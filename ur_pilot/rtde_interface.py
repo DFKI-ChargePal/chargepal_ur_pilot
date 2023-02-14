@@ -5,7 +5,7 @@ from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface as RTDEReceive
 
 # local
-from src.config_server import ConfigServer
+from ur_pilot.config_server import ConfigServer
 
 
 LOGGER = logging.getLogger(__name__)

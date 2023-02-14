@@ -7,7 +7,7 @@ import logging
 
 # local
 from set_up_pilot import _CFG_DUMP_FOLDER, _CFG_DUMP_FILE_NAME
-from src.utils import query_yes_no
+from ur_pilot.utils import query_yes_no
 
 # typing
 from typing import Any, Dict

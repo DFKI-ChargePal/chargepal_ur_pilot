@@ -27,7 +27,7 @@ top_down_task = {
 banana_wall_task = {
     "tool": "banana",
     "robot": {
-        "home_joint_config": (2.489, -1.315, -2.173, -3.421, -2.126, -1.930),
+        "home_joint_config": (3.034, -1.158, -2.260, -3.391, -1.665, -1.619),
     }
 }
 

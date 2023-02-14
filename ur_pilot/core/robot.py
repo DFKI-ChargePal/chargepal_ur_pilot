@@ -3,8 +3,8 @@ import time
 import logging
 
 # local
-from src.config_server import ConfigServer
-from src.rtde_interface import RTDEInterface
+from ur_pilot.config_server import ConfigServer
+from ur_pilot.rtde_interface import RTDEInterface
 
 # typing
 from typing import List, Optional, Tuple
@@ -14,9 +14,9 @@ LOGGER = logging.getLogger(__name__)
 
 class Robot:
 
-    def __init__(self, rtde: RTDEInterface) -> None:
+    def __init__(self) -> None:
         # Robot interface
-        self.rtde = rtde
+        self.rtde = RTDEInterface()
         # joint space movements
         self.joint_vel: float = 0.25
         self.joint_acc: float = 0.10
