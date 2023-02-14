@@ -130,9 +130,19 @@ class Robot:
         time.sleep(self.rtde.dt)
 
     def stop_force_mode(self) -> None:
+        """ Function to set robot back in normal position control mode. """
         self.rtde.c.forceModeStop()
 
+    def teach_mode(self) -> None:
+        """ Function to enable the free drive mode. """
+        self.rtde.c.teachMode()
+
+    def stop_teach_mode(self) -> None:
+        """ Function to set robot back in normal position control mode. """
+        self.rtde.c.endTeachMode()
+
     def set_tcp(self, tcp_offset: List[float]) -> None:
+        """ Function to set the tcp relative to the tool flange. """
         self.rtde.c.setTcp(tcp_offset)
 
     ##################################

@@ -122,3 +122,6 @@ dmypy.json
 
 # Configuration Cache
 .config_cache.json
+
+# Project data
+data/
