@@ -8,6 +8,9 @@ import chargepal_aruco as ca
 # local
 from ur_pilot.core.robot import Robot
 
+# typing
+from typing import Generator
+
 
 _T_IN_DIR = "data/ur10e/teach_in/"
 _T_IN_FILE = "hand_eye_calibration.json"
@@ -51,6 +54,22 @@ def record_state_sequence() -> None:
     ur10.exit()
     dp.destroy()
     cam.destroy()
+
+
+
+def state_sequence_reader() -> Generator[list[float], None, None]:
+
+    file_path = os.path.join(_T_IN_DIR, _T_IN_FILE)
+
+    state_seq: list[list[float]] = []
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as fp:
+            state_seq = json.load(fp)
+            # Iterate through the sequence
+            for joint_pos in state_seq:
+                yield joint_pos
+    else:
+        print(f"No file with path '{file_path}'")
 
 
 if __name__ == '__main__':

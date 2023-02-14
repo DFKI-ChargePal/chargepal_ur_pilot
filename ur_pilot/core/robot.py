@@ -16,7 +16,7 @@ class Robot:
 
     def __init__(self) -> None:
         # Robot interface
-        self.rtde = RTDEInterface()
+        self.rtde = RTDEInterface(verbose=True)
         # joint space movements
         self.joint_vel: float = 0.25
         self.joint_acc: float = 0.10
