@@ -6,7 +6,7 @@ import copy
 import logging
 
 # local
-from set_up_pilot import _FILE_NAME_CFG_DUMP
+from set_up_pilot import _CFG_DUMP_FOLDER, _CFG_DUMP_FILE_NAME
 from src.utils import query_yes_no
 
 # typing
@@ -20,19 +20,19 @@ class ConfigServer:
     
     def __init__(self) -> None:
         # Check if there is a configuration file
-        if os.path.isfile(_FILE_NAME_CFG_DUMP):
+        self.cfg_fp = os.path.join(_CFG_DUMP_FOLDER, _CFG_DUMP_FILE_NAME)
+        if os.path.isfile(self.cfg_fp):
             # Load configurations
             self.cfg = self._load_cfg_from_file()
         else:
             self.cfg = {}
-            LOGGER.warning(f"No configuration found under {_FILE_NAME_CFG_DUMP}!")
+            LOGGER.warning(f"No configuration found under {_CFG_DUMP_FOLDER}!")
             continue_prog = query_yes_no("Continue with default values?", default="no")
             if not continue_prog:
                 sys.exit()
 
-    @staticmethod
-    def _load_cfg_from_file() -> Dict[str, Any]:
-        with open(_FILE_NAME_CFG_DUMP, 'r') as fp:
+    def _load_cfg_from_file(self) -> Dict[str, Any]:
+        with open(self.cfg_fp, 'r') as fp:
             cfg: Dict[str, Any] = json.load(fp)
         return cfg
 

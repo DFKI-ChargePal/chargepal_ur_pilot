@@ -1,12 +1,13 @@
 # global
+import os
 import sys
 import json
 
 # typing
 from typing import Any, Dict
 
-
-_FILE_NAME_CFG_DUMP = ".cache/config_cache.json"
+_CFG_DUMP_FOLDER = ".cache"
+_CFG_DUMP_FILE_NAME = "config_dump.json"
 
 """ 
 ////////////////////////////////////
@@ -40,7 +41,9 @@ cfg_s = {
 
 
 def set_up_demo(cfg: Dict[str, Any]) -> None:
-    with open(_FILE_NAME_CFG_DUMP, 'w') as fp:
+    os.makedirs(_CFG_DUMP_FOLDER, exist_ok=True)
+    fn = os.path.join(_CFG_DUMP_FOLDER, _CFG_DUMP_FILE_NAME)
+    with open(fn, 'w') as fp:
         json.dump(cfg, fp=fp, indent=4, sort_keys=True)
 
 
