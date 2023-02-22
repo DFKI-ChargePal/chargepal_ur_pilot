@@ -13,7 +13,7 @@ def move_joints_rnd() -> None:
     # Move arm
     res = move_joints_random(ur10)
     # Print result
-    print("Target joint positions: ", " ".join(f"{q:.3f}" for q in res.rnd_joint_pos))
+    print("Target joint positions: ", " ".join(f"{q:.3f}" for q in res.joint_pos))
 
     # Disconnect to robot arm
     ur10.exit()

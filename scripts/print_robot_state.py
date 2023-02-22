@@ -16,8 +16,8 @@ def print_robot_state() -> None:
     tcp_pose = ur10.get_tcp_pose()
 
     # Print out
-    print("Joint Positions: ", " ".join(f"{q:.3f}" for q in joint_pos))
-    print("       TCP Pose: ", " ".join(f"{p:.3f}" for p in tcp_pose))
+    print("      Joint positions: ", " ".join(f"{q:.3f}" for q in joint_pos))
+    print("TCP pose w. axis ang.: ", " ".join(f"{p:.3f}" for p in tcp_pose.xyz + tcp_pose.axis_angle))
 
     # Disconnect to robot arm
     ur10.exit()

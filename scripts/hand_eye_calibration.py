@@ -17,11 +17,11 @@ from ur_pilot.core.robot import Robot
 from scripts.record_state_sequence import state_sequence_reader
 
 
-def record_calibration_imgs(_debug: bool) -> None:
+def record_calibration_imgs(_debug: bool, verbose: bool) -> None:
 
     # Create AruCo setup
-    cam = ca.RealSenseCamera("realsense")
-    dp = ca.Display(camera=cam, name="Rec")
+    cam = ca.RealSenseCamera("realsense", verbose=verbose)
+    dp = ca.Display(camera=cam, name="Rec", verbose=verbose)
     dtr = ca.Detector(cam, aruco_type="DICT_4X4_100", aruco_size_mm=19, checker_grid_size=(10, 7), checker_size_mm=25)
     # Connect to arm
     ur10 = Robot()
@@ -40,14 +40,12 @@ def record_calibration_imgs(_debug: bool) -> None:
                 dp.draw_frame_axes(img, r_vec, t_vec, length=0.05, thickness=3)
                 # Build target to camera transformation
                 R_cam2tgt, _ = cv.Rodrigues(r_vec)
-                tau_cam2tgt = np.array(t_vec, dtype=np.float32).squeeze()
+                tau_cam2tgt = np.array(t_vec).squeeze()
                 # Transformation matrix of target in camera frame
                 T_cam2tgt = rp.Transformation().from_R_tau(R_cam2tgt, tau_cam2tgt)
                 # Build TCP to arm base transformation
                 tcp_pose = ur10.get_tcp_pose()
-                tcp_pos = rp.Position().from_xyz(tcp_pose[:3])
-                tcp_ori = rp.Orientation().from_axis_angle(tcp_pose[3:])
-                T_base2tgt = rp.Transformation().from_pose(rp.Pose(tcp_pos, tcp_ori))
+                T_base2tgt = rp.Transformation().from_pose(tcp_pose)
                 # Save calibration item
                 file_name = f"hand_eye_{counter:02}"
                 if _debug:
@@ -84,12 +82,12 @@ def record_calibration_imgs(_debug: bool) -> None:
     cam.destroy()
 
 
-def run_hand_eye_calibration(_debug: bool) -> None:
+def run_hand_eye_calibration(_debug: bool, verbose: bool) -> None:
     """
     Function to execute the hand eye calibration. Please make sure to run the recording step first.
     :return: None
     """
-    camera = ca.RealSenseCamera("realsense", load_coefficients=True, launch=False, verbose=True)
+    camera = ca.RealSenseCamera("realsense", load_coefficients=True, launch=False, verbose=verbose)
     # Get transformation matrix of camera in the tcp frame
     T_tcp2cam = camera.calibrate_hand_eye()
     rp_tcp2cam = rp.Transformation().from_R_tau(R=T_tcp2cam[:3, :3], tau=T_tcp2cam[:3, 3])
@@ -115,7 +113,8 @@ def run_hand_eye_calibration(_debug: bool) -> None:
         plt.show()
 
     repr_tcp2cam = repr(T_tcp2cam)
-    print(repr_tcp2cam)
+    print(f"\n\nResult - TCP to camera transformation matrix (T_Cam_Plug):\n")
+    print(repr_tcp2cam, '\n')
     
     camera.destroy()
 
@@ -125,13 +124,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Hand-Eye calibration script.')
     parser.add_argument('-r', '--rec', action='store_true', help='Use this option to record new calibration images')
     parser.add_argument('--debug', action='store_true', help='Option to set global debug flag')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose flag')
     # Parse input arguments
     args = parser.parse_args()
     # Check if a new recording step is needed
     if args.rec:
-        record_calibration_imgs(args.debug)
+        record_calibration_imgs(args.debug, args.verbose)
     # Run calibration
-    run_hand_eye_calibration(args.debug)
+    run_hand_eye_calibration(args.debug, args.verbose)
 
 
 if __name__ == '__main__':

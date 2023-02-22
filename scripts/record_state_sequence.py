@@ -9,7 +9,7 @@ import chargepal_aruco as ca
 from ur_pilot.core.robot import Robot
 
 # typing
-from typing import Generator
+from typing import Generator, Sequence
 
 
 _T_IN_DIR = "data/ur10e/teach_in/"
@@ -25,7 +25,7 @@ def record_state_sequence() -> None:
     ur10.move_home()
 
     # Prepare recording
-    state_seq: list[list[float]] = []
+    state_seq: list[Sequence[float]] = []
     os.makedirs(_T_IN_DIR, exist_ok=True)
     file_path = os.path.join(_T_IN_DIR, _T_IN_FILE)
     # Enable free drive mode

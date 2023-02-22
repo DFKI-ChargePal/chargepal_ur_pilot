@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import rigmopy as rp
 
 # typing
 from typing import Any, Dict
@@ -28,7 +29,8 @@ banana_wall_task = {
     "tool": "banana",
     "robot": {
         "home_joint_config": (3.034, -1.158, -2.260, -3.391, -1.665, -1.619),
-        "T_CP": [
+        "T_C_P": # TODO: Set as RigMoPy transformation object
+        [
             [ 0.07806851,  0.92719907,  0.36634293, -0.17861411],
             [-0.99686325,  0.0773926 ,  0.01655629,  0.04555491],
             [-0.01300125, -0.36648634,  0.9303326 , -0.24013902],
