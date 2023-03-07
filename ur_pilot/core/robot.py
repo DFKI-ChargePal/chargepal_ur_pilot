@@ -2,6 +2,7 @@ from __future__ import annotations
 # global
 import time
 import logging
+import numpy as np
 import rigmopy as rp
 
 # local
@@ -9,7 +10,7 @@ from ur_pilot.config_server import ConfigServer
 from ur_pilot.rtde_interface import RTDEInterface
 
 # typing
-from typing import Sequence, List, Optional, Tuple
+from typing import Optional, Sequence
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,12 +35,16 @@ class Robot:
         self.force_type: int = 2
         self.force_mode_gain: float = 0.99
         self.force_mode_damp: float = 0.075
-        self.force_mode_lim: Tuple[float, ...] = (0.01, 0.01, 0.01, 0.01, 0.01, 0.01)
+        self.force_mode_lim: Sequence[float] = (0.01, 0.01, 0.01, 0.01, 0.01, 0.01)
         # constants
-        self.home_joint_config: Tuple[float, ...] = tuple(self.rtde.r.getActualQ())
-        self.T_C_P = rp.Transformation()
+        self.home_joint_config: Sequence[float] = tuple(self.rtde.r.getActualQ())
+        self._T_Cam_Plug: Sequence[float] = np.identity(4).tolist()
         # Load configurations from parameter server
         ConfigServer().load(__name__, self)
+
+    @property
+    def T_Cam_Plug(self) -> rp.Transformation:
+        return rp.Transformation().from_T(np.array(self._T_Cam_Plug))
 
     def exit(self) -> None:
         self.rtde.exit()
@@ -162,13 +167,13 @@ class Robot:
         return joint_vel
 
     def get_tcp_offset(self) -> rp.Pose:
-        tcp_offset: List[float] = self.rtde.c.getTCPOffset()
-        return rp.Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[:3])
+        tcp_offset: Sequence[float] = self.rtde.c.getTCPOffset()
+        return rp.Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[3:])
 
     def get_tcp_pose(self) -> rp.Pose:
-        tcp_pose: List[float] = self.rtde.r.getActualTCPPose()
-        return rp.Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[:3])
+        tcp_pose: Sequence[float] = self.rtde.r.getActualTCPPose()
+        return rp.Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
 
     def get_tcp_force(self) -> rp.Wrench:
-        tcp_force: List[float] = self.rtde.r.getActualTCPForce()
+        tcp_force: Sequence[float] = self.rtde.r.getActualTCPForce()
         return rp.Wrench().from_ft(tcp_force)

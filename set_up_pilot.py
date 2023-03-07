@@ -2,7 +2,6 @@
 import os
 import sys
 import json
-import rigmopy as rp
 
 # typing
 from typing import Any, Dict
@@ -29,13 +28,11 @@ banana_wall_task = {
     "tool": "banana",
     "robot": {
         "home_joint_config": (3.034, -1.158, -2.260, -3.391, -1.665, -1.619),
-        "T_C_P": # TODO: Set as RigMoPy transformation object
-        [
-            [ 0.07806851,  0.92719907,  0.36634293, -0.17861411],
-            [-0.99686325,  0.0773926 ,  0.01655629,  0.04555491],
-            [-0.01300125, -0.36648634,  0.9303326 , -0.24013902],
-            [ 0.        ,  0.        ,  0.        ,  1.        ]
-        ],
+        "_T_Cam_Plug": [
+            [ 0.06819847,  0.92839549,  0.36528179, -0.17570487],
+            [-0.9975047 ,  0.07015258,  0.00793621,  0.04608208],
+            [-0.01825752, -0.36491154,  0.93086317, -0.23798058],
+            [ 0.        ,  0.        ,  0.        ,  1.        ]],
     }
 }
 
@@ -62,6 +59,7 @@ if __name__ == '__main__':
         if cfg_name in cfg_s:
             cfg_s[cfg_name]["_setup_id_name"] = cfg_name
             set_up_demo(cfg_s[cfg_name])
+            print(f"Set up configuration file with name {cfg_name}...")
         else:
             print(f"Configuration with name {cfg_name} not found.\n"
                   f"Please create it or enter a valid file name")

@@ -1,5 +1,6 @@
 # global
 import time
+import math
 import argparse
 import cv2 as cv
 import numpy as np
@@ -7,6 +8,7 @@ import rigmopy as rp
 import chargepal_aruco as ca
 import matplotlib.pyplot as plt
 import pytransform3d.camera as pc
+import pytransform3d.rotations as pr
 import pytransform3d.transformations as pt
 from pytransform3d.plot_utils import make_3d_axis
 
@@ -29,6 +31,7 @@ def record_calibration_imgs(_debug: bool, verbose: bool) -> None:
     # Move to all states in sequence
     counter = 1
     stop_reading = False
+    cam.prepare_hand_eye_calibration_record()
     for joint_pos in state_sequence_reader():
         continue_reading = False
         n_debug_prints = 0
@@ -45,17 +48,17 @@ def record_calibration_imgs(_debug: bool, verbose: bool) -> None:
                 T_cam2tgt = rp.Transformation().from_R_tau(R_cam2tgt, tau_cam2tgt)
                 # Build TCP to arm base transformation
                 tcp_pose = ur10.get_tcp_pose()
-                T_base2tgt = rp.Transformation().from_pose(tcp_pose)
+                T_base2tcp = rp.Transformation().from_pose(tcp_pose)
                 # Save calibration item
                 file_name = f"hand_eye_{counter:02}"
                 if _debug:
                     if n_debug_prints <= 0:
                         print(f"\n\nTransformation ChArUco-board to camera\n {T_cam2tgt}")
-                        print(f"\nTransformation UR10-TCP to UR10-base\n {T_base2tgt}")
+                        print(f"\nTransformation UR10-TCP to UR10-base\n {T_base2tcp}")
                         print(f"Debug mode! No recordings will be saved.")
                         n_debug_prints += 1
                 else:
-                    cam.hand_eye_calibration_record(file_name, T_base2tgt.T, T_cam2tgt.T)
+                    cam.hand_eye_calibration_record(file_name, T_base2tcp.T, T_cam2tgt.T)
                     counter += 1
             dp.show_img(img)
             event = dp.event()
@@ -116,6 +119,15 @@ def run_hand_eye_calibration(_debug: bool, verbose: bool) -> None:
     print(f"\n\nResult - TCP to camera transformation matrix (T_Cam_Plug):\n")
     print(repr_tcp2cam, '\n')
     
+    if verbose:
+        # euler = pr.intrinsic_euler_xyz_from_active_matrix(T_tcp2cam[:3, :3])
+        euler = pr.intrinsic_euler_yzx_from_active_matrix(T_tcp2cam[:3, :3])
+        euler_deg = tuple([math.degrees(ang) for ang in euler])
+
+        print(f"Euler angle to active rotate plug frame into camera frame: {euler_deg}")
+        print(f"Position of the camera frame in plug frame:                {rp_tcp2cam.to_pose().xyz}")
+        # print(f"RPY_Cam_Plug: {rp_tcp2cam.to_pose().rpy_degrees}")
+
     camera.destroy()
 
 
