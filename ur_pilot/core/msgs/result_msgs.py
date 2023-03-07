@@ -17,3 +17,9 @@ class JointPosResult:
 @dataclass
 class TCPPoseResult:
     tcp_pose: rp.Pose
+
+
+@dataclass
+class PlugOutResult:
+    tcp_pose: rp.Pose
+    time_out: bool

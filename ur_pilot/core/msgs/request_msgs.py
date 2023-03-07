@@ -14,3 +14,17 @@ class JointPosRequest:
 @dataclass
 class TCPPoseRequest:
     tcp_pose: rp.Pose
+
+
+@dataclass
+class PlugInRequest:
+     compliant_axes: list[int]
+     wrench: rp.Wrench
+
+
+@dataclass
+class PlugOutRequest:
+     compliant_axes: list[int]
+     wrench: rp.Wrench
+     moving_distance: float
+     t_limit: float
