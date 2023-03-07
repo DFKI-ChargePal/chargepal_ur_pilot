@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 # global
+import sys
 import time
-import math
 import argparse
 import cv2 as cv
 import numpy as np
@@ -29,7 +29,8 @@ X_SOCKET_2_SOCKET_PRE = rp.Pose().from_xyz(xyz=[0.0, 0.0, -0.01])  # Retreat pos
 # Request messages
 PLUG_IN_REQ = req_msg.PlugInRequest(
     compliant_axes=[1, 1, 1, 0, 0, 1], 
-    wrench=rp.Wrench().from_ft([0.0, 0.0, 10.0, 0.0, 0.0, 0.0])
+    wrench=rp.Wrench().from_ft([0.0, 0.0, 10.0, 0.0, 0.0, 0.0]),
+    t_limit=10.0
     )
 
 PLUG_OUT_REQ = req_msg.PlugOutRequest(
@@ -40,18 +41,25 @@ PLUG_OUT_REQ = req_msg.PlugOutRequest(
     )
 
 
-def connect_to_socket() -> None:
+def connect_to_socket(monitor: bool) -> None:
     # Build AruCo detection setup()
     realsense = ca.RealSenseCamera("realsense")
-    img_display = ca.Display(camera=realsense, name="connect2socket")
-    
+
     # Use ArUco detector for a 3x3 ArUco board
     board_detector = ca.Detector(realsense, 'DICT_4X4_100', aruco_size_mm=19, checker_grid_size=(3, 3), checker_size_mm=25)
-    
+
+    if monitor:
+        cam_monitor = ca.Monitor(realsense, "Monitor")
+        cam_monitor.start()
+        board_screen = None
+    else:
+        board_screen = ca.Display(camera=realsense, name="board_detection_screen")
+
     # Build arm
     ur10 = Robot()
     # Start at home position
     ur10.move_home()
+    
     # Move to camera estimation pose to have all marker in camera field of view
     move_to_tcp_pose(ur10, req_msg.TCPPoseRequest(SOCKET_POSE_ESTIMATION_CFG_X))
 
@@ -89,9 +97,10 @@ def connect_to_socket() -> None:
             T_Base2SocketPre = T_Base2Socket @ T_Socket2SocketPre
 
             found_board = True
-
-            img_display.draw_frame_axes(img, r_vec, t_vec, length=0.025, thickness=2)
-        img_display.show_img(img)
+            if board_screen:
+                board_screen.draw_frame_axes(img, r_vec, t_vec, length=0.025, thickness=2)
+        if board_screen:
+            board_screen.show_img(img)
     
     if not found_board:
         # Move back to home
@@ -99,10 +108,10 @@ def connect_to_socket() -> None:
     else:
         # Move to socket with some safety distance
         move_to_tcp_pose(ur10, req_msg.TCPPoseRequest(T_Base2SocketPre.to_pose()))
-        time.sleep(2.0)
+        time.sleep(1.0)
         # Try to plug in
-        plug_in(ur10, PLUG_IN_REQ, img_display)
-        time.sleep(3.0)
+        plug_in(ur10, PLUG_IN_REQ)
+        time.sleep(2.0)
         # Try to plug out
         plug_out_res = plug_out(ur10, PLUG_OUT_REQ)
         time.sleep(1.0)
@@ -115,7 +124,10 @@ def connect_to_socket() -> None:
     
     # Clean up
     ur10.exit()
-    img_display.destroy()
+    if monitor:
+        cam_monitor.destroy()
+    if board_screen:
+        board_screen.destroy()
     realsense.destroy()
     
 
@@ -125,7 +137,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Script to connect the plug with the socket.')
     args = parser.parse_args()
 
-    connect_to_socket()
+    connect_to_socket(monitor=True)
 
 
 if __name__ == '__main__':

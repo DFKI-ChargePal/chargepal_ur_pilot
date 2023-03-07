@@ -20,6 +20,12 @@ class TCPPoseResult:
 
 
 @dataclass
+class PlugInResult:
+    tcp_pose: rp.Pose
+    time_out: bool
+
+
+@dataclass
 class PlugOutResult:
     tcp_pose: rp.Pose
     time_out: bool

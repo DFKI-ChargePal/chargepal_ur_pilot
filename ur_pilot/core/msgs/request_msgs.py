@@ -20,6 +20,7 @@ class TCPPoseRequest:
 class PlugInRequest:
      compliant_axes: list[int]
      wrench: rp.Wrench
+     t_limit: float
 
 
 @dataclass

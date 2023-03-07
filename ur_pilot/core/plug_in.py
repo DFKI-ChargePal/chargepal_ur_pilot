@@ -7,14 +7,14 @@ from chargepal_aruco import Display
 
 # local
 from ur_pilot.core.robot import Robot
-from ur_pilot.core.msgs.result_msgs import TCPPoseResult
+from ur_pilot.core.msgs.result_msgs import PlugInResult
 from ur_pilot.core.msgs.request_msgs import PlugInRequest
 
 # typing
 from typing import Optional
 
 
-def plug_in(rob: Robot, req: PlugInRequest, display: Optional[Display] = None) -> TCPPoseResult:
+def plug_in(rob: Robot, req: PlugInRequest, display: Optional[Display] = None) -> PlugInResult:
     """
     Execution function to connect the aligned plug with the socket
     :param rob: Robot object
@@ -29,6 +29,9 @@ def plug_in(rob: Robot, req: PlugInRequest, display: Optional[Display] = None) -
     task_frame = X_tcp.xyz + X_tcp.axis_angle
     t_ref = time.time()
     x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+    # Time out
+    time_out = False
+    t_start = time.time()
     while True:
         # Apply wrench
         rob.force_mode(
@@ -44,7 +47,11 @@ def plug_in(rob: Robot, req: PlugInRequest, display: Optional[Display] = None) -
                 break
             t_ref = t_now
             x_ref = x_now
+        if t_now - t_start > req.t_limit:
+            time_out = True
+            break
         if display:
+            display.show()
             if display.event() == ca.Event.QUIT:
                 break
 
@@ -52,4 +59,4 @@ def plug_in(rob: Robot, req: PlugInRequest, display: Optional[Display] = None) -
     rob.stop_force_mode()
     # Gather result
     res_pose = rob.get_tcp_pose()
-    return TCPPoseResult(res_pose)
+    return PlugInResult(res_pose, time_out)
