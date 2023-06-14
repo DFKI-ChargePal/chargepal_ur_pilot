@@ -3,11 +3,11 @@
 import numpy as np
 
 # local
-from ur_pilot.core.robot import Robot
-from ur_pilot.core.msgs.result_msgs import JointPosResult
+from ur_pilot.core import URPilot
+from ur_pilot.msgs.result_msgs import JointPosResult
 
 
-def move_joints_random(rob: Robot) -> JointPosResult:
+def move_joints_random(rob: URPilot) -> JointPosResult:
      # Move to home joint position
     rob.move_home()
     # Move to random joint positions near to the home configuration

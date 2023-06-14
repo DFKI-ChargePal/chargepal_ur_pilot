@@ -125,3 +125,4 @@ dmypy.json
 
 # Project data
 data/
+camera_info/

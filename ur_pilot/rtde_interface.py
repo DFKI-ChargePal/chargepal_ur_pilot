@@ -13,10 +13,10 @@ LOGGER = logging.getLogger(__name__)
 
 class RTDEInterface:
 
-    def __init__(self, verbose: bool = False) -> None:
+    def __init__(self, ip_address: str, robot_freq: float, verbose: bool = False) -> None:
         # Default configurations
-        self.ur_ip: str = "192.168.13.42"
-        self.ur_freq: float = 500.0
+        self.ur_ip = ip_address
+        self.ur_freq = robot_freq
         self.verbose = verbose
         # Load configurations from parameter server
         ConfigServer().load(__name__, self)

@@ -3,56 +3,64 @@ from __future__ import annotations
 # global
 import os
 import json
+import logging
+from pathlib import Path
 import chargepal_aruco as ca
 
 # local
-from ur_pilot.core.robot import Robot
+from ur_pilot import URPilot
 
 # typing
 from typing import Generator, Sequence
 
 
-_T_IN_DIR = "data/ur10e/teach_in/"
+LOGGER = logging.getLogger(__name__)
+
+_T_IN_DIR = "data/teach_in/"
 _T_IN_FILE = "hand_eye_calibration.json"
 
 
 def record_state_sequence() -> None:
     # Use camera for user interaction
-    cam = ca.RealSenseCamera("realsense")
-    dp = ca.Display(camera=cam, name="Rec")
+    cam = ca.RealSenseCamera('tcp_cam_realsense')
+    cam.load_coefficients()
+    display = ca.Display('Monitor')
     # Connect to robot
-    ur10 = Robot()
+    ur10 = URPilot()
     ur10.move_home()
 
     # Prepare recording
     state_seq: list[Sequence[float]] = []
-    os.makedirs(_T_IN_DIR, exist_ok=True)
-    file_path = os.path.join(_T_IN_DIR, _T_IN_FILE)
+    data_path = Path(_T_IN_DIR)
+    data_path.mkdir(parents=True, exist_ok=True)
+    file_path = data_path.joinpath(_T_IN_FILE)
+
     # Enable free drive mode
     ur10.teach_mode()
-    print("Start teach in mode: ")
-    print("You can now move the arm and record joint positions pressing 's' or 'S' ...")
+    LOGGER.info("Start teach in mode: ")
+    LOGGER.info("You can now move the arm and record joint positions pressing 's' or 'S' ...")
     while True:
-        dp.show()
-        event = dp.event()
-        if event in [ca.Event.CONTINUE, ca.Event.SAVE]:
+        img = cam.get_color_frame()
+        display.show(img)
+        if ca.EventObserver.state is ca.EventObserver.Type.SAVE:
             # Save current joint position configuration
             joint_pos = ur10.get_joint_pos()
-            print(f"Save joint pos:", " ".join(f"{q:.3f}" for q in joint_pos))
+            info_str = f"Save joint pos: " + " ".join(f"{q:.3f}" for q in joint_pos)
+            LOGGER.info(info_str)
             state_seq.append(joint_pos)
-        elif event == ca.Event.QUIT:
-            print("The recording process is terminated by the user.")
+        elif ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+            LOGGER.info("The recording process is terminated by the user.")
             break
     
-    print(f"Save all configurations in {file_path}")
-    with open(file_path, 'w') as fp:
+    LOGGER.info(f"Save all configurations in {file_path}")
+    with file_path.open('w') as fp:
         json.dump(state_seq, fp, indent=2)
 
     # Stop free drive mode
     ur10.stop_teach_mode()
     # Clean up
     ur10.exit()
-    dp.destroy()
+    display.destroy()
     cam.destroy()
 
 
@@ -73,4 +81,5 @@ def state_sequence_reader() -> Generator[list[float], None, None]:
 
 
 if __name__ == '__main__':
+    ca.set_logging_level(logging.INFO)
     record_state_sequence()

@@ -4,13 +4,13 @@ import time
 import numpy as np
 
 # local
-from ur_pilot.core.robot import Robot
-from ur_pilot.core.msgs.result_msgs import PlugOutResult
-from ur_pilot.core.msgs.request_msgs import PlugOutRequest
+from ur_pilot.core import URPilot
+from ur_pilot.msgs.result_msgs import PlugOutResult
+from ur_pilot.msgs.request_msgs import PlugOutRequest
 
 
 
-def plug_out(rob: Robot, req: PlugOutRequest) -> PlugOutResult:
+def plug_out(rob: URPilot, req: PlugOutRequest) -> PlugOutResult:
     """
     Execution function to disconnect the inserted plug from the socket.
     :param rob: Robot object

@@ -6,20 +6,19 @@ import chargepal_aruco as ca
 from chargepal_aruco import Display
 
 # local
-from ur_pilot.core.robot import Robot
-from ur_pilot.core.msgs.result_msgs import PlugInResult
-from ur_pilot.core.msgs.request_msgs import PlugInRequest
+from ur_pilot.core import URPilot
+from ur_pilot.msgs.result_msgs import PlugInResult
+from ur_pilot.msgs.request_msgs import PlugInRequest
 
 # typing
 from typing import Optional
 
 
-def plug_in(rob: Robot, req: PlugInRequest, display: Optional[Display] = None) -> PlugInResult:
+def plug_in(rob: URPilot, req: PlugInRequest) -> PlugInResult:
     """
     Execution function to connect the aligned plug with the socket
     :param rob: Robot object
     :param req: Request message
-    :param display: OpenCV display to observe process
     :return: Request message with the final TCP pose
     """
     # Set the force mode up
@@ -50,10 +49,8 @@ def plug_in(rob: Robot, req: PlugInRequest, display: Optional[Display] = None) -
         if t_now - t_start > req.t_limit:
             time_out = True
             break
-        if display:
-            display.show()
-            if display.event() == ca.Event.QUIT:
-                break
+        if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+            break
 
     # Exit force mode
     rob.stop_force_mode()

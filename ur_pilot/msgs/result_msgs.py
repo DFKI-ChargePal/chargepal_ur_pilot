@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 # global
-import rigmopy as rp
+from rigmopy import Pose
 from dataclasses import dataclass
 
 # typing
@@ -16,16 +16,16 @@ class JointPosResult:
 
 @dataclass
 class TCPPoseResult:
-    tcp_pose: rp.Pose
+    tcp_pose: Pose
 
 
 @dataclass
 class PlugInResult:
-    tcp_pose: rp.Pose
+    tcp_pose: Pose
     time_out: bool
 
 
 @dataclass
 class PlugOutResult:
-    tcp_pose: rp.Pose
+    tcp_pose: Pose
     time_out: bool

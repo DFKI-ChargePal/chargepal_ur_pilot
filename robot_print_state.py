@@ -4,12 +4,12 @@ Contains: Joint positions
           TCP pose
 """
 # local
-from ur_pilot.core.robot import Robot
+from ur_pilot import URPilot
 
 
 def print_robot_state() -> None:
     # Connect to robot arm
-    ur10 = Robot()
+    ur10 = URPilot()
 
     # Read joint and pose information
     joint_pos = ur10.get_joint_pos()

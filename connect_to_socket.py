@@ -10,11 +10,11 @@ import rigmopy as rp
 import chargepal_aruco as ca
 
 # local
-from ur_pilot.core.robot import Robot
-import ur_pilot.core.msgs.request_msgs as req_msg
-from ur_pilot.core.move_to import move_to_tcp_pose
-from ur_pilot.core.plug_in import plug_in
-from ur_pilot.core.plug_out import plug_out
+from ur_pilot.core import URPilot
+import ur_pilot.msgs.request_msgs as req_msg
+from ur_pilot.move_to import move_to_tcp_pose
+from ur_pilot.plug_in import plug_in
+from ur_pilot.plug_out import plug_out
 
 
 # Fixed configurations
@@ -56,7 +56,7 @@ def connect_to_socket(monitor: bool) -> None:
         board_screen = ca.Display(camera=realsense, name="board_detection_screen")
 
     # Build arm
-    ur10 = Robot()
+    ur10 = URPilot()
     # Start at home position
     ur10.move_home()
     

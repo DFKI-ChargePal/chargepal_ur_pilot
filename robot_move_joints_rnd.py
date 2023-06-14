@@ -2,13 +2,12 @@
 Script to move the robot arm randomly around the home position.
 """
 # local
-from ur_pilot.core.robot import Robot
-from ur_pilot.core.move_j_rnd import move_joints_random
+from ur_pilot import URPilot, move_joints_random
 
 
 def move_joints_rnd() -> None:
     # Connect to robot arm
-    ur10 = Robot()
+    ur10 = URPilot()
 
     # Move arm
     res = move_joints_random(ur10)

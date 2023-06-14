@@ -3,48 +3,49 @@ from __future__ import annotations
 import time
 import logging
 import numpy as np
-import rigmopy as rp
+from rigmopy import Pose, Transformation, Vector6d
+from pathlib import Path
 
 # local
-from ur_pilot.config_server import ConfigServer
+import config
 from ur_pilot.rtde_interface import RTDEInterface
+from ur_pilot.config import Config, read_toml
 
 # typing
-from typing import Optional, Sequence
+from typing import Sequence
+
 
 LOGGER = logging.getLogger(__name__)
 
 
-class Robot:
+class URPilot:
 
     def __init__(self) -> None:
+
+        config_fp = Path(config.__file__).parent.joinpath(config.RUNNING_CONFIG_FILE)
+        config_dict = read_toml(config_fp)
+        self.cfg = Config(**config_dict)
+
         # Robot interface
-        self.rtde = RTDEInterface(verbose=True)
-        # joint space movements
-        self.joint_vel: float = 0.25
-        self.joint_acc: float = 0.10
-        # linear space movements
-        self.lin_vel: float = 0.10
-        self.lin_acc: float = 0.10
-        # linear servoing
-        self.lin_servo_vel: float = 0.0  # NOT USED
-        self.lin_servo_acc: float = 0.0  # NOT USED
-        self.lin_servo_gain: float = 100.0  # range: [100, 2000]
-        self.lin_servo_lkh_time: float = 0.2  # range: [0.03, 0.2]
-        # force mode
-        self.force_type: int = 2
-        self.force_mode_gain: float = 0.99
-        self.force_mode_damp: float = 0.075
-        self.force_mode_lim: Sequence[float] = (0.01, 0.01, 0.01, 0.01, 0.01, 0.01)
-        # constants
-        self.home_joint_config: Sequence[float] = tuple(self.rtde.r.getActualQ())
+        self.rtde = RTDEInterface(self.cfg.robot.ip_address, self.cfg.robot.rtde_freq, True)
+
+        # If there is no configuration for the home_position set to current position
+        if self.cfg.robot.home_radians is None:
+            self.cfg.robot.home_radians = list(self.rtde.r.getActualQ())
+
+        # TODO: initialize cam 2 plug transformation
         self._T_Cam_Plug: Sequence[float] = np.identity(4).tolist()
-        # Load configurations from parameter server
-        ConfigServer().load(__name__, self)
 
     @property
-    def T_Cam_Plug(self) -> rp.Transformation:
-        return rp.Transformation().from_T(np.array(self._T_Cam_Plug))
+    def T_Cam_Plug(self) -> Transformation:
+        return Transformation().from_trans_matrix(np.array(self._T_Cam_Plug))
+
+    @property
+    def home_joint_config(self) -> tuple[float, ...]:
+        if self.cfg.robot.home_radians is not None:
+            return tuple(self.cfg.robot.home_radians)
+        else:
+            raise ValueError("Home joint configuration was not set.")
 
     def exit(self) -> None:
         self.rtde.exit()
@@ -54,22 +55,16 @@ class Robot:
     ####################################
     def move_home(self) -> None:
         LOGGER.debug("Try to move robot in home configuration")
-        success = self.rtde.c.moveJ(
-            q=self.home_joint_config,
-            speed=self.joint_vel,
-            acceleration=self.joint_acc
-        )
+        success = self.rtde.c.moveJ(self.cfg.robot.home_radians, self.cfg.robot.joints.vel, self.cfg.robot.joints.acc)
         if not success:
             LOGGER.warning("Malfunction during movement to the home configuration!")
 
-    def move_l(self, tcp_pose: rp.Pose,  vel: float = -1.0, acc: float = -1.0) -> None:
+    def move_l(self, tcp_pose: Pose) -> None:
         LOGGER.debug(f"Try to move robot to TCP pose {tcp_pose}")
-        speed = self.lin_vel if vel <= 0.0 else vel
-        acceleration = self.lin_acc if acc <= 0.0 else acc
         success = self.rtde.c.moveL(
             pose=tcp_pose.xyz + tcp_pose.axis_angle,
-            speed=speed,
-            acceleration=acceleration
+            speed=self.cfg.robot.tcp.vel,
+            acceleration=self.cfg.robot.tcp.acc
         )
         if not success:
             cur_pose = self.rtde.r.getActualTCPPose()
@@ -77,31 +72,29 @@ class Robot:
             cur_msg = f"\nCurrent pose: {cur_pose}"
             LOGGER.warning(f"Malfunction during movement to new pose.{tgt_msg}{cur_msg}")
 
-    def move_j(self, q: Sequence[float], vel: float = -1.0, acc: float = -1.0) -> None:
+    def move_j(self, q: Sequence[float]) -> None:
         LOGGER.debug(f"Try to move the robot to new joint configuration {q}")
-        speed = self.joint_vel if vel <= 0.0 else vel
-        acceleration = self.joint_acc if acc <= 0.0 else acc
-        success = self.rtde.c.moveJ(q, speed, acceleration)
+        success = self.rtde.c.moveJ(q, self.cfg.robot.joints.vel, self.cfg.robot.joints.acc)
         if not success:
             cur_q = self.rtde.r.getActualQ()
             tgt_msg = f"\nTarget joint positions: {q}"
             cur_msg = f"\nCurrent joint positions: {cur_q}"
             LOGGER.warning(f"Malfunction during movement to new joint positions.{tgt_msg}{cur_msg}")
 
-    def servo_l(self, tcp_pose: rp.Pose) -> None:
+    def servo_l(self, tcp_pose: Pose) -> None:
         LOGGER.debug(f"Try to move robot to TCP pose {tcp_pose}")
         self.rtde.c.initPeriod()
         success = self.rtde.c.servoL(
             tcp_pose.xyz + tcp_pose.axis_angle,
-            self.lin_servo_vel,
-            self.lin_servo_acc,
+            self.cfg.robot.servo.vel,
+            self.cfg.robot.servo.acc,
             self.rtde.dt,
-            self.lin_servo_lkh_time,
-            self.lin_servo_gain
+            self.cfg.robot.servo.lkh_time,
+            self.cfg.robot.servo.gain
         )
         self.rtde.c.waitPeriod(self.rtde.dt)
         # Since there is no real time kernel at the moment use python time library
-        time.sleep(self.rtde.dt)
+        time.sleep(self.rtde.dt)  # Do we need this?
         if not success:
             cur_pose = self.rtde.r.getActualTCPPose()
             tgt_msg = f"\nTarget pose: {tcp_pose}"
@@ -111,9 +104,9 @@ class Robot:
     def stop_servoing(self) -> None:
         self.rtde.c.servoStop()
 
-    def set_up_force_mode(self, gain: Optional[float] = None, damping: Optional[float] = None) -> None:
-        gain_scaling = gain if gain else self.force_mode_gain
-        damping_fact = damping if damping else self.force_mode_damp
+    def set_up_force_mode(self, gain: float | None = None, damping: float | None = None) -> None:
+        gain_scaling = gain if gain else self.cfg.robot.force_mode.gain
+        damping_fact = damping if damping else self.cfg.robot.force_mode.damping
         self.rtde.c.zeroFtSensor()
         self.rtde.c.forceModeSetGainScaling(gain_scaling)
         self.rtde.c.forceModeSetDamping(damping_fact)
@@ -122,20 +115,20 @@ class Robot:
                    task_frame: Sequence[float],
                    selection_vector: Sequence[int],
                    wrench: Sequence[float],
-                   f_mode_type: Optional[int] = None,
-                   limits: Optional[Sequence[float]] = None
+                   f_mode_type: int | None = None,
+                   tcp_limits: Sequence[float] | None = None
                    ) -> None:
         """ Function to use the force mode of the ur_rtde API """
         if f_mode_type is None:
-            f_mode_type = self.force_type
-        if limits is None:
-            limits = self.force_mode_lim
+            f_mode_type = self.cfg.robot.force_mode.mode
+        if tcp_limits is None:
+            tcp_limits = self.cfg.robot.force_mode.tcp_speed_limits
         self.rtde.c.forceMode(
             task_frame,
             selection_vector,
             wrench,
             f_mode_type,
-            limits
+            tcp_limits
         )
         time.sleep(self.rtde.dt)
 
@@ -151,7 +144,7 @@ class Robot:
         """ Function to set robot back in normal position control mode. """
         self.rtde.c.endTeachMode()
 
-    def set_tcp(self, tcp_offset: rp.Pose) -> None:
+    def set_tcp(self, tcp_offset: Pose) -> None:
         """ Function to set the tcp relative to the tool flange. """
         self.rtde.c.setTcp(tcp_offset.xyz + tcp_offset.axis_angle)
 
@@ -166,14 +159,14 @@ class Robot:
         joint_vel: Sequence[float] = self.rtde.r.getActualQd()
         return joint_vel
 
-    def get_tcp_offset(self) -> rp.Pose:
+    def get_tcp_offset(self) -> Pose:
         tcp_offset: Sequence[float] = self.rtde.c.getTCPOffset()
-        return rp.Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[3:])
+        return Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[3:])
 
-    def get_tcp_pose(self) -> rp.Pose:
+    def get_tcp_pose(self) -> Pose:
         tcp_pose: Sequence[float] = self.rtde.r.getActualTCPPose()
-        return rp.Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
+        return Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
 
-    def get_tcp_force(self) -> rp.Wrench:
+    def get_tcp_force(self) -> Vector6d:
         tcp_force: Sequence[float] = self.rtde.r.getActualTCPForce()
-        return rp.Wrench().from_ft(tcp_force)
+        return Vector6d().from_xyzXYZ(tcp_force)
