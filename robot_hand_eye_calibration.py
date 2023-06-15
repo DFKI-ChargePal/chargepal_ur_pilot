@@ -93,7 +93,7 @@ def run_hand_eye_calibration() -> None:
     np_T_tcp2cam = calibration.hand_eye_calibration_est_transformation()
 
     # Log results
-    T_tcp2cam = Transformation().from_rot_tau(rot_mat=np_T_tcp2cam[:3, :3], tau=np_T_tcp2cam[:3, 3])
+    T_tcp2cam = Transformation().from_trans_matrix(np_T_tcp2cam)
     LOGGER.info(f"Result - TCP to camera transformation (T_tcp2cam):")
     X_tcp2cam = T_tcp2cam.pose
     LOGGER.info(f"Tau in [m]:              {X_tcp2cam.xyz}")

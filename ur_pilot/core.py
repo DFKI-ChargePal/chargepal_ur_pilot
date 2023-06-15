@@ -3,8 +3,10 @@ from __future__ import annotations
 import time
 import logging
 import numpy as np
-from rigmopy import Pose, Transformation, Vector6d
 from pathlib import Path
+import chargepal_aruco as ca
+from chargepal_aruco import Camera
+from rigmopy import Pose, Transformation, Vector6d
 
 # local
 import config
@@ -33,12 +35,9 @@ class URPilot:
         if self.cfg.robot.home_radians is None:
             self.cfg.robot.home_radians = list(self.rtde.r.getActualQ())
 
-        # TODO: initialize cam 2 plug transformation
-        self._T_Cam_Plug: Sequence[float] = np.identity(4).tolist()
-
-    @property
-    def T_Cam_Plug(self) -> Transformation:
-        return Transformation().from_trans_matrix(np.array(self._T_Cam_Plug))
+        # End-effector camera
+        self.cam: Camera | None = None
+        self.T_tcp2cam = Transformation()
 
     @property
     def home_joint_config(self) -> tuple[float, ...]:
@@ -49,6 +48,12 @@ class URPilot:
 
     def exit(self) -> None:
         self.rtde.exit()
+
+    def register_ee_cam(self, cam: Camera) -> None:
+        self.cam = cam
+        self.cam.load_coefficients()
+        T_tcp2cam = ca.Calibration.hand_eye_calibration_load_transformation(self.cam)
+        self.T_tcp2cam = Transformation().from_trans_matrix(T_tcp2cam)
 
     ####################################
     #       CONTROLLER FUNCTIONS       #
