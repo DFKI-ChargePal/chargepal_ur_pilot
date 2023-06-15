@@ -1,21 +1,18 @@
 # global
 import time
+import logging
 import argparse
 import cv2 as cv
 import numpy as np
 import chargepal_aruco as ca
 from rigmopy import Transformation
-# import matplotlib.pyplot as plt
-# import pytransform3d.camera as pc
-# import pytransform3d.rotations as pr
-# import pytransform3d.transformations as pt
-# from pytransform3d.plot_utils import make_3d_axis
-
-
 
 # local
 from ur_pilot.core import URPilot
 from robot_record_state_sequence import state_sequence_reader
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def record_calibration_imgs(_debug: bool) -> None:
@@ -79,71 +76,49 @@ def record_calibration_imgs(_debug: bool) -> None:
     ur10.move_home()
     # Clean up
     ur10.exit()
-    cam.destroy()
+    detector.destroy(with_cam=True)
 
 
-def run_hand_eye_calibration(_debug: bool) -> None:
+def run_hand_eye_calibration() -> None:
+    """ Function to execute the hand eye calibration. Please make sure to run the recording step first.
+    
+    Return:
+        None
     """
-    Function to execute the hand eye calibration. Please make sure to run the recording step first.
-    :return: None
-    """
-
     camera = ca.RealSenseCamera("tcp_cam_realsense")
     camera.load_coefficients()
     calibration = ca.Calibration(camera)
 
     # Get transformation matrix of camera in the tcp frame
-    T_tcp2cam = calibration.hand_eye_calibration_est_transformation()
-    rp_tcp2cam = Transformation().from_rot_tau(rot_mat=T_tcp2cam[:3, :3], tau=T_tcp2cam[:3, 3])
+    np_T_tcp2cam = calibration.hand_eye_calibration_est_transformation()
 
-    # if _debug:
-    #     # Change convention
-    #     rp_cam2tcp = rp_tcp2cam
-    #     pt_cam2tcp = pt.transform_from(R=rp_cam2tcp.R, p=rp_cam2tcp.tau)
-    #     sensor_size = np.array([3855.0, 2919.0]) * 1.0e-6
-    #     intrinsic_matrix = np.array([
-    #         [0.005, 0,     sensor_size[0] / 2.0],
-    #         [0,     0.005, sensor_size[1] / 2.0],
-    #         [0,     0,                        1]
-    #     ])
-    #     virtual_image_distance = 0.5
-    #     ax = make_3d_axis(ax_s=1, unit="m", n_ticks=15)
-    #     pt.plot_transform(ax=ax)
-    #     pt.plot_transform(ax=ax, A2B=pt_cam2tcp, s=0.2)
-    #     pc.plot_camera(
-    #         ax, cam2world=pt_cam2tcp, M=intrinsic_matrix, sensor_size=sensor_size,
-    #         virtual_image_distance=virtual_image_distance
-    #     )
-    #     plt.tight_layout()
-    #     plt.show()
+    # Log results
+    T_tcp2cam = Transformation().from_rot_tau(rot_mat=np_T_tcp2cam[:3, :3], tau=np_T_tcp2cam[:3, 3])
+    LOGGER.info(f"Result - TCP to camera transformation (T_tcp2cam):")
+    X_tcp2cam = T_tcp2cam.pose
+    LOGGER.info(f"Tau in [m]:              {X_tcp2cam.xyz}")
+    LOGGER.info(f"Rotation in euler [deg]: {X_tcp2cam.to_euler_angle(degrees=True)}")
 
-    print(f"\n\nResult - TCP to camera transformation matrix (T_Cam_Plug):\n")
-    print(rp_tcp2cam, '\n')
-    
-    # if verbose:
-    #     # euler = pr.intrinsic_euler_xyz_from_active_matrix(T_tcp2cam[:3, :3])
-    #     euler = pr.intrinsic_euler_yzx_from_active_matrix(T_tcp2cam[:3, :3])
-    #     euler_deg = tuple([math.degrees(ang) for ang in euler])
-
-    #     print(f"Euler angle to active rotate plug frame into camera frame: {euler_deg}")
-    #     print(f"Position of the camera frame in plug frame:                {rp_tcp2cam.to_pose().xyz}")
-    #     # print(f"RPY_Cam_Plug: {rp_tcp2cam.to_pose().rpy_degrees}")
-
-    camera.destroy()
+    # Save results
+    calibration.hand_eye_calibration_save_transformation(camera, np_T_tcp2cam)
 
 
 def main() -> None:
-    """ Example script """
+    """ Hand eye calibration script """
     parser = argparse.ArgumentParser(description='Hand-Eye calibration script.')
     parser.add_argument('--rec', action='store_true', help='Use this option to record new calibration images')
     parser.add_argument('--debug', action='store_true', help='Option to set global debug flag')
     # Parse input arguments
     args = parser.parse_args()
+    if args.debug:
+        ca.set_logging_level(logging.DEBUG)
+    else:
+        ca.set_logging_level(logging.INFO)
     # Check if a new recording step is needed
     if args.rec:
         record_calibration_imgs(args.debug)
     # Run calibration
-    run_hand_eye_calibration(args.debug)
+    run_hand_eye_calibration()
 
 
 if __name__ == '__main__':
