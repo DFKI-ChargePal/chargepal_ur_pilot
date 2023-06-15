@@ -16,7 +16,6 @@ def free_drive() -> None:
     ur10 = URPilot()
     # Enable free drive mode
     ur10.teach_mode()
-
     while True:
         img = cam.get_color_frame()
         display.show(img)

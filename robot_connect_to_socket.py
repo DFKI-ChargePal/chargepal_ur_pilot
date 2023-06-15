@@ -18,13 +18,12 @@ from ur_pilot.plug_out import plug_out
 
 
 # Fixed configurations
-SOCKET_POSE_ESTIMATION_CFG_J = [2.928, -1.373, -2.004, -3.436, -1.757, -1.678]
-SOCKET_POSE_ESTIMATION_CFG_X = Pose().from_xyz([-0.717, 0.250, 0.392]).from_axis_angle([-2.218, -0.007, 2.223])
+SOCKET_POSE_ESTIMATION_CFG_X = Pose().from_xyz([0.614, 0.147, 0.439]).from_axis_angle([-0.017, 1.903, 0.058])
 
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 board_2 = 0.075 / 2  # half board size 
 X_SOCKET_2_BOARD = Pose().from_xyz_xyzw(xyz=[0.125 - board_2, board_2, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
-X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, -0.01])  # Retreat pose with respect to the socket
+X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, -0.045 -0.02])  # Retreat pose with respect to the socket
 
 # Request messages
 PLUG_IN_REQ = req_msg.PlugInRequest(
@@ -44,6 +43,7 @@ PLUG_OUT_REQ = req_msg.PlugOutRequest(
 def connect_to_socket() -> None:
     # Build AruCo detection setup()
     realsense = ca.RealSenseCamera("tcp_cam_realsense")
+    realsense.load_coefficients()
     aru_board = ca.CharucoBoard("DICT_4X4_100", 19, (3, 3), 25)
     board_detector = ca.CharucoboardDetector(realsense, aru_board, display=True)
 
@@ -70,7 +70,7 @@ def connect_to_socket() -> None:
             r_vec, t_vec = _board_pose[0], _board_pose[1]
             # Convert to body motion object
             R_Cam2Board, _ = cv.Rodrigues(r_vec)
-            q_Cam2Board = Quaternion().from_rotation(R_Cam2Board)
+            q_Cam2Board = Quaternion().from_matrix(R_Cam2Board)
             Cam_x_Cam2Board = Vector3d().from_xyz(t_vec)
             # Pose of the camera frame with respect to the ArUco board frame
             X_Cam2Board = Pose().from_pq(Cam_x_Cam2Board, q_Cam2Board)

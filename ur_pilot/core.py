@@ -51,7 +51,8 @@ class URPilot:
 
     def register_ee_cam(self, cam: Camera) -> None:
         self.cam = cam
-        self.cam.load_coefficients()
+        if not self.cam.is_calibrated:
+            self.cam.load_coefficients()
         T_tcp2cam = ca.Calibration.hand_eye_calibration_load_transformation(self.cam)
         self.T_tcp2cam = Transformation().from_trans_matrix(T_tcp2cam)
 
