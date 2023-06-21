@@ -5,7 +5,8 @@ description = ""
 authors = ["Georg John <georg.john@dfki.de>"]
 license = "BSD3"
 readme = "README.md"
-packages = [{include = "chargepal_ur_pilot"}]
+packages = [{include = "ur_pilot"}]
+
 
 [tool.poetry.dependencies]
 python = "^3.8, <3.12"
