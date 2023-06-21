@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "chargepal-ur-pilot"
+version = "0.1.0"
+description = ""
+authors = ["Georg John <georg.john@dfki.de>"]
+license = "BSD3"
+readme = "README.md"
+packages = [{include = "chargepal_ur_pilot"}]
+
+[tool.poetry.dependencies]
+python = "^3.8, <3.12"
+ur-rtde = "^1.5.6"
+chargepal-aruco = {path = "../libs/chargepal_aruco"}
+rigmopy = {path = "../libs/rigmopy"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
