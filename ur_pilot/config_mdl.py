@@ -54,6 +54,12 @@ class ForceMode(BaseModel):
     tcp_speed_limits: List[float] = Field(default_factory=lambda: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01])  
 
 
+class FTSensor(BaseModel):
+    """ Base data model for the force torque sensor configuration
+    """
+    adapter: str = 'enp3s0'
+
+
 class Robot(BaseModel):
     """ Base data model for robot configuration.
     """
@@ -64,13 +70,13 @@ class Robot(BaseModel):
     joints: Joints = Joints()
     tcp: TCP = TCP()
     servo: Servo = Servo()
+    ft_sensor: FTSensor = FTSensor()
     force_mode: ForceMode = ForceMode()
 
 
 class Config(Robot):
-
-    """Data model for robot configuration."""
-
+    """ Data model for robot configuration.
+    """
     name: NoneStr = None
     description: NoneStr = None
     author: NoneStr = None

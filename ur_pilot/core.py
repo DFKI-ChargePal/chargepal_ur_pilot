@@ -2,7 +2,6 @@ from __future__ import annotations
 # global
 import time
 import logging
-import numpy as np
 from pathlib import Path
 import chargepal_aruco as ca
 from chargepal_aruco import Camera
@@ -11,7 +10,7 @@ from rigmopy import Pose, Transformation, Vector6d
 # local
 import config
 from ur_pilot.rtde_interface import RTDEInterface
-from ur_pilot.config import Config, read_toml
+from ur_pilot.config_mdl import Config, read_toml
 
 # typing
 from typing import Sequence

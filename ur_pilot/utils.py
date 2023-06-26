@@ -1,6 +1,7 @@
 """ This file contains common functionality. """
 # global
 import sys
+import pysoem
 
 
 def query_yes_no(question: str, default: str = "yes") -> bool:
@@ -32,3 +33,13 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             return valid[choice]
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
+
+
+def find_ethernet_adapters() -> None:
+
+    adapters = pysoem.find_adapters()
+
+    for i, adapter in enumerate(adapters):
+        print(f'Adapter {i}')
+        print(f'   {adapter.name}')
+        print(f'   {adapter.desc}\n')
