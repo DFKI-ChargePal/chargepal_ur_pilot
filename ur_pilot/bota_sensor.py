@@ -1,52 +1,143 @@
-"""Prints the readings of a Bota Systems EtherCAT sensor.
-
-This example expects a physical slave layout according to
-_expected_slave_layout, see below.
-"""
+"""Bota force torque sensor."""
+from __future__ import annotations
 
 # global
-import sys
 import time
 import struct
 import ctypes
 import pysoem
-import threading
-from pathlib import Path
-from collections import namedtuple
+import logging
+import collections
+import numpy as np
+import multiprocessing
+from multiprocessing import shared_memory
 
-# local
-import config
-from ur_pilot.config_mdl import Config, read_toml
-
-# typing
-from typing import Callable
-from pysoem import CdefSlave
+#typing
+from typing import Any
+from numpy import typing as npt
+from typing_extensions import Literal
 
 
-class BasicExample:
+LOGGER = logging.getLogger(__name__)
+
+
+class BotaFtSensor:
+
+    """Bota Force Torque Sensor class."""
 
     BOTA_VENDOR_ID = 0xB07A
     BOTA_PRODUCT_CODE = 0x00000001
-    SINC_LENGTH = 128 # 256
-    # Note that the time step is set according to the sinc filter size!
-    time_step = 1.0;
+    MEM_SIZE_BYTES = 77
+    SINC_LENGTHS = (51, 64, 128, 205, 256, 512)
 
-    def __init__(self, ifname: str) -> None:
-        self._ifname = ifname
-        self._pd_thread_stop_event = threading.Event()
-        self._ch_thread_stop_event = threading.Event()
-        self._actual_wkc = 0
+    def __init__(
+        self,
+        adapter: str,
+        slave_pos: int = 0,
+        filter_sinc_length: int = 512,
+        filter_fir: bool = False,
+        filter_fast: bool = False,
+        filter_chop: bool = False,
+    ) -> None:
+        """
+        Bota Force Torque Sensor.
+
+        Parameters:
+            adapter: string
+                String identifier of the ethernet adapter interface the sensor is connected to
+            slave_pos: int, default 0
+                Index of the sensor instance as a SOEM slave in the slave list
+            filter_sinc_length: int, default 512
+                Length of the Sinc filter,
+                value restricted to 51, 64, 128, 205, 256, 512
+            filter_fir: bool, default False
+                Flag for activating the FIR filter
+            filter_fast: bool, default False
+                Flag for activating the FAST option of the FIR filter,
+                it is recommended to be disabled for real-time applications
+            filter_chop: bool, default False
+                Flag for activating the CHOP filter,
+                it is recommended to be disabled for real-time applications
+        """
+        self.adapter = adapter
+        if filter_sinc_length not in self.SINC_LENGTHS:
+            raise ValueError(
+                f"Value {filter_sinc_length} not valid for sinc_length. "
+                f"Values are restricted to {', '.join(map(str, self.SINC_LENGTHS))}."
+            )
+        self.filter_sinc_length = filter_sinc_length
+        self.filter_fir = filter_fir
+        self.filter_fast = filter_fast
+        self.filter_chop = filter_chop
+
         self._master = pysoem.Master()
-        self._master.in_op = False
-        self._master.do_check_state = False
-        SlaveSet = namedtuple('SlaveSet', 'name product_code config_func')
-        self._expected_slave_layout = {0: SlaveSet('BFT-SENS-ECAT-M8', self.BOTA_PRODUCT_CODE, self.bota_sensor_setup)}
+        self.sampling_rate = 0
+        self.time_step = 0.0
+        SlaveSet = collections.namedtuple("SlaveSet", "slave_name product_code config_func")
+        self._expected_slave_mapping = {
+            slave_pos: SlaveSet("BFT-MEDS-ECAT-M8", self.BOTA_PRODUCT_CODE, self._sensor_setup)
+        }
+        self.update_process = multiprocessing.Process()
+        self._init_master()
+        self.slave = self._master.slaves[slave_pos]
 
-    def bota_sensor_setup(self, slave_pos: int) -> None:
-        print("bota_sensor_setup")
+    def start(self) -> None:
+        LOGGER.debug("Starting value update process")
+        self.write_buffer = shared_memory.SharedMemory(create=True, size=self.MEM_SIZE_BYTES)
+        self.update_process = multiprocessing.Process(target=self._update_values, args=())
+        self.read_buffer = shared_memory.SharedMemory(self.write_buffer.name)
+        self.update_process.start()
+        time.sleep(0.125)
+
+    def stop(self) -> None:
+        LOGGER.debug("Stopping value update process")
+        self.update_process.terminate()
+
+        LOGGER.debug("Releasing shared memory")
+        self.write_buffer.close()
+        self.read_buffer.close()
+        self.write_buffer.unlink()
+
+
+    def __enter__(self) -> BotaFtSensor:
+        """
+        Context manager __enter__ method.
+
+        Use, e.g., like:
+        >>> with BotaFtSensor(ether_if) as sensor:
+        >>>     while True:
+        >>>         print(f"Fx: {sensor.Fx:.5f} N", end="\r")
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> Literal[False]:
+        """
+        Context manager __exit__ method.
+
+        Use, e.g., like:
+        >>> with BotaFtSensor(ether_if) as sensor:
+        >>>     while True:
+        >>>         print(f"Fx: {sensor.Fx:.5f} N", end="\r")
+        """
+        self.stop()
+        return False
+
+    def _sensor_setup(self, slave_pos: int) -> None:
+        """
+        Setup of sensor.
+
+        Parameters:
+            slave_pos: int
+                Index of the sensor in the slaves list
+        """
+        LOGGER.debug("Setting up sensor")
         slave = self._master.slaves[slave_pos]
 
-        ## Set sensor configuration
+        ## Set sensor configuration:
         # calibration matrix active
         slave.sdo_write(0x8010, 1, bytes(ctypes.c_uint8(1)))
         # temperature compensation
@@ -54,236 +145,301 @@ class BasicExample:
         # IMU active
         slave.sdo_write(0x8010, 3, bytes(ctypes.c_uint8(1)))
 
-        ## Set force torque filter
-        # Sinc filter size
-        slave.sdo_write(0x8006, 1, bytes(ctypes.c_uint16(self.SINC_LENGTH)))
-        # FIR disable
-        slave.sdo_write(0x8006, 2, bytes(ctypes.c_uint8(1)))
-        # FAST enable
-        slave.sdo_write(0x8006, 3, bytes(ctypes.c_uint8(0)))
-        # CHOP enable
-        slave.sdo_write(0x8006, 4, bytes(ctypes.c_uint8(0)))
+        ## Set force torque filter:
+        slave.sdo_write(index=0x8006, subindex=2, data=struct.pack('b', int(not self.filter_fir)))  # Has to be inverted
+        slave.sdo_write(index=0x8006, subindex=3, data=struct.pack('b', int(self.filter_fast)))
+        slave.sdo_write(index=0x8006, subindex=4, data=struct.pack('b', int(self.filter_chop)))
+        LOGGER.info(f"Filter settings: sinc length {self.filter_sinc_length}, " \
+                    f"FIR {self.filter_fir}, FAST {self.filter_fast}, CHOP {self.filter_chop}")
+        slave.sdo_write(index=0x8006, subindex=1, data=struct.pack('H', self.filter_sinc_length))
 
-        ## Get filter parameter
-        fir_disable = struct.unpack('B', slave.sdo_read(0x8006, 2))[0]
-        fast_enable = struct.unpack('B', slave.sdo_read(0x8006, 3))[0]
-        chop_enable = struct.unpack('B', slave.sdo_read(0x8006, 4))[0]
-        print(f"FIR disable: {fir_disable}")
-        print(f"Fast enable: {fast_enable}")
-        print(f"Chop enable: {chop_enable}")
-        ## Get sampling rate
-        sampling_rate = struct.unpack('h', slave.sdo_read(0x8011, 0))[0]
-        print("Sampling rate {}".format(sampling_rate))
-        if sampling_rate > 0:
-            self.time_step = 1.0/float(sampling_rate)
+        # Get sampling rate:
+        self.sampling_rate = struct.unpack("h", slave.sdo_read(0x8011, 0))[0]
+        LOGGER.info(f"Sampling rate {self.sampling_rate} Hz")
+        if self.sampling_rate > 0:
+            self.time_step = 1.0 / float(self.sampling_rate)
 
-        # Save configuration
-        slave.sdo_write(0x8030, 1, bytes(ctypes.c_uint8(1)))
+    def _init_master(self) -> None:
+        """Initialization of the SOEM master."""
+        self._master.open(self.adapter)
 
-        print("time step {}".format(self.time_step))
+        # config_init returns the number of slaves found
+        if self._master.config_init() > 0:
+            LOGGER.debug(f"{len(self._master.slaves)} slave(s) found and configured")
 
-    def _processdata_thread(self) -> None:
-        while not self._pd_thread_stop_event.is_set():
-            start_time = time.perf_counter()
-            self._master.send_processdata()
-            self._actual_wkc = self._master.receive_processdata(2000)
-            if not self._actual_wkc == self._master.expected_wkc:
-                print('incorrect wkc')
+            for i, slave in enumerate(self._master.slaves):
+                assert slave.man == self.BOTA_VENDOR_ID
+                assert slave.id == self._expected_slave_mapping[i].product_code
+                slave.config_func = self._expected_slave_mapping[i].config_func
 
-            sensor_input_as_bytes = self._master.slaves[0].input
-            status = struct.unpack_from('B', sensor_input_as_bytes, 0)[0]
+            # PREOP_STATE to SAFEOP_STATE request - each slave's config_func is called
+            self._master.config_map()
 
-            warningsErrorsFatals = struct.unpack_from('I', sensor_input_as_bytes, 1)[0]
-
-            Fx = struct.unpack_from('f', sensor_input_as_bytes, 5)[0]
-            Fy = struct.unpack_from('f', sensor_input_as_bytes, 9)[0]
-            Fz = struct.unpack_from('f', sensor_input_as_bytes, 13)[0]
-            Mx = struct.unpack_from('f', sensor_input_as_bytes, 17)[0]
-            My = struct.unpack_from('f', sensor_input_as_bytes, 21)[0]
-            Mz = struct.unpack_from('f', sensor_input_as_bytes, 25)[0]
-            forceTorqueSaturated = struct.unpack_from('H', sensor_input_as_bytes, 29)[0]
-
-            Ax = struct.unpack_from('f', sensor_input_as_bytes, 31)[0]
-            Ay = struct.unpack_from('f', sensor_input_as_bytes, 35)[0]
-            Az = struct.unpack_from('f', sensor_input_as_bytes, 39)[0]
-            accelerationSaturated = struct.unpack_from('B', sensor_input_as_bytes, 43)[0]
-
-            Rx = struct.unpack_from('f', sensor_input_as_bytes, 44)[0]
-            Ry = struct.unpack_from('f', sensor_input_as_bytes, 48)[0]
-            Rz = struct.unpack_from('f', sensor_input_as_bytes, 52)[0]
-            angularRateSaturated = struct.unpack_from('B', sensor_input_as_bytes, 56)[0]
-
-            temperature = struct.unpack_from('f', sensor_input_as_bytes, 57)[0]
-            
-            #print("Status {}".format(status))
-            #print("Warnings/Errors/Fatals {}".format(warningsErrorsFatals))
-
-            # print("Fx {}".format(Fx))
-            # print("Fy {}".format(Fy))
-            # print("Fz {}".format(Fz))
-            # print("Mx {}".format(Mx))
-            # print("My {}".format(My))
-            # print("Mz {}".format(Mz))
-            #print("Force-Torque saturated {}".format(forceTorqueSaturated))
-            
-            # print("Ax {}".format(Ax))
-            # print("Ay {}".format(Ay))
-            # print("Az {}".format(Az))
-            #print("Acceleration saturated {}".format(accelerationSaturated))
-            
-            #print("Rx {}".format(Rx))
-            #print("Ry {}".format(Ry))
-            #print("Rz {}".format(Rz))
-            #print("Angular rate saturated {}".format(angularRateSaturated))
-            # print("Temperature {}\n".format(temperature))
-            # print(" ")
-            time_diff = time.perf_counter() - start_time
-            if time_diff < self.time_step:
-                BasicExample._sleep(self.time_step - time_diff)
- 
-
-    def _my_loop(self) -> None:
-
-        self._master.in_op = True
-
-        try:
-            while 1:
-                # print('Run my loop')
-
-                time.sleep(1.0)
-
-        except KeyboardInterrupt:
-            # ctrl-C abort handling
-            print('stopped')
-
-
-    def run(self) -> None:
-
-        self._master.open(self._ifname)
-
-        if not self._master.config_init() > 0:
-            self._master.close()
-            raise BasicExampleError('no slave found')
-
-        for i, slave in enumerate(self._master.slaves):
-            if not ((slave.man == self.BOTA_VENDOR_ID) and
-                    (slave.id == self._expected_slave_layout[i].product_code)):
-                self._master.close()
-                raise BasicExampleError('unexpected slave layout')
-            slave.config_func = self._expected_slave_layout[i].config_func
-            slave.is_lost = False
-
-        self._master.config_map()
-
-        if self._master.state_check(pysoem.SAFEOP_STATE, 50000) != pysoem.SAFEOP_STATE:
-            self._master.close()
-            raise BasicExampleError('not all slaves reached SAFEOP state')
-
-        self._master.state = pysoem.OP_STATE
-
-        check_thread = threading.Thread(target=self._check_thread)
-        check_thread.start()
-        proc_thread = threading.Thread(target=self._processdata_thread)
-        proc_thread.start()
-        
-        # send one valid process data to make outputs in slaves happy
-        self._master.send_processdata()
-        self._master.receive_processdata(2000)
-        # request OP state for all slaves
-        
-        self._master.write_state()
-
-        all_slaves_reached_op_state = False
-        for i in range(40):
-            self._master.state_check(pysoem.OP_STATE, 50000)
-            if self._master.state == pysoem.OP_STATE:
-                all_slaves_reached_op_state = True
-                break
-        print(f"Number of slaves: {len(self._master.slaves)}")
-        if all_slaves_reached_op_state:
-            self._my_loop()
-
-        self._pd_thread_stop_event.set()
-        self._ch_thread_stop_event.set()
-        proc_thread.join()
-        check_thread.join()
-        self._master.state = pysoem.INIT_STATE
-        # request INIT state for all slaves
-        self._master.write_state()
-        self._master.close()
-
-        if not all_slaves_reached_op_state:
-            raise BasicExampleError('not all slaves reached OP state')
-
-    @staticmethod
-    def _check_slave(slave: CdefSlave, pos: int) -> None:
-        if slave.state == (pysoem.SAFEOP_STATE + pysoem.STATE_ERROR):
-            print(
-                'ERROR : slave {} is in SAFE_OP + ERROR, attempting ack.'.format(pos))
-            slave.state = pysoem.SAFEOP_STATE + pysoem.STATE_ACK
-            slave.write_state()
-        elif slave.state == pysoem.SAFEOP_STATE:
-            print(
-                'WARNING : slave {} is in SAFE_OP, try change to OPERATIONAL.'.format(pos))
-            slave.state = pysoem.OP_STATE
-            slave.write_state()
-        elif slave.state > pysoem.NONE_STATE:
-            if slave.reconfig():
-                slave.is_lost = False
-                print('MESSAGE : slave {} reconfigured'.format(pos))
-        elif not slave.is_lost:
-            slave.state_check(pysoem.OP_STATE)
-            if slave.state == pysoem.NONE_STATE:
-                slave.is_lost = True
-                print('ERROR : slave {} lost'.format(pos))
-        if slave.is_lost:
-            if slave.state == pysoem.NONE_STATE:
-                if slave.recover():
-                    slave.is_lost = False
-                    print(
-                        'MESSAGE : slave {} recovered'.format(pos))
-            else:
-                slave.is_lost = False
-                print('MESSAGE : slave {} found'.format(pos))
-    
-    def _check_thread(self) -> None:
-
-        while not self._ch_thread_stop_event.is_set():
-            if self._master.in_op and ((self._actual_wkc < self._master.expected_wkc) or self._master.do_check_state):
-                self._master.do_check_state = False
+            # wait 50 ms for all slaves to reach SAFE_OP state
+            if (self._master.state_check(pysoem.SAFEOP_STATE, 50000) != pysoem.SAFEOP_STATE):
                 self._master.read_state()
-                for i, slave in enumerate(self._master.slaves):
-                    if slave.state != pysoem.OP_STATE:
-                        self._master.do_check_state = True
-                        BasicExample._check_slave(slave, i)
-                if not self._master.do_check_state:
-                    print('OK : all slaves resumed OPERATIONAL.')
+                for slave in self._master.slaves:
+                    if not slave.state == pysoem.SAFEOP_STATE:
+                        LOGGER.error(f"{slave.name} did not reach SAFEOP state")
+                        LOGGER.error(
+                            f"al status code {hex(slave.al_status)} ",
+                            f"({pysoem.al_status_code_to_string(slave.al_status)})",
+                        )
+                raise Exception("not all slaves reached SAFEOP state")
+
+            self._master.state = pysoem.OP_STATE
+            self._master.write_state()
+
+            self._master.state_check(pysoem.OP_STATE, 50000)
+            if self._master.state != pysoem.OP_STATE:
+                self._master.read_state()
+                for slave in self._master.slaves:
+                    if not slave.state == pysoem.OP_STATE:
+                        LOGGER.error(f"{slave.name} did not reach OP state")
+                        LOGGER.error(
+                            f"al status code {hex(slave.al_status)} ",
+                            f"({pysoem.al_status_code_to_string(slave.al_status)})",
+                        )
+                raise Exception("not all slaves reached OP state")
+        else:
+            raise RuntimeError(f"Can not connect to sensor slaves. Is adapter name '{self.adapter}' correct?")
+            LOGGER.error("slaves not found")
+
+    def _update_values(self) -> None:
+        """Update process for the sensor values."""
+        try:
+            while True:
+                # Run update loop:
+                self._master.send_processdata()
+                self._master.receive_processdata(2000)
+
+                self.write_buffer.buf[:] = bytearray(self.slave.input)
+
+                time.sleep(self.time_step)
+        except Exception as e:
+            LOGGER.error(f"Aborted sensor value update: {e}")
+            raise
+        finally:
+            self._master.state = pysoem.INIT_STATE
+            # request INIT state for all slaves
+            self._master.write_state()
+            self._master.close()
+
+    def _read_value(self, type: str, position: int) -> Any:
+        """
+        Read current sensor value from the value buffer.
+
+        Parameters:
+            type: string
+                Type identifier according to
+                https://docs.python.org/3/library/struct.html#format-characters
+            position: integer
+                Position in the bytearray
+        Returns:
+            Unpacked value from value buffer
+        """
+        return struct.unpack_from(type, self.read_buffer.buf, position)[0]
+    
+    def set_ft_offset(self, offset: npt.NDArray[np.float64]) -> None:
+        """ Set the internal force-torque offset
+
+        Args:
+            offset: 6 dimensional offset
+        """
+        if self.update_process.is_alive():
+            self.slave.sdo_write(index=0x8000, subindex=1, data=struct.pack("f", float(offset[0])))
+            self.slave.sdo_write(index=0x8000, subindex=2, data=struct.pack("f", float(offset[1])))
+            self.slave.sdo_write(index=0x8000, subindex=3, data=struct.pack("f", float(offset[2])))
+            self.slave.sdo_write(index=0x8000, subindex=4, data=struct.pack("f", float(offset[3])))
+            self.slave.sdo_write(index=0x8000, subindex=5, data=struct.pack("f", float(offset[4])))
+            self.slave.sdo_write(index=0x8000, subindex=6, data=struct.pack("f", float(offset[5])))
+            time.sleep(0.125)
+        else:
+            LOGGER.error("Error while setting sensor offset. Is the sensor connected properly?")
+
+    def clear_ft_offset(self) -> None:
+        """ Method to set force torque offset to zero
+        """
+        self.set_ft_offset(np.zeros(6))
+
+    def zero_ft_readings(self) -> npt.NDArray[np.float64]:
+        """ Zeroing of the sensor readings.
+            This method sets an offset of the mean values over one second of sensor
+            measurements. Therefore, the update process of the sensor has to be started
+            already by entering the context manager of the sensor.
+
+        Returns:
+            The calculated offset
+        """
+        LOGGER.info(f"Zeroing sensor with mean values over a sample size of {self.sampling_rate}.")
+        buffer = np.empty(shape=(6, self.sampling_rate), dtype=np.float32)
+        for i in range(self.sampling_rate):
+            buffer[:, i] = np.array([self.Fx, self.Fy, self.Fz, self.Tx, self.Ty, self.Tz])
             time.sleep(self.time_step)
+        offset: npt.NDArray[np.float64] = buffer.mean(axis=1)
+        self.set_ft_offset(-offset)
+        return -offset
 
-    @staticmethod
-    def _sleep(duration: float, get_now: Callable[[], float] = time.perf_counter) -> None:
-        now = get_now()
-        end = now + duration
-        while now < end:
-            now = get_now()
+    @property
+    def status(self) -> int:
+        """Status of sensor readings."""
+        status: int = self._read_value("B", 0)
+        return status
 
+    @property
+    def warningsErrorsFatals(self) -> int:
+        """Count of warnings, errors or fatals."""
+        wef: int = self._read_value("I", 1)
+        return wef
 
-class BasicExampleError(Exception):
+    @property
+    def Fx(self) -> float:
+        """Force in x direction."""
+        fx: float = self._read_value("f", 5)
+        return fx
 
-    def __init__(self, message: str) -> None:
-        super(BasicExampleError, self).__init__(message)
-        self.message = message
+    @property
+    def Fy(self) -> float:
+        """Force in y direction."""
+        fy: float = self._read_value("f", 9)
+        return fy
 
+    @property
+    def Fz(self) -> float:
+        """Force in z direction."""
+        fz: float = self._read_value("f", 13)
+        return fz
 
-if __name__ == '__main__':
+    @property
+    def Tx(self) -> float:
+        """Torque about x axis."""
+        tx: float = self._read_value("f", 17)
+        return tx
 
-    print('basic_example started')
-    config_fp = Path(config.__file__).parent.joinpath(config.RUNNING_CONFIG_FILE)
-    config_dict = read_toml(config_fp)
-    cfg = Config(**config_dict)
+    @property
+    def Ty(self) -> float:
+        """Torque about y axis."""
+        ty: float = self._read_value("f", 21)
+        return ty
 
-    try:
-        BasicExample(cfg.robot.ft_sensor.adapter).run()
-    except BasicExampleError as expt:
-        print('basic_example failed: ' + expt.message)
-        sys.exit(1)
+    @property
+    def Tz(self) -> float:
+        """Torque about z axis."""
+        tz: float = self._read_value("f", 25)
+        return tz
+    
+    @property
+    def FT(self) -> npt.NDArray[np.float64]:
+        """ Force torque readings as array
+        """
+        return np.array([self.Fx, self.Fy, self.Fz, self.Tx, self.Ty, self.Tz])
+
+    @property
+    def FTSaturated(self) -> int:
+        """Saturation status of force or torque measurements."""
+        ft_sat: int =  self._read_value("H", 29)
+        return ft_sat
+
+    @property
+    def Ax(self) -> float:
+        """Acceleration in x direction."""
+        ax: float = self._read_value("f", 31)
+        return ax
+
+    @property
+    def Ay(self) -> float:
+        """Acceleration in y direction."""
+        ay: float = self._read_value("f", 35)
+        return ay
+
+    @property
+    def Az(self) -> float:
+        """Acceleration in z direction."""
+        az: float = self._read_value("f", 39)
+        return az
+
+    @property
+    def accelerationSaturated(self) -> int:
+        """Saturation status of acceleration measurements."""
+        acc_sat: int = self._read_value("B", 43)
+        return acc_sat
+
+    @property
+    def Rx(self) -> float:
+        """Angular rate about x axis."""
+        rx: float = self._read_value("f", 44)
+        return rx
+
+    @property
+    def Ry(self) -> float:
+        """Angular rate about y axis."""
+        ry: float = self._read_value("f", 48)
+        return ry
+
+    @property
+    def Rz(self) -> float:
+        """Angular rate about z axis."""
+        rz: float = self._read_value("f", 52)
+        return rz
+
+    @property
+    def angularRateSaturated(self) -> int:
+        """Saturation status of angular rate measurements."""
+        ang_sat: int = self._read_value("B", 56)
+        return ang_sat
+
+    @property
+    def IMU(self) -> npt.NDArray[np.float64]:
+        """ IMU readings as array
+        """
+        return np.array([self.Ax, self.Ay, self.Az, self.Rx, self.Ry, self.Rz])
+
+    @property
+    def temperature(self) -> float:
+        """Temperature."""
+        temp: float = self._read_value("f", 57)
+        return temp
+
+    @property
+    def orientationX(self) -> float:
+        """
+        Not available right now.
+
+        The sensor does not return any other value than 0.0 when orientation
+        estimation is turned on.
+        """
+        ox: float = self._read_value("f", 61)
+        return ox
+
+    @property
+    def orientationY(self) -> float:
+        """
+        Not available right now.
+
+        The sensor does not return any other value than 0.0 when orientation
+        estimation is turned on.
+        """
+        oy: float = self._read_value("f", 65)
+        return oy
+
+    @property
+    def orientationZ(self) -> float:
+        """
+        Not available right now.
+
+        The sensor does not return any other value than 0.0 when orientation
+        estimation is turned on.
+        """
+        oz: float = self._read_value("f", 69)
+        return oz
+
+    @property
+    def orientationW(self) -> float:
+        """
+        Not available right now.
+
+        The sensor does not return any other value than 0.0 when orientation
+        estimation is turned on.
+        """
+        ow: float = self._read_value("f", 73)
+        return ow

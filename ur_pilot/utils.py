@@ -2,6 +2,19 @@
 # global
 import sys
 import pysoem
+import logging
+
+
+def set_logging_level(level: int) -> None:
+    """ Helper to configure logging
+
+    Args:
+        level: Logging level
+
+    Returns:
+        None
+    """
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=level)
 
 
 def query_yes_no(question: str, default: str = "yes") -> bool:

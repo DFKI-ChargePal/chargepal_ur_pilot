@@ -10,6 +10,10 @@ ip_address = "192.168.13.42"
 
 [robot.ft_sensor]
 adapter = "enx3c18a01939b0"
+filter_sinc_length = 128  # (51, 64, 128, 205, 256, 512)
+filter_fir = false
+filter_fast = false
+filter_chop = false 
 
 [robot.joints]
 vel = 0.1

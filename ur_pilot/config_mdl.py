@@ -57,7 +57,12 @@ class ForceMode(BaseModel):
 class FTSensor(BaseModel):
     """ Base data model for the force torque sensor configuration
     """
-    adapter: str = 'enp3s0'
+    adapter: str = 'enx3c18a01939b0'
+    slave_pos: int = 0
+    filter_sinc_length: int = 512
+    filter_fir: bool = True
+    filter_fast: bool = False
+    filter_chop: bool = False 
 
 
 class Robot(BaseModel):
