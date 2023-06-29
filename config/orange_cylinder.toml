@@ -9,7 +9,7 @@ home_radians = [3.429, -1.371, 2.127, -0.747, 1.867, -1.565]
 ip_address = "192.168.13.42"
 
 [robot.ft_sensor]
-adapter = "enx3c18a01939b0"
+adapter = "enx3c18a01939b0"  # "enp3s0"  # 
 filter_sinc_length = 128  # (51, 64, 128, 205, 256, 512)
 filter_fir = false
 filter_fast = false

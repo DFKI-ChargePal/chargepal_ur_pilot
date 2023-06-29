@@ -149,9 +149,10 @@ class BotaFtSensor:
         slave.sdo_write(index=0x8006, subindex=2, data=struct.pack('b', int(not self.filter_fir)))  # Has to be inverted
         slave.sdo_write(index=0x8006, subindex=3, data=struct.pack('b', int(self.filter_fast)))
         slave.sdo_write(index=0x8006, subindex=4, data=struct.pack('b', int(self.filter_chop)))
+        slave.sdo_write(index=0x8006, subindex=1, data=struct.pack('H', self.filter_sinc_length))
+        
         LOGGER.info(f"Filter settings: sinc length {self.filter_sinc_length}, " \
                     f"FIR {self.filter_fir}, FAST {self.filter_fast}, CHOP {self.filter_chop}")
-        slave.sdo_write(index=0x8006, subindex=1, data=struct.pack('H', self.filter_sinc_length))
 
         # Get sampling rate:
         self.sampling_rate = struct.unpack("h", slave.sdo_read(0x8011, 0))[0]
@@ -200,10 +201,9 @@ class BotaFtSensor:
                             f"al status code {hex(slave.al_status)} ",
                             f"({pysoem.al_status_code_to_string(slave.al_status)})",
                         )
-                raise Exception("not all slaves reached OP state")
+                raise Exception("Not all slaves reached OP state")
         else:
             raise RuntimeError(f"Can not connect to sensor slaves. Is adapter name '{self.adapter}' correct?")
-            LOGGER.error("slaves not found")
 
     def _update_values(self) -> None:
         """Update process for the sensor values."""
@@ -253,7 +253,6 @@ class BotaFtSensor:
             self.slave.sdo_write(index=0x8000, subindex=4, data=struct.pack("f", float(offset[3])))
             self.slave.sdo_write(index=0x8000, subindex=5, data=struct.pack("f", float(offset[4])))
             self.slave.sdo_write(index=0x8000, subindex=6, data=struct.pack("f", float(offset[5])))
-            time.sleep(0.125)
         else:
             LOGGER.error("Error while setting sensor offset. Is the sensor connected properly?")
 
