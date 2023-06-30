@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 
 import numpy as np
-from threading import Thread
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.artist import Artist
@@ -91,7 +90,7 @@ class BlitManager:
 
 class SignalMonitor(BlitManager):
 
-    MONITOR_HZ_ = 30
+    MONITOR_HZ_ = 20
 
     def __init__(self, y_labels: list[str], hz: int, time_history: float = 1.0) -> None:
         self.display_rate = 1.0/self.MONITOR_HZ_
@@ -113,16 +112,9 @@ class SignalMonitor(BlitManager):
         self._axs[-1].set_xlabel('time [s]')
         # Use BlitMangar to update signal data in realtime.
         BlitManager.__init__(self, self._fig.canvas, self.signal_lns)
-        # self.bm = BlitManager(self._fig.canvas, self.signal_lns)
-        # # Create thread
-        # self.thread = Thread(target=self._update_monitor, args=())
-        # self.thread.daemon = True
-        # self.running = True
         # Make sure our window is on the screen and drawn
         plt.show(block=False)
         plt.pause(.1)
-        # Start updating monitor
-        # self.thread.start()
 
     def _update_monitor(self) -> None:
         y_min, y_max = np.min(self.signals, axis=-1), np.max(self.signals, axis=-1)
@@ -145,8 +137,3 @@ class SignalMonitor(BlitManager):
             raise ValueError(f'Given signal do not match with the number of plots. {sig_dim} != {self.sig_dim}')
         self.signals = np.hstack([self.signals[:, sig_len:], signal])
         self._update_monitor()
-
-
-    # def destroy(self) -> None:
-    #     self.running = False
-    #     self.thread.join()

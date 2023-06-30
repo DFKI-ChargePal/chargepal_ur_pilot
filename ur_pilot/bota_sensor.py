@@ -98,7 +98,6 @@ class BotaFtSensor:
         self.read_buffer.close()
         self.write_buffer.unlink()
 
-
     def __enter__(self) -> BotaFtSensor:
         """
         Context manager __enter__ method.
@@ -137,7 +136,7 @@ class BotaFtSensor:
         LOGGER.debug("Setting up sensor")
         slave = self._master.slaves[slave_pos]
 
-        ## Set sensor configuration:
+        # -- Set sensor configuration:
         # calibration matrix active
         slave.sdo_write(0x8010, 1, bytes(ctypes.c_uint8(1)))
         # temperature compensation
@@ -145,13 +144,13 @@ class BotaFtSensor:
         # IMU active
         slave.sdo_write(0x8010, 3, bytes(ctypes.c_uint8(1)))
 
-        ## Set force torque filter:
+        # -- Set force torque filter:
         slave.sdo_write(index=0x8006, subindex=2, data=struct.pack('b', int(not self.filter_fir)))  # Has to be inverted
         slave.sdo_write(index=0x8006, subindex=3, data=struct.pack('b', int(self.filter_fast)))
         slave.sdo_write(index=0x8006, subindex=4, data=struct.pack('b', int(self.filter_chop)))
         slave.sdo_write(index=0x8006, subindex=1, data=struct.pack('H', self.filter_sinc_length))
         
-        LOGGER.info(f"Filter settings: sinc length {self.filter_sinc_length}, " \
+        LOGGER.info(f"Filter settings: sinc length {self.filter_sinc_length}, "
                     f"FIR {self.filter_fir}, FAST {self.filter_fast}, CHOP {self.filter_chop}")
 
         # Get sampling rate:
@@ -177,7 +176,7 @@ class BotaFtSensor:
             self._master.config_map()
 
             # wait 50 ms for all slaves to reach SAFE_OP state
-            if (self._master.state_check(pysoem.SAFEOP_STATE, 50000) != pysoem.SAFEOP_STATE):
+            if self._master.state_check(pysoem.SAFEOP_STATE, 50000) != pysoem.SAFEOP_STATE:
                 self._master.read_state()
                 for slave in self._master.slaves:
                     if not slave.state == pysoem.SAFEOP_STATE:

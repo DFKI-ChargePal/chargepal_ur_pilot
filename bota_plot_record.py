@@ -33,9 +33,12 @@ def plot6d(ts: npt.NDArray[np.float64], data_array: npt.NDArray[np.float64], x_l
 def main() -> None:
 
     cfg = FTSensor()
-    cfg.filter_fir = True
-    cfg.filter_sinc_length = 128
-    
+    cfg.adapter = "enp0s31f6"
+    cfg.filter_fir = False
+    cfg.filter_fast = False
+    cfg.filter_chop = False
+    cfg.filter_sinc_length = 51
+
     data = helper.record_from_sensor(cfg, DURATION_, 'ft_imu')
     t_span = np.linspace(0.0, DURATION_, data.shape[-1])
     ft_data = data[0:6]

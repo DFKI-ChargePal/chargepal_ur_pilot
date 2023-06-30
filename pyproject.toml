@@ -14,6 +14,7 @@ ur-rtde = "^1.5.6"
 chargepal-aruco = {path = "../libs/chargepal_aruco"}
 rigmopy = {path = "../libs/rigmopy"}
 pysoem = "^1.0.8"
+pydantic = "^1.10.9"
 
 
 [build-system]

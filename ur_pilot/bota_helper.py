@@ -25,6 +25,7 @@ def record_from_sensor(sensor_cfg: FTSensor, duration: float, rec_type: str) -> 
     data_rec: npt.NDArray[np.float64] | None = None
 
     with BotaFtSensor(**sensor_cfg.dict()) as sensor:
+
         t_start = time.time()
         while t_start + duration > time.time():
 
