@@ -14,8 +14,30 @@ class FTCalibration:
         """ Class based on the ROS package http://wiki.ros.org/force_torque_tools
         """
         self.num_meas = 0
-        self.H: npt.NDArray[np.float64] | None = None  # stacked measurement matrices
-        self.Z: npt.NDArray[np.float64] | None = None  # stacked F/T measurements
+        self._H: npt.NDArray[np.float64] | None = None  # stacked measurement matrices
+        self._Z: npt.NDArray[np.float64] | None = None  # stacked F/T measurements
+
+    @property
+    def H(self) -> npt.NDArray[np.float64]:
+        if self._H is None:
+            raise ValueError("Measurement matrices are not set.")
+        else:
+            return self._H
+
+    @H.setter
+    def H(self, H_: npt.NDArray[np.float64]) -> None:
+        self._H = H_
+
+    @property
+    def Z(self) -> npt.NDArray[np.float64]:
+        if self._Z is None:
+            raise ValueError("F/T measurements are not set.")
+        else:
+            return self._Z
+
+    @Z.setter
+    def Z(self, Z_: npt.NDArray[np.float64]) -> None:
+        self._Z = Z_
 
     def add_measurement(self, gravity: Vector3d, ft_raw: Vector6d) -> None:
         """ Add a new measurement for calibration. Make sure both vector are represented in the same frame.
