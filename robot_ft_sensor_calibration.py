@@ -17,7 +17,6 @@ from rigmopy import Vector3d, Vector6d
 from ur_pilot.core import URPilot
 from ur_pilot.utils import set_logging_level
 from ur_pilot.ft_sensor.ft_calib import FTCalibration
-from ur_pilot.ft_sensor.bota_sensor import BotaFtSensor
 from robot_record_state_sequence import record_state_sequence, state_sequence_reader
 
 
@@ -70,12 +69,13 @@ def record_ft_measurements() -> None:
 
         file_name = f"{counter:02}_{MEAS_FILE_}"
         fp = meas_dir.joinpath(file_name)
-
+        LOGGER.info(f"Record sample with:\nGravity: {g_tcp_wrt_world}\nFT: {new_ft_meas_wrt_world}")
         toml_doc = document()
         toml_doc.add("gravity", g_tcp_wrt_world.xyz)  # type: ignore
         toml_doc.add("ft_raw", new_ft_meas_wrt_world.xyzXYZ)  # type: ignore
         with fp.open(mode='wb') as f:
             tomli_w.dump(toml_doc, f)
+        counter += 1
 
     # Move back to home
     ur10.move_home()
@@ -99,13 +99,14 @@ def calibrate_ft_sensor() -> tuple[float, Vector3d, Vector6d]:
         LOGGER.warning(f"No directory found with path {meas_dir}. Return default parameters")
     else:
         for file_ in meas_dir.glob('*.toml'):
-            with file_.open(mode='wb') as fp:
+            with file_.open(mode='rb') as fp:
                 f_in = tomli.load(fp)
                 g = Vector3d().from_xyz(f_in["gravity"])
                 ft_raw = Vector6d().from_xyzXYZ(f_in["ft_raw"])
                 ft_calib.add_measurement(g, ft_raw)
 
         mass, com, ft_bias = ft_calib.get_calib()
+    LOGGER.info(f"Calibration values:\nMass: {mass}\nCOM: {com}\nFT bias: {ft_bias}")
     return mass, com, ft_bias
 
 

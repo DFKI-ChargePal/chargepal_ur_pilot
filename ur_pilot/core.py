@@ -86,7 +86,7 @@ class URPilot:
             else:
                 avg_ft = np.hstack([avg_ft, ft_next])
             time.sleep(self.ft_sensor.time_step)
-        assert avg_ft  # for type check
+        assert avg_ft is not None  # for type check
         return Vector6d().from_xyzXYZ(np.mean(avg_ft, axis=-1))
 
     def exit(self) -> None:
