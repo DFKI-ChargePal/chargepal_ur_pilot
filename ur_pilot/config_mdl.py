@@ -71,8 +71,8 @@ class FTSensor(BaseModel):
     filter_fast: bool = False
     filter_chop: bool = False
     ft_bias: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    q_tcp2ft: List[float] = Field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
-    p_tcp2ft: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.035])
+    # q_tcp2ft: List[float] = Field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
+    # p_tcp2ft: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.035])
 
 
 class Robot(BaseModel):
