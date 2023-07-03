@@ -6,7 +6,7 @@ import numpy as np
 
 # local
 from ur_pilot.config_mdl import FTSensor
-from ur_pilot.bota_sensor import BotaFtSensor
+from ur_pilot.ft_sensor.bota_sensor import BotaFtSensor
 
 # typing 
 from numpy import typing as npt

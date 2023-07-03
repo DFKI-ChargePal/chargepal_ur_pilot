@@ -12,7 +12,7 @@ import numpy as np
 import multiprocessing
 from multiprocessing import shared_memory
 
-#typing
+# typing
 from typing import Any
 from numpy import typing as npt
 from typing_extensions import Literal
@@ -23,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 
 class BotaFtSensor:
 
-    """Bota Force Torque Sensor class."""
+    """ Bota Force Torque Sensor class. """
 
     BOTA_VENDOR_ID = 0xB07A
     BOTA_PRODUCT_CODE = 0x00000001
@@ -39,25 +39,17 @@ class BotaFtSensor:
         filter_fast: bool = False,
         filter_chop: bool = False,
     ) -> None:
-        """
-        Bota Force Torque Sensor.
+        """ Bota Force Torque Sensor.
 
-        Parameters:
-            adapter: string
-                String identifier of the ethernet adapter interface the sensor is connected to
-            slave_pos: int, default 0
-                Index of the sensor instance as a SOEM slave in the slave list
-            filter_sinc_length: int, default 512
-                Length of the Sinc filter,
-                value restricted to 51, 64, 128, 205, 256, 512
-            filter_fir: bool, default False
-                Flag for activating the FIR filter
-            filter_fast: bool, default False
-                Flag for activating the FAST option of the FIR filter,
-                it is recommended to be disabled for real-time applications
-            filter_chop: bool, default False
-                Flag for activating the CHOP filter,
-                it is recommended to be disabled for real-time applications
+        Args:
+            adapter:            String identifier of the ethernet adapter interface the sensor is connected to
+            slave_pos:          Index of the sensor instance as a SOEM slave in the slave list
+            filter_sinc_length: Length of the Sinc filter, value restricted to 51, 64, 128, 205, 256, 512
+            filter_fir:         Flag for activating the FIR filter
+            filter_fast:        Flag for activating the FAST option of the FIR filter, it is recommended to be disabled
+                                for real-time applications
+            filter_chop:        Flag for activating the CHOP filter, it is recommended to be disabled for real-time
+                                applications
         """
         self.adapter = adapter
         if filter_sinc_length not in self.SINC_LENGTHS:
@@ -99,13 +91,7 @@ class BotaFtSensor:
         self.write_buffer.unlink()
 
     def __enter__(self) -> BotaFtSensor:
-        """
-        Context manager __enter__ method.
-
-        Use, e.g., like:
-        >>> with BotaFtSensor(ether_if) as sensor:
-        >>>     while True:
-        >>>         print(f"Fx: {sensor.Fx:.5f} N", end="\r")
+        """ Context manager __enter__ method.
 
         Returns:
             self
@@ -114,13 +100,15 @@ class BotaFtSensor:
         return self
 
     def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> Literal[False]:
-        """
-        Context manager __exit__ method.
+        """ Context manager __exit__ method.
 
-        Use, e.g., like:
-        >>> with BotaFtSensor(ether_if) as sensor:
-        >>>     while True:
-        >>>         print(f"Fx: {sensor.Fx:.5f} N", end="\r")
+        Args:
+            ex_type:
+            ex_value:
+            ex_traceback:
+
+        Returns:
+
         """
         self.stop()
         return False
@@ -138,11 +126,11 @@ class BotaFtSensor:
 
         # -- Set sensor configuration:
         # calibration matrix active
-        slave.sdo_write(0x8010, 1, bytes(ctypes.c_uint8(1)))
+        slave.sdo_write(0x8010, 1, bytes(ctypes.c_uint8(1)))  # type_: ignore
         # temperature compensation
-        slave.sdo_write(0x8010, 2, bytes(ctypes.c_uint8(0)))
+        slave.sdo_write(0x8010, 2, bytes(ctypes.c_uint8(0)))  # type_: ignore
         # IMU active
-        slave.sdo_write(0x8010, 3, bytes(ctypes.c_uint8(1)))
+        slave.sdo_write(0x8010, 3, bytes(ctypes.c_uint8(1)))  # type_: ignore
 
         # -- Set force torque filter:
         slave.sdo_write(index=0x8006, subindex=2, data=struct.pack('b', int(not self.filter_fir)))  # Has to be inverted
@@ -224,12 +212,12 @@ class BotaFtSensor:
             self._master.write_state()
             self._master.close()
 
-    def _read_value(self, type: str, position: int) -> Any:
+    def _read_value(self, type_: str, position: int) -> Any:
         """
         Read current sensor value from the value buffer.
 
         Parameters:
-            type: string
+            type_: string
                 Type identifier according to
                 https://docs.python.org/3/library/struct.html#format-characters
             position: integer
@@ -237,7 +225,7 @@ class BotaFtSensor:
         Returns:
             Unpacked value from value buffer
         """
-        return struct.unpack_from(type, self.read_buffer.buf, position)[0]
+        return struct.unpack_from(type_, self.read_buffer.buf, position)[0]
     
     def set_ft_offset(self, offset: npt.NDArray[np.float64]) -> None:
         """ Set the internal force-torque offset
@@ -335,7 +323,7 @@ class BotaFtSensor:
     @property
     def FTSaturated(self) -> int:
         """Saturation status of force or torque measurements."""
-        ft_sat: int =  self._read_value("H", 29)
+        ft_sat: int = self._read_value("H", 29)
         return ft_sat
 
     @property
