@@ -50,7 +50,6 @@ def main() -> None:
             t_next_ += sig_mtr.display_rate
             t_left_ = t_next_ - time.time()
             if t_left_ > 0.0:
-                print("Sleep zzz")
                 time.sleep(t_left_)
             sig_mtr.add(signal)
 
