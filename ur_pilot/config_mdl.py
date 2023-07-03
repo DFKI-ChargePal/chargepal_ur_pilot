@@ -75,7 +75,7 @@ class Robot(BaseModel):
     joints: Joints = Joints()
     tcp: TCP = TCP()
     servo: Servo = Servo()
-    ft_sensor: FTSensor = FTSensor()
+    ft_sensor: Optional[FTSensor] = FTSensor()
     force_mode: ForceMode = ForceMode()
 
 

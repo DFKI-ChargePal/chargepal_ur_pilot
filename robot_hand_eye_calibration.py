@@ -14,6 +14,8 @@ from robot_record_state_sequence import state_sequence_reader
 
 LOGGER = logging.getLogger(__name__)
 
+TEACH_IN_FILE_ = "hand_eye_calibration.json"
+
 
 def record_calibration_imgs(_debug: bool) -> None:
 
@@ -31,7 +33,7 @@ def record_calibration_imgs(_debug: bool) -> None:
     counter = 1
     stop_reading = False
     calibration.hand_eye_calibration_clear_directories()
-    for joint_pos in state_sequence_reader():
+    for joint_pos in state_sequence_reader(TEACH_IN_FILE_):
         n_debug_prints = 0
         ur10.move_j(joint_pos)
         _ret, board_pose = detector.find_board_pose()

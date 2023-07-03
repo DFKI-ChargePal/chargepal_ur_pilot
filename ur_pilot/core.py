@@ -2,15 +2,17 @@ from __future__ import annotations
 # global
 import time
 import logging
+import numpy as np
 from pathlib import Path
 import chargepal_aruco as ca
 from chargepal_aruco import Camera
-from rigmopy import Pose, Transformation, Vector6d
+from rigmopy import Pose, Quaternion, Transformation, Vector6d
 
 # local
 import config
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
+from ur_pilot.ft_sensor.bota_sensor import BotaFtSensor
 
 # typing
 from typing import Sequence
@@ -20,6 +22,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class URPilot:
+
+    Q_WORLD2ARM_ = Quaternion().from_euler_angle([np.pi, 0.0, 0.0])
 
     def __init__(self) -> None:
 
@@ -34,6 +38,13 @@ class URPilot:
         if self.cfg.robot.home_radians is None:
             self.cfg.robot.home_radians = list(self.rtde.r.getActualQ())
 
+        # Use external FT-sensor
+        if self.cfg.robot.ft_sensor is None:
+            self._ft_sensor = None
+        else:
+            self._ft_sensor = BotaFtSensor(**self.cfg.robot.ft_sensor.dict())
+            self._ft_sensor.start()
+
         # End-effector camera
         self.cam: Camera | None = None
         self.T_tcp2cam = Transformation()
@@ -45,7 +56,42 @@ class URPilot:
         else:
             raise ValueError("Home joint configuration was not set.")
 
+    @property
+    def ft_sensor(self) -> BotaFtSensor:
+        if self._ft_sensor is not None:
+            return self._ft_sensor
+        else:
+            raise RuntimeError("Bota force torque sensor is not initialized.")
+
+    @property
+    def q_world2arm(self) -> Quaternion:
+        return self.Q_WORLD2ARM_
+
+    def average_ft_measurement(self, num_meas: int = 100) -> Vector6d:
+        """ Method to get an average force torque measurement over num_meas samples.
+
+        Args:
+            num_meas: Number of samples
+
+        Returns:
+            The mean of n ft measurements
+        """
+        if num_meas < 1:
+            raise ValueError("Number of measurements must be at least 1")
+        avg_ft = None
+        for _ in range(num_meas):
+            ft_next = np.reshape(self.ft_sensor.FT, [6, 1])
+            if avg_ft is None:
+                avg_ft = ft_next
+            else:
+                avg_ft = np.hstack([avg_ft, ft_next])
+            time.sleep(self.ft_sensor.time_step)
+        assert avg_ft  # for type check
+        return Vector6d().from_xyzXYZ(np.mean(avg_ft, axis=-1))
+
     def exit(self) -> None:
+        if self._ft_sensor is not None:
+            self._ft_sensor.stop()
         self.rtde.exit()
 
     def register_ee_cam(self, cam: Camera) -> None:

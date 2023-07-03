@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import json
 import logging
+import argparse
 from pathlib import Path
 import chargepal_aruco as ca
 
@@ -20,7 +21,7 @@ _T_IN_DIR = "data/teach_in/"
 _T_IN_FILE = "hand_eye_calibration.json"
 
 
-def record_state_sequence() -> None:
+def record_state_sequence(file_name: str) -> None:
     # Use camera for user interaction
     cam = ca.RealSenseCamera('tcp_cam_realsense')
     cam.load_coefficients()
@@ -33,7 +34,7 @@ def record_state_sequence() -> None:
     state_seq: list[Sequence[float]] = []
     data_path = Path(_T_IN_DIR)
     data_path.mkdir(parents=True, exist_ok=True)
-    file_path = data_path.joinpath(_T_IN_FILE)
+    file_path = data_path.joinpath(file_name)
 
     # Enable free drive mode
     ur10.teach_mode()
@@ -64,12 +65,17 @@ def record_state_sequence() -> None:
     cam.destroy()
 
 
+def state_sequence_reader(file_name: str) -> Generator[list[float], None, None]:
+    """ Helper function to read a state sequence from a JSON file
 
-def state_sequence_reader() -> Generator[list[float], None, None]:
+    Args:
+        file_name: JSON file name
 
-    file_path = os.path.join(_T_IN_DIR, _T_IN_FILE)
+    Returns:
+        A generator that gives the next robot state
+    """
+    file_path = os.path.join(_T_IN_DIR, file_name)
 
-    state_seq: list[list[float]] = []
     if os.path.exists(file_path):
         with open(file_path, 'r') as fp:
             state_seq = json.load(fp)
@@ -77,9 +83,22 @@ def state_sequence_reader() -> Generator[list[float], None, None]:
             for joint_pos in state_seq:
                 yield joint_pos
     else:
-        print(f"No file with path '{file_path}'")
+        LOGGER.warning(f"No file with path '{file_path}'")
 
 
 if __name__ == '__main__':
-    ca.set_logging_level(logging.INFO)
-    record_state_sequence()
+    """ Script to record a sequence of robot states (joint positions) """
+    parser = argparse.ArgumentParser(description="Record a sequence of robot states")
+    parser.add_argument('file_name', type=str, help='.json file name')
+    parser.add_argument('--debug', action='store_true', help='Debug flag')
+    # Parse input arguments
+    args = parser.parse_args()
+    fn: str = args.file_name
+    if not fn.endswith('.json'):
+        raise ValueError(f"JSON file with extension .json is mandatory. Given file name: {fn}")
+    if args.debug:
+        ca.set_logging_level(logging.DEBUG)
+    else:
+        ca.set_logging_level(logging.INFO)
+    # Start recording
+    record_state_sequence(fn)
