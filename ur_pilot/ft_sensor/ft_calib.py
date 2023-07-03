@@ -67,9 +67,7 @@ class FTCalibration:
         Returns:
             Calibration parameters [mass, center of mass, ft bias]
         """
-        U, S, Vh = np.linalg.svd(self.H, full_matrices=False)
-        # ft_calib_params = np.linalg.lstsq(self.H, self.Z, rcond=None)[0]
-        ft_calib_params = np.linalg.lstsq(U, self.Z, rcond=None)[0]
+        ft_calib_params = np.linalg.lstsq(self.H, self.Z, rcond=None)[0]
 
         mass = ft_calib_params[0]
         if mass <= 0.0:
