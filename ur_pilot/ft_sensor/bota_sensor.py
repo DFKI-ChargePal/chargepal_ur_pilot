@@ -328,7 +328,7 @@ class BotaFtSensor:
     @property
     def FT(self) -> npt.NDArray[np.float64]:
         """ Force torque readings cleaned by sensor bias. """
-        return np.array([self.Fx, self.Fy, self.Fz, self.Tx, self.Ty, self.Tz]) - self.ft_bias
+        return np.array([self.Fx, self.Fy, self.Fz, self.Tx, self.Ty, self.Tz]) + self.ft_bias
 
     @property
     def FTSaturated(self) -> int:
