@@ -42,9 +42,9 @@ def main() -> None:
         t_next_ = t_start_
         while t_start_ + DURATION_ > time.time():
             
-            signal = np.reshape(sensor.FT, [6, 1])
+            signal = np.reshape(sensor.FT_raw, [6, 1])
             for i in range(sub_steps - 1):
-                signal = np.hstack([signal, np.reshape(sensor.FT, [6, 1])])
+                signal = np.hstack([signal, np.reshape(sensor.FT_raw, [6, 1])])
                 time.sleep(sensor.time_step)
 
             t_next_ += sig_mtr.display_rate

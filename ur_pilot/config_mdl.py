@@ -36,6 +36,13 @@ class TCP(BaseModel):
     max_acc: float = 1.0
 
 
+class Tool(BaseModel):
+    """ Data model for the end-effector
+    """
+    mass: float = 0.0
+    com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+
+
 class Servo(BaseModel):
     """ Data model for robot servo values. 
     """
@@ -62,7 +69,10 @@ class FTSensor(BaseModel):
     filter_sinc_length: int = 512
     filter_fir: bool = True
     filter_fast: bool = False
-    filter_chop: bool = False 
+    filter_chop: bool = False
+    ft_bias: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    q_tcp2ft: List[float] = Field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
+    p_tcp2ft: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.035])
 
 
 class Robot(BaseModel):
@@ -70,10 +80,10 @@ class Robot(BaseModel):
     """
     ip_address: str = "192.168.13.42"
     rtde_freq: float = 500.0
-    tool: NoneStr = None
     home_radians: Optional[List[float]] = None
     joints: Joints = Joints()
     tcp: TCP = TCP()
+    tool: Tool = Tool()
     servo: Servo = Servo()
     ft_sensor: Optional[FTSensor] = FTSensor()
     force_mode: ForceMode = ForceMode()

@@ -80,7 +80,7 @@ class URPilot:
             raise ValueError("Number of measurements must be at least 1")
         avg_ft = None
         for _ in range(num_meas):
-            ft_next = np.reshape(self.ft_sensor.FT, [6, 1])
+            ft_next = np.reshape(self.ft_sensor.FT_raw, [6, 1])
             if avg_ft is None:
                 avg_ft = ft_next
             else:

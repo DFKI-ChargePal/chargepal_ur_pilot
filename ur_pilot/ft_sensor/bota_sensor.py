@@ -38,6 +38,7 @@ class BotaFtSensor:
         filter_fir: bool = False,
         filter_fast: bool = False,
         filter_chop: bool = False,
+        ft_bias: list[float] | None = None
     ) -> None:
         """ Bota Force Torque Sensor.
 
@@ -63,6 +64,10 @@ class BotaFtSensor:
         self.filter_chop = filter_chop
 
         self._master = pysoem.Master()
+        if ft_bias is None:
+            self.ft_bias = np.zeros([6])
+        else:
+            self.ft_bias = np.reshape(ft_bias, [6])
         self.sampling_rate = 0
         self.time_step = 0.0
         SlaveSet = collections.namedtuple("SlaveSet", "slave_name product_code config_func")
@@ -315,10 +320,15 @@ class BotaFtSensor:
         return tz
     
     @property
-    def FT(self) -> npt.NDArray[np.float64]:
+    def FT_raw(self) -> npt.NDArray[np.float64]:
         """ Force torque readings as array
         """
         return np.array([self.Fx, self.Fy, self.Fz, self.Tx, self.Ty, self.Tz])
+
+    @property
+    def FT(self) -> npt.NDArray[np.float64]:
+        """ Force torque readings cleaned by sensor bias. """
+        return np.array([self.Fx, self.Fy, self.Fz, self.Tx, self.Ty, self.Tz]) - self.ft_bias
 
     @property
     def FTSaturated(self) -> int:

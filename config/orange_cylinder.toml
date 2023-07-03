@@ -4,16 +4,8 @@ author = "Georg John"
 email = "georg.john@dfki.de"
 
 [robot]
-tool = "None"
 home_radians = [3.429, -1.371, 2.127, -0.747, 1.867, -1.565]
 ip_address = "192.168.13.42"
-
-[robot.ft_sensor]
-adapter = "enx3c18a01939b0"  # "enp3s0"  # 
-filter_sinc_length = 128  # (51, 64, 128, 205, 256, 512)
-filter_fir = false
-filter_fast = false
-filter_chop = false 
 
 [robot.joints]
 vel = 0.1
@@ -26,6 +18,18 @@ vel = 0.1
 max_vel = 0.2
 acc = 0.1
 max_acc = 0.2
+
+[robot.tool]
+mass = 0.1549411
+com = [0.0015589617226782777, 0.00002105870314753542, 0.005683291457782796]
+
+[robot.ft_sensor]
+adapter = "enx3c18a01939b0"  # "enp3s0"  #
+filter_sinc_length = 128  # (51, 64, 128, 205, 256, 512)
+filter_fir = false
+filter_fast = false
+filter_chop = false
+ft_bias = [9.13262, -1.22357, -30.95425, -0.07685, -0.02464, 0.04979]
 
 [robot.servo]
 vel = 0.0

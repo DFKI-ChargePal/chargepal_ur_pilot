@@ -29,7 +29,7 @@ def record_from_sensor(sensor_cfg: FTSensor, duration: float, rec_type: str) -> 
         t_start = time.time()
         while t_start + duration > time.time():
 
-            ft_readings = np.reshape(sensor.FT, [6, 1]) if rec_ft else np.array([], dtype=np.float64)
+            ft_readings = np.reshape(sensor.FT_raw, [6, 1]) if rec_ft else np.array([], dtype=np.float64)
             imu_readings = np.reshape(sensor.IMU, [6, 1]) if rec_imu else np.array([], dtype=np.float64)
             sensor_readings = np.vstack([ft_readings, imu_readings])
             if data_rec is None:
