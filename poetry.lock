@@ -747,7 +747,7 @@ use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
 name = "rigmopy"
-version = "1.6.1"
+version = "1.6.2"
 description = "RigMoPy: Package that provides Rigid-Body Motions representations, wrapper and functionality"
 optional = false
 python-versions = "^3.8,<3.12"
