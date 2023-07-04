@@ -23,7 +23,7 @@ def follow_state_sequence() -> None:
     ur10.move_home()
 
     # Create a monitor to display ft readings
-    ft_monitor = SignalMonitor(AX_LABELS_, round(1 / ur10.ft_sensor.time_step), 10.0)
+    ft_monitor = SignalMonitor(AX_LABELS_, round(1 / ur10.ft_sensor.time_step), 3.14)
     sub_steps = int(ft_monitor.display_rate / ur10.ft_sensor.time_step)
     LOGGER.info(f'Perform {sub_steps} sub-steps before updating the Monitor.')
 
@@ -34,9 +34,9 @@ def follow_state_sequence() -> None:
         t_start_ = time.time()
         t_next_ = t_start_
         while True:
-            ft_signal = np.reshape(ur10.get_tcp_force(extern=False).xyzXYZ, [6, 1])
+            ft_signal = np.reshape(ur10.get_tcp_force(extern=True).xyzXYZ, [6, 1])
             for i in range(sub_steps - 1):
-                ft_signal = np.hstack([ft_signal, np.reshape(ur10.get_tcp_force(extern=False).xyzXYZ, [6, 1])])
+                ft_signal = np.hstack([ft_signal, np.reshape(ur10.get_tcp_force(extern=True).xyzXYZ, [6, 1])])
                 time.sleep(ur10.ft_sensor.time_step)
 
             t_next_ += ft_monitor.display_rate

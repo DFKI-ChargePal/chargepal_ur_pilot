@@ -65,7 +65,7 @@ def record_ft_measurements() -> None:
         new_ft_meas_wrt_world = ur10.average_ft_measurement(200)  # Get average measurement over 200 readings
         q_world2tcp = ur10.q_world2arm * ur10.get_tcp_pose().q
         g_world_wrt_world = Vector3d().from_xyz([0.0, 0.0, -9.80665])
-        g_tcp_wrt_world = q_world2tcp.apply(g_world_wrt_world)
+        g_tcp_wrt_world = q_world2tcp.apply(g_world_wrt_world, inverse=True)
 
         file_name = f"{counter:02}_{MEAS_FILE_}"
         fp = meas_dir.joinpath(file_name)

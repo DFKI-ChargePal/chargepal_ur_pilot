@@ -89,6 +89,7 @@ class BotaFtSensor:
     def stop(self) -> None:
         LOGGER.debug("Stopping value update process")
         self.update_process.terminate()
+        self.update_process.join()
 
         LOGGER.debug("Releasing shared memory")
         self.write_buffer.close()

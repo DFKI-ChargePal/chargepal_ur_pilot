@@ -233,7 +233,7 @@ class URPilot:
             tcp_force = Vector6d().from_xyzXYZ(self.rtde.r.getActualTCPForce())
         # Compensate Tool mass
         f_tool_wrt_world = self.tool.f_inertia
-        f_tool_wrt_ft = (self.q_world2arm * self.get_tcp_pose().q).apply(f_tool_wrt_world)
-        t_tool_wrt_ft = Vector3d().from_xyz(np.cross(f_tool_wrt_ft.xyz, self.tool.com.xyz))
+        f_tool_wrt_ft = (self.q_world2arm * self.get_tcp_pose().q).apply(f_tool_wrt_world, inverse=True)
+        t_tool_wrt_ft = Vector3d().from_xyz(np.cross(self.tool.com.xyz, f_tool_wrt_ft.xyz))
         ft_comp = Vector6d().from_Vector3d(f_tool_wrt_ft, t_tool_wrt_ft)
         return tcp_force + ft_comp
