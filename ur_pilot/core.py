@@ -6,12 +6,13 @@ import numpy as np
 from pathlib import Path
 import chargepal_aruco as ca
 from chargepal_aruco import Camera
-from rigmopy import Pose, Quaternion, Transformation, Vector6d
+from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
 # local
 import config
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
+from ur_pilot.end_effector.tool import Tool
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 
 # typing
@@ -44,6 +45,9 @@ class URPilot:
         else:
             self._ft_sensor = BotaFtSensor(**self.cfg.robot.ft_sensor.dict())
             self._ft_sensor.start()
+
+        # Tool
+        self.tool = Tool(**self.cfg.robot.tool.dict())
 
         # End-effector camera
         self.cam: Camera | None = None
@@ -218,9 +222,18 @@ class URPilot:
         tcp_pose: Sequence[float] = self.rtde.r.getActualTCPPose()
         return Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
 
+    def get_tcp_vel(self) -> Vector6d:
+        tcp_vel: Sequence[float] = self.rtde.r.getActualTCPSpeed()
+        return Vector6d().from_xyzXYZ(tcp_vel)
+
     def get_tcp_force(self, extern: bool = False) -> Vector6d:
         if extern:
             tcp_force = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
         else:
             tcp_force = Vector6d().from_xyzXYZ(self.rtde.r.getActualTCPForce())
-        return tcp_force
+        # Compensate Tool mass
+        f_tool_wrt_world = self.tool.f_inertia
+        f_tool_wrt_ft = self.get_tcp_pose().q.apply(f_tool_wrt_world)
+        t_tool_wrt_ft = Vector3d().from_xyz(np.cross(f_tool_wrt_ft.xyz, self.tool.com.xyz))
+        ft_comp = Vector6d().from_Vector3d(f_tool_wrt_ft, t_tool_wrt_ft)
+        return tcp_force - ft_comp

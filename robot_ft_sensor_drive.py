@@ -34,9 +34,9 @@ def follow_state_sequence() -> None:
         t_start_ = time.time()
         t_next_ = t_start_
         while True:
-            ft_signal = np.reshape(ur10.ft_sensor.FT, [6, 1])
+            ft_signal = np.reshape(ur10.get_tcp_force(extern=True).xyzXYZ, [6, 1])
             for i in range(sub_steps - 1):
-                ft_signal = np.hstack([ft_signal, np.reshape(ur10.ft_sensor.FT, [6, 1])])
+                ft_signal = np.hstack([ft_signal, np.reshape(ur10.get_tcp_force(extern=True).xyzXYZ, [6, 1])])
                 time.sleep(ur10.ft_sensor.time_step)
 
             t_next_ += ft_monitor.display_rate
