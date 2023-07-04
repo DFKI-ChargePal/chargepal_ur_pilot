@@ -12,7 +12,7 @@ from rigmopy import Pose, Quaternion, Transformation, Vector6d
 import config
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
-from ur_pilot.ft_sensor.bota_sensor import BotaFtSensor
+from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 
 # typing
 from typing import Sequence
@@ -218,6 +218,9 @@ class URPilot:
         tcp_pose: Sequence[float] = self.rtde.r.getActualTCPPose()
         return Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
 
-    def get_tcp_force(self) -> Vector6d:
-        tcp_force: Sequence[float] = self.rtde.r.getActualTCPForce()
-        return Vector6d().from_xyzXYZ(tcp_force)
+    def get_tcp_force(self, extern: bool = False) -> Vector6d:
+        if extern:
+            tcp_force = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
+        else:
+            tcp_force = Vector6d().from_xyzXYZ(self.rtde.r.getActualTCPForce())
+        return tcp_force

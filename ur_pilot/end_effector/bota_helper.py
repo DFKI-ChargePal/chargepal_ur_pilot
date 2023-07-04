@@ -6,7 +6,7 @@ import numpy as np
 
 # local
 from ur_pilot.config_mdl import FTSensor
-from ur_pilot.ft_sensor.bota_sensor import BotaFtSensor
+from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 
 # typing 
 from numpy import typing as npt
@@ -14,6 +14,7 @@ from numpy import typing as npt
 
 def record_from_sensor(sensor_cfg: FTSensor, duration: float, rec_type: str) -> npt.NDArray[np.float64]:
 
+    rec_imu, rec_ft = False, False
     if rec_type.capitalize() == 'FT':
         rec_ft = True
     elif rec_type.capitalize() == 'IMU':

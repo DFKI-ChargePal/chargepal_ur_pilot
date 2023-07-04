@@ -10,7 +10,7 @@ import time
 import math
 import config
 from ur_pilot.utils import set_logging_level
-from ur_pilot.ft_sensor.bota_sensor import BotaFtSensor
+from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.monitor.signal_monitor import SignalMonitor
 

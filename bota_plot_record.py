@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 # local
 from ur_pilot.utils import set_logging_level
 from ur_pilot.config_mdl import FTSensor
-from ur_pilot.ft_sensor import bota_helper as helper
+from ur_pilot.end_effector import bota_helper as helper
 
 # typing
 from numpy import typing as npt

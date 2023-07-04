@@ -16,7 +16,7 @@ from rigmopy import Vector3d, Vector6d
 # local
 from ur_pilot.core import URPilot
 from ur_pilot.utils import set_logging_level
-from ur_pilot.ft_sensor.ft_calib import FTCalibration
+from ur_pilot.end_effector.ft_calib import FTCalibration
 from robot_record_state_sequence import record_state_sequence, state_sequence_reader
 
 
