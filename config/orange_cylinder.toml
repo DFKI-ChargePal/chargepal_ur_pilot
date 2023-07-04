@@ -20,8 +20,8 @@ acc = 0.1
 max_acc = 0.2
 
 [robot.tool]
-mass = 0.06185931
-com = [0.0, 0.0, 0.006]
+mass = 0.2020638
+com = [0.00057, 0.00017, 0.0089]
 
 [robot.ft_sensor]
 adapter = "enx3c18a01939b0"  # "enp3s0"  #
@@ -29,7 +29,8 @@ filter_sinc_length = 128  # (51, 64, 128, 205, 256, 512)
 filter_fir = false
 filter_fast = false
 filter_chop = false
-ft_bias = [9.13262, -1.22357, -30.95425, -0.07685, -0.02464, 0.04979]
+# ft_bias = [10.33677, -3.36174, -28.48316, -0.10087, -0.04437, 0.04883]
+ft_bias = [8.44668, -2.15590, -30.20378, -0.07605, -0.00192, 0.04328]
 
 [robot.servo]
 vel = 0.0

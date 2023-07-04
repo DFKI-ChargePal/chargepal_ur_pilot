@@ -169,8 +169,8 @@ class BotaFtSensor:
             # PREOP_STATE to SAFEOP_STATE request - each slave's config_func is called
             self._master.config_map()
 
-            # wait 50 ms for all slaves to reach SAFE_OP state
-            if self._master.state_check(pysoem.SAFEOP_STATE, 50000) != pysoem.SAFEOP_STATE:
+            # wait 100 ms for all slaves to reach SAFE_OP state
+            if self._master.state_check(pysoem.SAFEOP_STATE, 100000) != pysoem.SAFEOP_STATE:
                 self._master.read_state()
                 for slave in self._master.slaves:
                     if not slave.state == pysoem.SAFEOP_STATE:
