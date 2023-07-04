@@ -1,5 +1,5 @@
 """ 
-Script to print the the current robot state. 
+Script to print the current robot state.
 Contains: Joint positions
           TCP pose
 """
