@@ -36,11 +36,13 @@ class TCP(BaseModel):
     max_acc: float = 1.0
 
 
-class Tool(BaseModel):
+class ToolModel(BaseModel):
     """ Data model for the end-effector
     """
     mass: float = 0.0
     com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+    p_mounting2tip: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+    q_mounting2tip: List[float] = Field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
 
 
 class Servo(BaseModel):
@@ -58,11 +60,11 @@ class ForceMode(BaseModel):
     mode: int = 2
     gain: float = 0.99
     damping: float = 0.075
-    tcp_speed_limits: List[float] = Field(default_factory=lambda: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01])  
+    tcp_speed_limits: List[float] = Field(default_factory=lambda: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
 
 
 class FTSensor(BaseModel):
-    """ Base data model for the force torque sensor configuration
+    """ Force torque sensor configuration
     """
     adapter: str = 'enx3c18a01939b0'
     slave_pos: int = 0
@@ -71,8 +73,6 @@ class FTSensor(BaseModel):
     filter_fast: bool = False
     filter_chop: bool = False
     ft_bias: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    # q_tcp2ft: List[float] = Field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
-    # p_tcp2ft: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.035])
 
 
 class Robot(BaseModel):
@@ -83,7 +83,7 @@ class Robot(BaseModel):
     home_radians: Optional[List[float]] = None
     joints: Joints = Joints()
     tcp: TCP = TCP()
-    tool: Tool = Tool()
+    tool: ToolModel = ToolModel()
     servo: Servo = Servo()
     ft_sensor: Optional[FTSensor] = FTSensor()
     force_mode: ForceMode = ForceMode()

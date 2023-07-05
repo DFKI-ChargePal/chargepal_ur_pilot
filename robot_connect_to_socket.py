@@ -79,7 +79,7 @@ def connect_to_socket() -> None:
             X_Base2Plug = ur10.get_tcp_pose()
 
             # Get transformation matrices
-            T_Plug2Cam = ur10.T_tcp2cam
+            T_Plug2Cam = ur10.cam_mdl.T_flange2camera
             T_Base2Plug = X_Base2Plug.transformation
             T_Cam2Board = X_Cam2Board.transformation
             T_Board2Socket = X_SOCKET_2_BOARD.transformation.inverse()

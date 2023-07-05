@@ -22,6 +22,7 @@ max_acc = 0.2
 [robot.tool]
 mass = 0.2020638
 com = [0.00057, 0.00017, 0.0089]
+p_mounting2tip = [0.0, 0.0, 0.02]
 
 [robot.ft_sensor]
 adapter = "enx3c18a01939b0"  # "enp3s0"  #
