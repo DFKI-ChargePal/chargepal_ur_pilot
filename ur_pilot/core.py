@@ -12,7 +12,7 @@ from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 import config
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
-from ur_pilot.end_effector.tool import Tool
+from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 
 # typing
@@ -24,7 +24,11 @@ LOGGER = logging.getLogger(__name__)
 
 class URPilot:
 
-    Q_WORLD2ARM_ = Quaternion().from_euler_angle([np.pi, 0.0, 0.0])
+    Q_WORLD2BASE_ = Quaternion().from_euler_angle([np.pi, 0.0, 0.0])
+
+    FT_SENSOR_FRAMES_ = ['world', 'arm_base', 'ft_sensor']
+
+    EE_FRAMES_ = ['flange', 'ft_sensor', 'tool', 'camera']
 
     def __init__(self) -> None:
 
@@ -39,19 +43,19 @@ class URPilot:
         if self.cfg.robot.home_radians is None:
             self.cfg.robot.home_radians = list(self.rtde.r.getActualQ())
 
-        # Use external FT-sensor
+        # Set up end-effector
         if self.cfg.robot.ft_sensor is None:
+            self.extern_sensor = False
             self._ft_sensor = None
+            self._ft_sensor_mdl = None
         else:
+            self.extern_sensor = True
             self._ft_sensor = BotaFtSensor(**self.cfg.robot.ft_sensor.dict())
+            self._ft_sensor_mdl = BotaSensONEModel()
             self._ft_sensor.start()
-
-        # Tool
-        self.tool = Tool(**self.cfg.robot.tool.dict())
-
-        # End-effector camera
+        self.tool = ToolModel(**self.cfg.robot.tool.dict())
         self.cam: Camera | None = None
-        self.T_tcp2cam = Transformation()
+        self.cam_mdl = CameraModel()
 
     @property
     def home_joint_config(self) -> tuple[float, ...]:
@@ -65,11 +69,18 @@ class URPilot:
         if self._ft_sensor is not None:
             return self._ft_sensor
         else:
-            raise RuntimeError("Bota force torque sensor is not initialized.")
+            raise RuntimeError("External sensor is not initialized. Please check the configuration.")
+
+    @property
+    def ft_sensor_mdl(self) -> BotaSensONEModel:
+        if self._ft_sensor_mdl is not None:
+            return self._ft_sensor_mdl
+        else:
+            raise RuntimeError("External sensor is not initialized. Please check the configuration.")
 
     @property
     def q_world2arm(self) -> Quaternion:
-        return self.Q_WORLD2ARM_
+        return self.Q_WORLD2BASE_
 
     def average_ft_measurement(self, num_meas: int = 100) -> Vector6d:
         """ Method to get an average force torque measurement over num_meas samples.
@@ -103,7 +114,7 @@ class URPilot:
         if not self.cam.is_calibrated:
             self.cam.load_coefficients()
         T_tcp2cam = ca.Calibration.hand_eye_calibration_load_transformation(self.cam)
-        self.T_tcp2cam = Transformation().from_trans_matrix(T_tcp2cam)
+        self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_tcp2cam)
 
     ####################################
     #       CONTROLLER FUNCTIONS       #
@@ -214,6 +225,44 @@ class URPilot:
         joint_vel: Sequence[float] = self.rtde.r.getActualQd()
         return joint_vel
 
+    def get_pose(self, frame: str = 'flange') -> Pose:
+        """ Get pose of the desired frame w.r.t the robot base. This function is independent of the TCP offset defined
+            on the robot side.
+
+        Args:
+            frame: One of the frame name defined in the class member variable 'EE_FRAMES_'
+
+        Returns:
+            6D pose
+        """
+        if frame not in self.EE_FRAMES_:
+            raise ValueError(f"Given frame is not available. Please select one of '{self.EE_FRAMES_}'")
+
+        if frame == 'flange':
+            tcp_offset_ = 6 * (0.0,)
+        elif frame == 'ft_sensor':
+            if self.extern_sensor:
+                tcp_offset_ = self.ft_sensor_mdl.p_mounting2wrench.xyz + self.ft_sensor_mdl.q_mounting2wrench.axis_angle
+            else:
+                # Tread internal force torque sensor as mounted in flange frame
+                tcp_offset_ = 6 * (0.0,)
+                LOGGER.warning(f"External ft_sensor is not configured. Return pose of the flange frame.")
+        elif frame == 'tool':
+            if self.extern_sensor:
+                pq_flange2tool = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2tip).pose
+                tcp_offset_ = pq_flange2tool.xyz + pq_flange2tool.axis_angle
+            else:
+                tcp_offset_ = self.tool.p_mounting2tip.xyz + self.tool.q_mounting2tip.axis_angle
+        elif frame == 'camera':
+            pq_flange2cam = self.cam_mdl.T_flange2camera.pose
+            tcp_offset_ = pq_flange2cam.xyz + pq_flange2cam.axis_angle
+        else:
+            raise RuntimeError(f"This code should not be reached. Please check the frame definitions.")
+
+        q_: Sequence[float] = self.rtde.r.getActualQ()
+        pose_vec: Sequence[float] = self.rtde.c.getForwardKinematics(q=q_, tcp_offset=tcp_offset_)
+        return Pose().from_xyz(pose_vec[:3]).from_axis_angle(pose_vec[3:])
+
     def get_tcp_offset(self) -> Pose:
         tcp_offset: Sequence[float] = self.rtde.c.getTCPOffset()
         return Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[3:])
@@ -225,6 +274,27 @@ class URPilot:
     def get_tcp_vel(self) -> Vector6d:
         tcp_vel: Sequence[float] = self.rtde.r.getActualTCPSpeed()
         return Vector6d().from_xyzXYZ(tcp_vel)
+
+    def get_ft(self, frame: str = 'ft_sensor') -> Vector6d:
+        """ Get force-torque readings w.r.t the desired frame.
+
+        Args:
+            frame: One of the frame name defined in the class member variable 'FT_SENSOR_FRAMES_'
+
+        Returns:
+            A 6d vector with the sensor readings
+        """
+        if frame not in self.FT_SENSOR_FRAMES_:
+            raise ValueError(f"Given frame is not available. Please select one of '{self.FT_SENSOR_FRAMES_}'")
+        if self.extern_sensor:
+            # The default sensor readings are w.r.t the sensor frame
+            ft_raw = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
+            if frame == 'ft_sensor':
+                ft = ft_raw
+        else:
+            # The default build in sensor readings are w.r.t the arm base frame
+            ft = Vector6d()
+        return ft
 
     def get_tcp_force(self, extern: bool = False) -> Vector6d:
         if extern:
