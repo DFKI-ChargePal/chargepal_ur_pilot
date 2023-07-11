@@ -85,7 +85,7 @@ class Robot(BaseModel):
     tcp: TCP = TCP()
     tool: Tool = Tool()
     servo: Servo = Servo()
-    ft_sensor: Optional[FTSensor] = FTSensor()
+    ft_sensor: Optional[FTSensor] = None
     force_mode: ForceMode = ForceMode()
 
 

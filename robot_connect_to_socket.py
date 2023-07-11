@@ -23,12 +23,12 @@ SOCKET_POSE_ESTIMATION_CFG_X = Pose().from_xyz([0.614, 0.147, 0.439]).from_axis_
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 board_2 = 0.075 / 2  # half board size 
 X_SOCKET_2_BOARD = Pose().from_xyz_xyzw(xyz=[0.125 - board_2, board_2, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
-X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, -0.045 -0.02])  # Retreat pose with respect to the socket
+X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[-0.005, 0.0, -0.045 -0.01])  # Retreat pose with respect to the socket
 
 # Request messages
 PLUG_IN_REQ = req_msg.PlugInRequest(
     compliant_axes=[1, 1, 1, 0, 0, 1], 
-    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 10.0, 0.0, 0.0, 0.0]),
+    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 20.0, 0.0, 0.0, 0.0]),
     t_limit=10.0
     )
 
@@ -64,7 +64,6 @@ def connect_to_socket() -> None:
     while time.time() - _t_start <= time_out and not found_board:
         time.sleep(1.0)
         img = realsense.get_color_frame()
-        # _ret, r_vec, t_vec = board_detector.find_board_pose()
         _ret, _board_pose = board_detector.find_board_pose()
         if _ret:
             r_vec, t_vec = _board_pose[0], _board_pose[1]
