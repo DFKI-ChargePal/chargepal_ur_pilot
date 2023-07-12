@@ -63,6 +63,13 @@ class ForceMode(BaseModel):
     tcp_speed_limits: List[float] = Field(default_factory=lambda: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
 
 
+class MotionMode(BaseModel):
+    """ Data model for robot motion mode.
+    """
+    error_scale = 0.5
+    Kp: List[float] = Field(default_factory=lambda: [0.8, 0.8, 0.8, 0.8, 0.8, 0.8])
+    Kd: List[float] = Field(default_factory=lambda: [1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3])
+
 class FTSensor(BaseModel):
     """ Force torque sensor configuration
     """
@@ -87,6 +94,7 @@ class Robot(BaseModel):
     servo: Servo = Servo()
     ft_sensor: Optional[FTSensor] = None
     force_mode: ForceMode = ForceMode()
+    motion_mode: MotionMode = MotionMode()
 
 
 class Config(Robot):

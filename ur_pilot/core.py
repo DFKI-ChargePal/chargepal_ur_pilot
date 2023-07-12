@@ -6,10 +6,12 @@ import numpy as np
 from pathlib import Path
 import chargepal_aruco as ca
 from chargepal_aruco import Camera
+from rigmopy import utils_math as rp_math
 from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
 # local
 import config
+from ur_pilot.utils import SpatialPDController
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
@@ -36,6 +38,9 @@ class URPilot:
         config_dict = read_toml(config_fp)
         self.cfg = Config(**config_dict)
 
+        # Constants
+        self.error_scale_motion_mode = 1.0
+
         # Robot interface
         self.rtde = RTDEInterface(self.cfg.robot.ip_address, self.cfg.robot.rtde_freq, True)
 
@@ -53,6 +58,9 @@ class URPilot:
             self._ft_sensor = BotaFtSensor(**self.cfg.robot.ft_sensor.dict())
             self._ft_sensor_mdl = BotaSensONEModel()
             self._ft_sensor.start()
+
+        self._motion_pd: SpatialPDController | None = None
+
         self.tool = ToolModel(**self.cfg.robot.tool.dict())
         self.cam: Camera | None = None
         self.cam_mdl = CameraModel()
@@ -77,6 +85,14 @@ class URPilot:
             return self._ft_sensor_mdl
         else:
             raise RuntimeError("External sensor is not initialized. Please check the configuration.")
+
+    @property
+    def motion_pd(self) -> SpatialPDController:
+        if self._motion_pd is not None:
+            return self._motion_pd
+        else:
+            raise RuntimeError(
+                "Motion PD controller is not initialized. Please run URPilot.set_up_motion_mode(...) first")
 
     @property
     def q_world2arm(self) -> Quaternion:
@@ -147,11 +163,11 @@ class URPilot:
             cur_msg = f"\nCurrent joint positions: {cur_q}"
             LOGGER.warning(f"Malfunction during movement to new joint positions.{tgt_msg}{cur_msg}")
 
-    def servo_l(self, tcp_pose: Pose) -> None:
-        LOGGER.debug(f"Try to move robot to TCP pose {tcp_pose}")
+    def servo_l(self, target: Pose) -> None:
+        LOGGER.debug(f"Try to move robot to TCP pose {target}")
         self.rtde.c.initPeriod()
         success = self.rtde.c.servoL(
-            tcp_pose.xyz + tcp_pose.axis_angle,
+            target.xyz + target.axis_angle,
             self.cfg.robot.servo.vel,
             self.cfg.robot.servo.acc,
             self.rtde.dt,
@@ -163,7 +179,7 @@ class URPilot:
         time.sleep(self.rtde.dt)  # Do we need this?
         if not success:
             cur_pose = self.rtde.r.getActualTCPPose()
-            tgt_msg = f"\nTarget pose: {tcp_pose}"
+            tgt_msg = f"\nTarget pose: {target}"
             cur_msg = f"\nCurrent pose: {cur_pose}"
             LOGGER.warning(f"Malfunction during movement to new pose.{tgt_msg}{cur_msg}")
 
@@ -201,6 +217,66 @@ class URPilot:
     def stop_force_mode(self) -> None:
         """ Function to set robot back in normal position control mode. """
         self.rtde.c.forceModeStop()
+
+    def set_up_motion_mode(self, 
+                           error_scale: float | None = None,
+                           Kp_6: Sequence[float] | None = None,
+                           Kd_6: Sequence[float] | None = None, 
+                           ft_gain: float | None = None, 
+                           ft_damping: float | None = None) -> None:
+        """ Function to set up force based motion controller
+
+        Args:
+            ft_gain: _description_. Defaults to None.
+            ft_damping: _description_. Defaults to None.
+        """
+        self.error_scale_motion_mode = error_scale if error_scale else self.cfg.robot.motion_mode.error_scale
+        Kp = Kp_6 if Kp_6 is not None else self.cfg.robot.motion_mode.Kp
+        Kd = Kd_6 if Kd_6 is not None else self.cfg.robot.motion_mode.Kd
+        self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
+        self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
+
+    def motion_mode(self, target: Pose, task_frame: Sequence[float]) -> None:
+        """ Function to update motion target and let the motion controller keep running
+
+        Args:
+            tcp_pose: Target pose of the TCP
+        """
+        # Get current Pose
+        actual = self.get_tcp_pose()
+        # Compute spatial error
+        pos_error = target.p - actual.p
+        aa_error = np.array(rp_math.quaternion_difference(actual.q, target.q).axis_angle)
+
+        # Angles error always within [0,Pi)
+        angle_error = np.max(np.abs(aa_error))
+        if angle_error < 1e7:
+            axis_error = aa_error
+        else:
+            axis_error = aa_error/angle_error
+        # Clamp maximal tolerated error.
+        # The remaining error will be handled in the next control cycle.
+        # Note that this is also the maximal offset that the
+        # cartesian_compliance_controller can use to build up a restoring stiffness
+        # wrench.
+        angle_error = np.clip(angle_error, 0.0, 1.0)
+        ax_error = Vector3d().from_xyz(angle_error * axis_error)
+        distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
+        po_error = distance_error * pos_error
+        motion_error = Vector6d().from_Vector3d(po_error, ax_error)
+        f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.rtde.dt)
+        # Clip to maximum forces
+        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-100, a_max=100)
+        self.force_mode(
+            task_frame=task_frame, 
+            selection_vector=6 * (1,),
+            wrench=f_net_clip.tolist(),
+            )
+
+    def stop_motion_mode(self) -> None:
+        """ Function to set robot back in normal position control mode. """
+        self.motion_pd.reset()
+        self.stop_force_mode()
 
     def teach_mode(self) -> None:
         """ Function to enable the free drive mode. """
