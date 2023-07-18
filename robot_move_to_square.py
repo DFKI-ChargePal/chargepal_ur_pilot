@@ -2,7 +2,6 @@
 Script to move the robot to different positions.
 """
 # global
-import time
 import numpy as np
 from rigmopy import Pose
 
