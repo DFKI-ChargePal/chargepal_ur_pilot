@@ -20,6 +20,12 @@ class TCPPoseResult:
 
 
 @dataclass
+class MoveToPoseResult:
+    tcp_result: Pose
+    time_out: bool = False
+
+
+@dataclass
 class PlugInResult:
     tcp_pose: Pose
     time_out: bool

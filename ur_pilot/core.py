@@ -236,12 +236,13 @@ class URPilot:
         self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
         self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
 
-    def motion_mode(self, target: Pose, task_frame: Sequence[float]) -> None:
+    def motion_mode(self, target: Pose) -> None:
         """ Function to update motion target and let the motion controller keep running
 
         Args:
             tcp_pose: Target pose of the TCP
         """
+        task_frame = 6 * (0.0, )  # Move wrt. robot base?
         # Get current Pose
         actual = self.get_tcp_pose()
         # Compute spatial error

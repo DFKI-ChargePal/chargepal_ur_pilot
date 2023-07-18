@@ -3,7 +3,6 @@
 import time
 import numpy as np
 import chargepal_aruco as ca
-from chargepal_aruco import Display
 
 # local
 from ur_pilot.core import URPilot

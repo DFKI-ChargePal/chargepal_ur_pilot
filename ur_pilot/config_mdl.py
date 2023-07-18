@@ -66,9 +66,9 @@ class ForceMode(BaseModel):
 class MotionMode(BaseModel):
     """ Data model for robot motion mode.
     """
-    error_scale = 0.5
-    Kp: List[float] = Field(default_factory=lambda: [0.8, 0.8, 0.8, 0.8, 0.8, 0.8])
-    Kd: List[float] = Field(default_factory=lambda: [1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3])
+    error_scale = 5000.0
+    Kp: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
+    Kd: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
 
 class FTSensor(BaseModel):
     """ Force torque sensor configuration

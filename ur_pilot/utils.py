@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 # global
+import abc
 import sys
 import pysoem
 import logging
@@ -64,15 +65,28 @@ def find_ethernet_adapters() -> None:
         print(f'   {adapter.desc}\n')
 
 
-class PDController:
+class Controller(metaclass=abc.ABCMeta):    
+    """ Controller superclass. """
+
+    @abc.abstractmethod
+    def reset(self) -> None:
+        raise NotImplementedError('Must be implemented in subclass.')
+
+    @abc.abstractmethod
+    def update(self, error: float, period: float) -> float:
+        raise NotImplementedError('Must be implemented in subclass.')
+
+
+class PDController(Controller):
 
     def __init__(self, kp: float = 0.0, kd: float = 0.0) -> None:
-        """ One dimension proportional, derivative controller
+        """ One dimension proportional-derivative controller
 
         Args:
             kp: Proportional gain. Defaults to 0.0.
             kd: Derivative gain. Defaults to 0.0.
         """
+        super().__init__()
         self.kp = abs(kp)
         self.kd = abs(kd)
         self.prev_error: float | None = None  # Previous controller error
@@ -94,28 +108,66 @@ class PDController:
         if period > 0.0:
             if self.prev_error is None:
                 self.prev_error = error
-            result = self.kp * error + self.kd * (error - self.prev_error) / period
+            out = self.kp * error + self.kd * (error - self.prev_error) / period
             self.prev_error = error
         else:
-            result = 0.0
-        return result
+            out = 0.0
+        return out
 
 
+class PIDController(Controller):
 
-class SpatialPDController:
-
-    def __init__(self, Kp_6: Sequence[float], Kd_6: Sequence[float]) -> None:
-        """ Six dimensional spatial PD controller
+    def __init__(self, kp: float = 0.0, ki: float = 0.0, kd: float = 0.0) -> None:
+        """ One dimension proportional-integral-derivative controller
 
         Args:
-            kp6: 6 kp values
-            kd6: 6 kd values
+            kp: Proportional gain. Defaults to 0.0.
+            ki: Integral gain. Defaults to 0.0.
+            kd: Derivative gain. Defaults to 0.0.
         """
-        if len(Kp_6) == 6 and len(Kd_6) == 6:
-            self.ctrl_l = [PDController(kp, kd) for kp, kd in zip(Kp_6, Kd_6)]
-        else:
-            raise ValueError(f"Given parameter lists '{Kp_6}' and '{Kd_6}' is not valid")
+        super().__init__()
+        self.kp = abs(kp)
+        self.ki = abs(ki)
+        self.kd = abs(kd)
+        self.integral = 0.0
+        self.prev_error: float | None = None  # Previous controller error
 
+    def reset(self) -> None:
+        """ Reset controller """
+        self.integral = 0.0
+        self.prev_error = None
+
+    def update(self, error: float, period: float) -> float:
+        """ Controller update step.
+
+        Args:
+            error: Controller error
+            period: Controller update duration [sec]
+
+        Returns:
+            Controller output / system input
+        """
+        if period > 0.0:
+            if self.prev_error is None:
+                self.prev_error = error
+            # Calculate control terms 
+            p_term = self.kp * error
+            i_term = self.ki * error * period
+            d_term = self.kd * (error - self.prev_error) / period
+            # Update internal state
+            self.prev_error = error
+            self.integral += i_term
+            # Get output
+            out = p_term + self.integral + d_term
+        else:
+            out = 0.0
+        return out
+
+
+class SpatialController:
+
+    def __init__(self) -> None:
+        self.ctrl_l: list[Controller] = []
 
     def reset(self) -> None:
         """ Reset all sub-controllers """
@@ -134,3 +186,36 @@ class SpatialPDController:
         """
         out = [ctrl.update(err, period) for ctrl, err in zip(self.ctrl_l, errors.xyzXYZ)]
         return Vector6d().from_xyzXYZ(out)
+
+
+class SpatialPDController(SpatialController):
+
+    def __init__(self, Kp_6: Sequence[float], Kd_6: Sequence[float]) -> None:
+        """ Six dimensional spatial PD controller
+
+        Args:
+            kp6: 6 kp values
+            kd6: 6 kd values
+        """
+        super().__init__()
+        if len(Kp_6) == 6 and len(Kd_6) == 6:
+            self.ctrl_l = [PDController(kp, kd) for kp, kd in zip(Kp_6, Kd_6)]
+        else:
+            raise ValueError(f"Given parameter lists '{Kp_6}' and '{Kd_6}' is not valid")
+
+
+class SpatialPIDController(SpatialController):
+
+    def __init__(self, Kp_6: Sequence[float], Ki_6: Sequence[float], Kd_6: Sequence[float]) -> None:
+        """ Six dimensional spatial PID controller
+
+        Args:
+            Kp_6: 6 kp values
+            Ki_6: 6 ki values
+            Kd_6: 6 kd values
+        """
+        super().__init__()
+        if len(Kp_6) == 6 and len(Ki_6) == 6 and len(Kd_6) == 6:
+            self.ctrl_l = [PIDController(kp, ki, kd) for kp, ki, kd in zip(Kp_6, Ki_6, Kd_6)]
+        else:
+            raise ValueError(f"Given parameter lists '{Kp_6}', '{Ki_6}', and '{Kd_6}' is not valid")

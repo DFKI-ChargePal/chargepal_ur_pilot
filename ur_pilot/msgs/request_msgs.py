@@ -13,7 +13,14 @@ class JointPosRequest:
 
 @dataclass
 class TCPPoseRequest:
-    tcp_pose: Pose
+    tcp_target: Pose
+
+
+@dataclass
+class MoveToPoseRequest:
+     tcp_target: Pose
+     controller_type: str
+     t_limit: float = -1.0
 
 
 @dataclass
