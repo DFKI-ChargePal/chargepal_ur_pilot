@@ -267,7 +267,7 @@ class URPilot:
         motion_error = Vector6d().from_Vector3d(po_error, ax_error)
         f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.rtde.dt)
         # Clip to maximum forces
-        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-10, a_max=10)
+        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-100, a_max=100)
         self.force_mode(
             task_frame=task_frame,
             selection_vector=6 * (1,),

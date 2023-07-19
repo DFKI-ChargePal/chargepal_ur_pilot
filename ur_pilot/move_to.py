@@ -32,7 +32,9 @@ def move_to_pose(rob: URPilot, req: MoveToPoseRequest) -> MoveToPoseResult:
     elif ctrl_type == 'velocity':
         raise NotImplementedError(f"Moving robot with control type'{ctrl_type}' is not implemented yet.")
     elif ctrl_type == 'motion':
-        rob.set_up_motion_mode()
+        rob.set_up_motion_mode(
+            error_scale=5000.0)
+        # rob.set_up_motion_mode()
         time_out = False
         t_start = time.time()
         tgt_3pts = req.tcp_target.to_3pt_set()

@@ -20,22 +20,22 @@ def move_to_square(ctrl_type: str, length: float) -> None:
     ref_p, ref_q = ref_pose.p, ref_pose.q
     # Move 10 cm in y direction
     new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, -length, 0.0)), ref_q.wxyz)
-    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 15.0))
+    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 5.0))
     if res.time_out:
         print(f"Warning: Target was not reached")
     # Move 10cm in z direction
     new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, -length, length)), ref_q.wxyz)
-    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 15.0))
+    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 5.0))
     if res.time_out:
         print(f"Warning: Target was not reached")
     # Move 10cm back in y direction
     new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, 0.0, length)), ref_q.wxyz)
-    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 15.0))
+    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 5.0))
     if res.time_out:
         print(f"Warning: Target was not reached")
     # Move 10cm back in z direction
     new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, 0.0, 0.0)), ref_q.wxyz)
-    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 15.0))
+    res = move_to_pose(ur10, MoveToPoseRequest(new_pose, ctrl_type, 5.0))
     if res.time_out:
         print(f"Warning: Target was not reached")
     print(f"Error wrt. start position: {ref_p - ur10.get_tcp_pose().p}")
@@ -47,4 +47,4 @@ def move_to_square(ctrl_type: str, length: float) -> None:
 
 
 if __name__ == '__main__':
-    move_to_square('motion', 0.25)
+    move_to_square('motion', 0.10)
