@@ -24,10 +24,19 @@ class MoveToPoseRequest:
 
 
 @dataclass
-class PlugInRequest:
+class PlugInForceModeRequest:
      compliant_axes: list[int]
      wrench: Vector6d
      t_limit: float
+
+
+@dataclass
+class PlugInMotionModeRequest:
+     tcp_target: Pose
+     t_limit: float
+     error_scale: float | None
+     Kp: list[float] | None
+     Kd: list[float] | None
 
 
 @dataclass

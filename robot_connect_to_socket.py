@@ -13,7 +13,7 @@ from rigmopy import Vector3d, Vector6d, Pose, Quaternion
 from ur_pilot.core import URPilot
 import ur_pilot.msgs.request_msgs as req_msg
 from ur_pilot.move_to import move_to_tcp_pose
-from ur_pilot.plug_in import plug_in
+from ur_pilot.plug_in import plug_in_fm, plug_in_mm
 from ur_pilot.plug_out import plug_out
 
 
@@ -22,15 +22,21 @@ SOCKET_POSE_ESTIMATION_CFG_X = Pose().from_xyz([0.614, 0.147, 0.439]).from_axis_
 
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 board_2 = 0.075 / 2  # half board size 
-X_SOCKET_2_BOARD = Pose().from_xyz_xyzw(xyz=[0.125 - board_2, board_2, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
-X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[-0.005, 0.0, -0.045 -0.01])  # Retreat pose with respect to the socket
+X_SOCKET_2_BOARD = Pose().from_xyz_xyzw(xyz=[0.126 - board_2, board_2, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
+# X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[-0.005, 0.0, -0.045 -0.01])  # Retreat pose with respect to the socket
+# X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[-0.005, 0.0, 0.02]) 
+X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, -0.045 -0.01])  # Retreat pose with respect to the socket
+X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[0.0, 0.0, 0.05])
+
+
 
 # Request messages
-PLUG_IN_REQ = req_msg.PlugInRequest(
+PLUG_IN_FM_REQ = req_msg.PlugInForceModeRequest(
     compliant_axes=[1, 1, 1, 0, 0, 1], 
     wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 20.0, 0.0, 0.0, 0.0]),
     t_limit=10.0
     )
+
 
 PLUG_OUT_REQ = req_msg.PlugOutRequest(
     compliant_axes=[0, 0, 1, 0, 0, 0],
@@ -40,7 +46,7 @@ PLUG_OUT_REQ = req_msg.PlugOutRequest(
     )
 
 
-def connect_to_socket() -> None:
+def connect_to_socket(mode: str) -> None:
     # Build AruCo detection setup()
     realsense = ca.RealSenseCamera("tcp_cam_realsense")
     realsense.load_coefficients()
@@ -83,11 +89,13 @@ def connect_to_socket() -> None:
             T_Cam2Board = X_Cam2Board.transformation
             T_Board2Socket = X_SOCKET_2_BOARD.transformation.inverse()
             T_Socket2SocketPre = X_SOCKET_2_SOCKET_PRE.transformation
+            T_Socket2SocketIn = X_SOCKET_2_SOCKET_IN.transformation
 
             # Get searched transformations
             T_Plug2Board = T_Plug2Cam @ T_Cam2Board
             T_Plug2Socket = T_Plug2Board @ T_Board2Socket 
             T_Base2Socket = T_Base2Plug @ T_Plug2Socket
+            T_Base2SocketIn = T_Base2Socket @ T_Socket2SocketIn
             T_Base2SocketPre = T_Base2Socket @ T_Socket2SocketPre
 
             found_board = True
@@ -99,9 +107,17 @@ def connect_to_socket() -> None:
         # Move to socket with some safety distance
         move_to_tcp_pose(ur10, req_msg.TCPPoseRequest(T_Base2SocketPre.pose))
         time.sleep(1.0)
-        # Try to plug in
-        plug_in(ur10, PLUG_IN_REQ)
-        time.sleep(2.0)
+        if mode == 'force_mode':
+            connect_to_socket_force_mode(ur10, PLUG_IN_FM_REQ)
+        elif mode == 'motion_mode':
+            req = req_msg.PlugInMotionModeRequest(
+                tcp_target=T_Base2SocketIn.pose,
+                t_limit=10.0,
+                error_scale=5000.0,
+                Kp=None, Kd=None
+            )
+            connect_to_socket_motion_mode(ur10, req)
+
         # Try to plug out
         plug_out_res = plug_out(ur10, PLUG_OUT_REQ)
         time.sleep(1.0)
@@ -116,7 +132,21 @@ def connect_to_socket() -> None:
     ur10.exit()
     board_detector.destroy(with_cam=False)
     realsense.destroy()
-    
+
+
+def connect_to_socket_force_mode(rob: URPilot, req: req_msg.PlugInForceModeRequest) -> None:
+    # Try to plug in
+    plug_in_fm(rob, req)
+    time.sleep(2.0)
+
+
+
+def connect_to_socket_motion_mode(rob: URPilot, req: req_msg.PlugInMotionModeRequest) -> None:
+    # Try to plug in
+    plug_in_mm(rob, req)
+    time.sleep(2.0)
+
+
 
 def main() -> None:
     """ Main function to start process. """
@@ -124,7 +154,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Script to connect the plug with the socket.')
     args = parser.parse_args()
 
-    connect_to_socket()
+    connect_to_socket(mode='motion_mode')
 
 
 if __name__ == '__main__':

@@ -27,8 +27,8 @@ def motion_mode_ctrl(episode_len: float) -> None:
         dt = 0
         while time.time() - t_start_ < episode_len:
             dt += 1
-            new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + 1.0 * np.random.randn(3), (ref_q * Quaternion().from_axis_angle(1.0 * np.random.randn(3))).wxyz)
-            # new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array([0.0, - dt * 0.02, 0.0]), ref_q.wxyz)
+            new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + 0.005 * np.random.randn(3), (ref_q * Quaternion().from_axis_angle(0.005 * np.random.randn(3))).wxyz)
+            # new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array([0.0, - dt * 0.005, 0.0]), ref_q.wxyz)
             # new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz), ref_q.wxyz)
             t_sub_start = time.time()
             while time.time() - t_sub_start < 1/CONTROL_FREQ_:

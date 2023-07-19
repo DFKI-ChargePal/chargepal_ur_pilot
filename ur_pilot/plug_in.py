@@ -7,18 +7,18 @@ import chargepal_aruco as ca
 # local
 from ur_pilot.core import URPilot
 from ur_pilot.msgs.result_msgs import PlugInResult
-from ur_pilot.msgs.request_msgs import PlugInRequest
-
-# typing
-from typing import Optional
+from ur_pilot.msgs.request_msgs import PlugInForceModeRequest, PlugInMotionModeRequest
 
 
-def plug_in(rob: URPilot, req: PlugInRequest) -> PlugInResult:
-    """
-    Execution function to connect the aligned plug with the socket
-    :param rob: Robot object
-    :param req: Request message
-    :return: Request message with the final TCP pose
+def plug_in_fm(rob: URPilot, req: PlugInForceModeRequest) -> PlugInResult:
+    """ Execution function using force mode to connect the aligned plug with the socket
+
+    Args:
+        rob: Robot object
+        req: Request message
+
+    Returns:
+        Result message with the final TCP pose
     """
     # Set the force mode up
     rob.set_up_force_mode()
@@ -53,6 +53,42 @@ def plug_in(rob: URPilot, req: PlugInRequest) -> PlugInResult:
 
     # Exit force mode
     rob.stop_force_mode()
+    # Gather result
+    res_pose = rob.get_tcp_pose()
+    return PlugInResult(res_pose, time_out)
+
+
+def plug_in_mm(rob: URPilot, req: PlugInMotionModeRequest) -> PlugInResult:
+    """ Execution function using motion mode to connect the aligned plug with the socket
+
+    Args:
+        rob: Robot object
+        req: Request message
+
+    Returns:
+        Result message with the final TCP pose
+    """
+    # Set up motion mode
+    rob.set_up_motion_mode(error_scale=req.error_scale, Kp_6=req.Kp, Kd_6=req.Kd)
+    time_out = False
+    t_start = time.time()
+    while True:
+        # Move linear to target
+        rob.motion_mode(req.tcp_target)
+
+        # Check error in plugging direction
+        act_pose = rob.get_tcp_pose()
+        error_p = req.tcp_target.p - act_pose.p
+        # Rotate in tcp frame
+        error_p_tcp = act_pose.q.apply(error_p, inverse=True)
+        if abs(error_p_tcp.xyz[-1]) <= 0.005:
+            break
+        elif time.time() - t_start > req.t_limit:
+            time_out = True
+            break
+    
+    # Exit motion mode
+    rob.stop_motion_mode()
     # Gather result
     res_pose = rob.get_tcp_pose()
     return PlugInResult(res_pose, time_out)
