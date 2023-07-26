@@ -22,12 +22,11 @@ SOCKET_POSE_ESTIMATION_CFG_X = Pose().from_xyz([0.614, 0.147, 0.439]).from_axis_
 
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 board_2 = 0.075 / 2  # half board size 
-X_SOCKET_2_BOARD = Pose().from_xyz_xyzw(xyz=[0.126 - board_2, board_2, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
+X_SOCKET_2_BOARD = Pose().from_xyz_xyzw(xyz=[0.130 - board_2, board_2, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
 # X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[-0.005, 0.0, -0.045 -0.01])  # Retreat pose with respect to the socket
 # X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[-0.005, 0.0, 0.02]) 
-X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, -0.045 -0.01])  # Retreat pose with respect to the socket
+X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, -0.045 - 0.01])  # Retreat pose with respect to the socket
 X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[0.0, 0.0, 0.05])
-
 
 
 # Request messages
@@ -140,12 +139,10 @@ def connect_to_socket_force_mode(rob: URPilot, req: req_msg.PlugInForceModeReque
     time.sleep(2.0)
 
 
-
 def connect_to_socket_motion_mode(rob: URPilot, req: req_msg.PlugInMotionModeRequest) -> None:
     # Try to plug in
     plug_in_mm(rob, req)
     time.sleep(2.0)
-
 
 
 def main() -> None:
@@ -153,7 +150,6 @@ def main() -> None:
     # Input parsing
     parser = argparse.ArgumentParser(description='Script to connect the plug with the socket.')
     args = parser.parse_args()
-
     connect_to_socket(mode='motion_mode')
 
 
