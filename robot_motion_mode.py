@@ -13,7 +13,6 @@ EPISODE_LEN_ = 20.0  # [sec]
 CONTROL_FREQ_ = 20  # [hz]
 
 
-
 def motion_mode_ctrl(episode_len: float) -> None:
     # Connect to robot arm
     ur10 = URPilot()
