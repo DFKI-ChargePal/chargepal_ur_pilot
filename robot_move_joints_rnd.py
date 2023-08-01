@@ -1,22 +1,10 @@
-""" 
-Script to move the robot arm randomly around the home position.
-"""
-# local
-from ur_pilot import URPilot, move_joints_random
-
-
-def move_joints_rnd() -> None:
-    # Connect to robot arm
-    ur10 = URPilot()
-
-    # Move arm
-    res = move_joints_random(ur10)
-    # Print result
-    print("Target joint positions: ", " ".join(f"{q:.3f}" for q in res.joint_pos))
-
-    # Disconnect to robot arm
-    ur10.exit()
+""" Script to move the robot arm randomly around the home position """
+import ur_pilot
 
 
 if __name__ == '__main__':
-    move_joints_rnd()
+    with ur_pilot.connect() as pilot:
+        with pilot.position_control():
+            rnd_joint_pos = pilot.move_joints_random()
+            # Print result
+            print("Target joint positions: ", " ".join(f"{q:.3f}" for q in rnd_joint_pos))
