@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # global
-from time import process_time
+from time import perf_counter
 import numpy as np
 from pathlib import Path
 from enum import auto, Enum
@@ -55,9 +55,9 @@ class Pilot:
     def _check_control_context(self, expected: ControlContext | list[ControlContext]) -> None:
         if self.control_context is ControlContext.DISABLED:
             raise RuntimeError(f"Pilot is not in any control context. Running actions is not possible.")
-        elif type(expected) == list and self.control_context not in expected:
+        if type(expected) == list and self.control_context not in expected:
             raise RuntimeError(f"This action is not able to use one of the control context '{self.control_context}'")
-        elif self.control_context is not expected:
+        if type(expected) == ControlContext and self.control_context is not expected:
             raise RuntimeError(f"This action is not able to use the control context '{self.control_context}'")
 
     @contextmanager
@@ -112,14 +112,14 @@ class Pilot:
             x_ref = np.array(X_tcp.xyz, dtype=np.float32)
             # Time observation
             fin = False
-            t_ref = t_start = process_time()
+            t_ref = t_start = perf_counter()
             while True:
                 # Apply wrench
                 self.robot.force_mode(
                     task_frame=task_frame,
                     selection_vector=compliant_axes,
                     wrench=wrench.xyzXYZ)
-                t_now = process_time()
+                t_now = perf_counter()
                 # Check every second if robot is still moving
                 if t_now - t_ref > 1.0:
                     x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
