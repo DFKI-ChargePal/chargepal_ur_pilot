@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 # global
+from time import process_time
 import numpy as np
 from pathlib import Path
 from enum import auto, Enum
 from contextlib import contextmanager
-from rigmopy import Pose
+
+import chargepal_aruco as ca
+from rigmopy import Pose, Vector6d
 
 # local
 from ur_pilot.robot import Robot
@@ -98,6 +101,43 @@ class Pilot:
         self.robot.move_l(target)
         new_pose = self.robot.get_tcp_pose()
         return new_pose
+
+    def plug_in(self, wrench: Vector6d, compliant_axes: list[int], time_out: float) -> tuple[bool, Pose]:
+        self._check_control_context(expected=[ControlContext.FORCE, ControlContext.MOTION])
+
+        if self.control_context is ControlContext.FORCE:
+            # Wrench will be applied with respect to the current TCP pose
+            X_tcp = self.robot.get_tcp_pose()
+            task_frame = X_tcp.xyz + X_tcp.axis_angle
+            x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+            # Time observation
+            fin = False
+            t_ref = t_start = process_time()
+            while True:
+                # Apply wrench
+                self.robot.force_mode(
+                    task_frame=task_frame,
+                    selection_vector=compliant_axes,
+                    wrench=wrench.xyzXYZ)
+                t_now = process_time()
+                # Check every second if robot is still moving
+                if t_now - t_ref > 1.0:
+                    x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                    if np.allclose(x_ref, x_now, atol=0.001):
+                        fin = True
+                        break
+                    t_ref, x_ref = t_now, x_now
+                if t_now - t_start > time_out:
+                    break
+                if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                    break
+            # Stop robot movement.
+            self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+            return fin, self.robot.get_tcp_pose()
+        elif self.control_context is ControlContext.MOTION:
+            raise NotImplementedError(f"Control context hasn't been implemented yet for this action.")
+        else:
+            raise RuntimeError(f"Undefined program state.")
 
     def move_joints_random(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
