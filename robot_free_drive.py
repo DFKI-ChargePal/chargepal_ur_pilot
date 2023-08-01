@@ -11,11 +11,9 @@ def free_drive() -> None:
     with ur_pilot.connect() as pilot:
         # Start free drive mode
         with pilot.teach_in_control():
-            while True:
+            while not ca.EventObserver.state is ca.EventObserver.Type.QUIT:
                 img = cam.get_color_frame()
                 display.show(img)
-                if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
-                    break
 
 
 if __name__ == '__main__':
