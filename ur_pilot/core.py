@@ -194,6 +194,35 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return fin, self.robot.get_tcp_pose()
 
+    def find_contact_point(self, direction: list[int], time_out: float) -> tuple[bool, Pose]:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Map direction to wrench
+        wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
+        selection_vector = [1 if d != 0 else 0 for d in direction]
+        task_frame = 6 * [0.0]  # Robot base
+        fin = False
+        t_start = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=selection_vector,
+                wrench=wrench
+                )
+            t_now = perf_counter()
+            time_steps_since_contact = self.robot.rtde.c.toolContact([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
+            if time_steps_since_contact > 0:
+                print(time_steps_since_contact)
+                fin = True
+                break
+            elif t_now - t_start > time_out:
+                fin = False
+                break
+        return fin, self.robot.get_tcp_pose()
+
+
+
+
     def plug_in_motion_mode(self, target: Pose, time_out: float) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.MOTION)
         fin = False
