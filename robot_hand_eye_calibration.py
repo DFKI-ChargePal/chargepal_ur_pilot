@@ -8,7 +8,7 @@ import chargepal_aruco as ca
 from rigmopy import Transformation
 
 # local
-from ur_pilot.core import URPilot
+import ur_pilot
 from robot_record_state_sequence import state_sequence_reader
 
 
@@ -27,57 +27,59 @@ def record_calibration_imgs(_debug: bool) -> None:
     detector = ca.CharucoboardDetector(cam, aru_board, display=True)
     
     # Connect to arm
-    ur10 = URPilot()
-    ur10.move_home()
-    # Move to all states in sequence
-    counter = 1
-    stop_reading = False
-    calibration.hand_eye_calibration_clear_directories()
-    for joint_pos in state_sequence_reader(TEACH_IN_FILE_):
-        n_debug_prints = 0
-        ur10.move_j(joint_pos)
-        _ret, board_pose = detector.find_board_pose()
-        if _ret:
-            r_vec, t_vec = board_pose[0], board_pose[1]
-            # Build target to camera transformation
-            R_cam2tgt, _ = cv.Rodrigues(r_vec)
-            tau_cam2tgt = np.array(t_vec).squeeze()
-            # Transformation matrix of target in camera frame
-            T_cam2tgt = Transformation().from_rot_tau(R_cam2tgt, tau_cam2tgt)
-            # Build TCP to arm base transformation
-            tcp_pose = ur10.get_tcp_pose()
-            T_base2tcp = Transformation().from_pose(tcp_pose)
-            # Save calibration item
-            file_name = f"hand_eye_{counter:02}"
-            if _debug:
-                if n_debug_prints <= 0:
-                    print(f"\n\nTransformation ChArUco-board to camera\n {T_cam2tgt}")
-                    print(f"\nTransformation UR10-TCP to UR10-base\n {T_base2tcp}")
-                    print(f"Debug mode! No recordings will be saved.")
-                    n_debug_prints += 1
-            else:
-                calibration.hand_eye_calibration_record_sample(
-                    file_prefix=file_name,
-                    T_base2tcp=T_base2tcp.trans_matrix,
-                    T_cam2tgt=T_cam2tgt.trans_matrix,
-                )
-                counter += 1
-        if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
-            print("The recording process is terminated by the user.")
-            stop_reading = True
-        if _debug:
-            # Pause by user
-            ca.EventObserver.wait_for_user()
-        else:
-            time.sleep(0.1)
+    with ur_pilot.connect() as pilot:
 
-        if stop_reading:
-            break
+        with pilot.position_control():
+            pilot.move_home()
 
-    # Move back to home
-    ur10.move_home()
+            # Move to all states in sequence
+            counter = 1
+            stop_reading = False
+            calibration.hand_eye_calibration_clear_directories()
+            for joint_pos in state_sequence_reader(TEACH_IN_FILE_):
+                n_debug_prints = 0
+                pilot.move_to_joint_pos(joint_pos)
+                _ret, board_pose = detector.find_board_pose()
+                if _ret:
+                    r_vec, t_vec = board_pose[0], board_pose[1]
+                    # Build target to camera transformation
+                    R_cam2tgt, _ = cv.Rodrigues(r_vec)
+                    tau_cam2tgt = np.array(t_vec).squeeze()
+                    # Transformation matrix of target in camera frame
+                    T_cam2tgt = Transformation().from_rot_tau(R_cam2tgt, tau_cam2tgt)
+                    # Build TCP to arm base transformation
+                    tcp_pose = pilot.robot.get_tcp_pose()
+                    T_base2tcp = Transformation().from_pose(tcp_pose)
+                    # Save calibration item
+                    file_name = f"hand_eye_{counter:02}"
+                    if _debug:
+                        if n_debug_prints <= 0:
+                            print(f"\n\nTransformation ChArUco-board to camera\n {T_cam2tgt}")
+                            print(f"\nTransformation UR10-TCP to UR10-base\n {T_base2tcp}")
+                            print(f"Debug mode! No recordings will be saved.")
+                            n_debug_prints += 1
+                    else:
+                        calibration.hand_eye_calibration_record_sample(
+                            file_prefix=file_name,
+                            T_base2tcp=T_base2tcp.trans_matrix,
+                            T_cam2tgt=T_cam2tgt.trans_matrix,
+                        )
+                        counter += 1
+                if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                    print("The recording process is terminated by the user.")
+                    stop_reading = True
+                if _debug:
+                    # Pause by user
+                    ca.EventObserver.wait_for_user()
+                else:
+                    time.sleep(0.1)
+
+                if stop_reading:
+                    break
+            # Move back to home
+            pilot.move_home()
+    
     # Clean up
-    ur10.exit()
     detector.destroy(with_cam=True)
 
 

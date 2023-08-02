@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import shutil
 # global
 import time
-
-import numpy as np
 import tomli
+import shutil
 import tomli_w
 import logging
 import argparse
@@ -14,8 +12,7 @@ from tomlkit import document
 from rigmopy import Vector3d, Vector6d
 
 # local
-from ur_pilot.core import URPilot
-from ur_pilot.utils import set_logging_level
+import ur_pilot
 from ur_pilot.end_effector.ft_calib import FTCalibration
 from robot_record_state_sequence import record_state_sequence, state_sequence_reader
 
@@ -55,32 +52,31 @@ def record_ft_measurements() -> None:
         shutil.rmtree(meas_dir)
     meas_dir.mkdir(parents=True, exist_ok=True)
     # Connect to robot
-    ur10 = URPilot()
-    ur10.move_home()
-    # Move to all states in sequence
-    counter = 1
-    for joint_pos in state_sequence_reader(TEACH_IN_FILE_):
-        ur10.move_j(joint_pos)
-        time.sleep(1.0)  # wait to have no more movements
-        new_ft_meas_wrt_world = ur10.average_ft_measurement(200)  # Get average measurement over 200 readings
-        q_world2tcp = ur10.q_world2arm * ur10.get_tcp_pose().q
-        g_world_wrt_world = Vector3d().from_xyz([0.0, 0.0, -9.80665])
-        g_tcp_wrt_world = q_world2tcp.apply(g_world_wrt_world, inverse=True)
+    with ur_pilot.connect() as pilot:
+        with pilot.position_control():
+            pilot.move_home()
+            # Move to all states in sequence
+            counter = 1
+            for joint_pos in state_sequence_reader(TEACH_IN_FILE_):
+                pilot.move_to_joint_pos(joint_pos)
+                time.sleep(1.0)  # wait to have no more movements
+                new_ft_meas_wrt_world = pilot.robot.average_ft_measurement(200)  # Get average measurement over 200 readings
+                q_world2tcp = pilot.robot.q_world2arm * pilot.robot.get_tcp_pose().q
+                g_world_wrt_world = Vector3d().from_xyz([0.0, 0.0, -9.80665])
+                g_tcp_wrt_world = q_world2tcp.apply(g_world_wrt_world, inverse=True)
 
-        file_name = f"{counter:02}_{MEAS_FILE_}"
-        fp = meas_dir.joinpath(file_name)
-        LOGGER.info(f"Record sample with:\nGravity: {g_tcp_wrt_world}\nFT: {new_ft_meas_wrt_world}")
-        toml_doc = document()
-        toml_doc.add("gravity", g_tcp_wrt_world.xyz)  # type: ignore
-        toml_doc.add("ft_raw", new_ft_meas_wrt_world.xyzXYZ)  # type: ignore
-        with fp.open(mode='wb') as f:
-            tomli_w.dump(toml_doc, f)
-        counter += 1
+                file_name = f"{counter:02}_{MEAS_FILE_}"
+                fp = meas_dir.joinpath(file_name)
+                LOGGER.info(f"Record sample with:\nGravity: {g_tcp_wrt_world}\nFT: {new_ft_meas_wrt_world}")
+                toml_doc = document()
+                toml_doc.add("gravity", g_tcp_wrt_world.xyz)  # type: ignore
+                toml_doc.add("ft_raw", new_ft_meas_wrt_world.xyzXYZ)  # type: ignore
+                with fp.open(mode='wb') as f:
+                    tomli_w.dump(toml_doc, f)
+                counter += 1
 
-    # Move back to home
-    ur10.move_home()
-    # Clean up
-    ur10.exit()
+            # Move back to home
+            pilot.move_home()
 
 
 def calibrate_ft_sensor() -> tuple[float, Vector3d, Vector6d]:
@@ -121,9 +117,9 @@ if __name__ == '__main__':
     # Parse input arguments
     args = parser.parse_args()
     if args.debug:
-        set_logging_level(logging.DEBUG)
+        ur_pilot.set_logging_level(logging.DEBUG)
     else:
-        set_logging_level(logging.INFO)
+        ur_pilot.set_logging_level(logging.INFO)
     # Run desired jobs
     if args.teach_in:
         teach_in()
