@@ -1,30 +1,19 @@
 """ Short demo to demonstrate motion mode. Goal is to keep the current pose """
-import time
-from ur_pilot import URPilot
-
+import ur_pilot
 
 def keep_pose(soft: bool, time_out: float) -> None:
 
-    # Connect to robot arm
-    ur10 = URPilot()
+    # Connect to pilot/robot arm
+    with ur_pilot.connect() as pilot:
 
-    if soft:
-        ur10.set_up_motion_mode(Kp_6=[1.0, 1.0, 1.0, 0.01, 0.01, 0.01])
-    else:
-        ur10.set_up_motion_mode(Kp_6=[25.0, 25.0, 25.0, 1.0, 1.0, 1.0])
-    init_pose = ur10.get_tcp_pose()
-    t_start = time.time()
-
-    try:
-
-        while time.time() - t_start < time_out:
-            ur10.motion_mode(init_pose)
-
-    except Exception as e:
-        print(e)
-    finally:
-        ur10.stop_motion_mode()
-        ur10.exit()
+        if soft:
+            Kp = [1.0, 1.0, 1.0, 0.01, 0.01, 0.01]
+        else:
+            Kp = [25.0, 25.0, 25.0, 1.0, 1.0, 1.0]
+        
+        with pilot.motion_control(Kp_6=Kp):
+            init_pose = pilot.robot.get_tcp_pose()
+            pilot.move_to_tcp_pose(init_pose, time_out=time_out)
 
 
 if __name__ == '__main__':

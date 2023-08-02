@@ -67,11 +67,25 @@ class Pilot:
         self.control_context = ControlContext.DISABLED
 
     @contextmanager
-    def force_control(self) -> Iterator[None]:
-        self.robot.set_up_force_mode()
+    def force_control(self, gain: float | None = None, damping: float | None = None) -> Iterator[None]:
+        self.robot.set_up_force_mode(gain=gain, damping=damping)
         self.control_context = ControlContext.FORCE
         yield
         self.robot.stop_force_mode()
+        self.control_context = ControlContext.DISABLED
+
+    @contextmanager
+    def motion_control(self,
+                       error_scale: float | None = None,
+                       Kp_6: Sequence[float] | None = None,
+                       Kd_6: Sequence[float] | None = None,
+                       ft_gain: float | None = None,
+                       ft_damping: float | None = None) -> Iterator[None]:
+        self.robot.set_up_motion_mode(
+            error_scale=error_scale, Kp_6=Kp_6, Kd_6=Kd_6, ft_gain=ft_gain, ft_damping=ft_damping)
+        self.control_context = ControlContext.MOTION
+        yield
+        self.robot.stop_motion_mode()
         self.control_context = ControlContext.DISABLED
 
     @contextmanager
@@ -95,49 +109,130 @@ class Pilot:
         new_joint_pos = self.robot.get_joint_pos()
         return new_joint_pos
 
-    def move_to_tcp_pose(self, target: Pose) -> Pose:
-        self._check_control_context(expected=ControlContext.POSITION)
+    def move_to_tcp_pose(self, target: Pose, time_out: float = 3.0) -> tuple[bool, Pose]:
+        self._check_control_context(expected=[ControlContext.POSITION, ControlContext.MOTION])
+        fin = False
         # Move to requested TCP pose
-        self.robot.move_l(target)
-        new_pose = self.robot.get_tcp_pose()
-        return new_pose
-
-    def plug_in(self, wrench: Vector6d, compliant_axes: list[int], time_out: float) -> tuple[bool, Pose]:
-        self._check_control_context(expected=[ControlContext.FORCE, ControlContext.MOTION])
-
-        if self.control_context is ControlContext.FORCE:
-            # Wrench will be applied with respect to the current TCP pose
-            X_tcp = self.robot.get_tcp_pose()
-            task_frame = X_tcp.xyz + X_tcp.axis_angle
-            x_ref = np.array(X_tcp.xyz, dtype=np.float32)
-            # Time observation
-            fin = False
-            t_ref = t_start = perf_counter()
+        if self.control_context == ControlContext.POSITION:
+            self.robot.move_l(target)
+            fin = True
+        if self.control_context == ControlContext.MOTION:
+            t_start = perf_counter()
+            tgt_3pts = target.to_3pt_set()
             while True:
-                # Apply wrench
-                self.robot.force_mode(
-                    task_frame=task_frame,
-                    selection_vector=compliant_axes,
-                    wrench=wrench.xyzXYZ)
-                t_now = perf_counter()
-                # Check every second if robot is still moving
-                if t_now - t_ref > 1.0:
-                    x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
-                    if np.allclose(x_ref, x_now, atol=0.001):
-                        fin = True
-                        break
-                    t_ref, x_ref = t_now, x_now
-                if t_now - t_start > time_out:
+                self.robot.motion_mode(target)
+                cur_3pts = self.robot.get_tcp_pose().to_3pt_set()
+                error = np.mean(np.abs(tgt_3pts, cur_3pts))
+                if error <= 0.005:  # 5 mm
+                    fin = True
                     break
-                if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                elif perf_counter() - t_start > time_out:
+                    fin = False
                     break
-            # Stop robot movement.
-            self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
-            return fin, self.robot.get_tcp_pose()
-        elif self.control_context is ControlContext.MOTION:
-            raise NotImplementedError(f"Control context hasn't been implemented yet for this action.")
-        else:
-            raise RuntimeError(f"Undefined program state.")
+        new_pose = self.robot.get_tcp_pose()
+        return fin, new_pose
+
+    def plug_in_force_mode(self, wrench: Vector6d, compliant_axes: list[int], time_out: float) -> tuple[bool, Pose]:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        # Time observation
+        fin = False
+        t_ref = t_start = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=compliant_axes,
+                wrench=wrench.xyzXYZ)
+            t_now = perf_counter()
+            # Check every second if robot is still moving
+            if t_now - t_ref > 1.0:
+                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                if np.allclose(x_ref, x_now, atol=0.001):
+                    fin = True
+                    break
+                t_ref, x_ref = t_now, x_now
+            if t_now - t_start > time_out:
+                break
+            if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                break
+        # Stop robot movement.
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        return fin, self.robot.get_tcp_pose()
+
+    def plug_out_force_mode(self,
+                            wrench: Vector6d, 
+                            compliant_axes: list[int], 
+                            distance: float, 
+                            time_out: float) -> tuple[bool, Pose]:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        fin = False
+        t_start = perf_counter()
+        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=compliant_axes,
+                wrench=wrench.xyzXYZ)
+            x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+            l2_norm_dist = np.linalg.norm(x_now - x_ref)
+            t_now = perf_counter()
+            if l2_norm_dist >= distance:
+                fin = True
+                break
+            elif t_now - t_start > time_out:
+                fin = False
+                break
+        # Stop robot movement
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        return fin, self.robot.get_tcp_pose()
+
+    def plug_in_motion_mode(self, target: Pose, time_out: float) -> tuple[bool, Pose]:
+        self._check_control_context(expected=ControlContext.MOTION)
+        fin = False
+        t_start = perf_counter()
+        while True:
+            # Move linear to target
+            self.robot.motion_mode(target)
+            # Check error in plugging direction
+            act_pose = self.robot.get_tcp_pose()
+            error_p = target.p - act_pose.p
+            # Rotate in tcp frame
+            error_p_tcp = act_pose.q.apply(error_p, inverse=True)
+            if abs(error_p_tcp.xyz[-1]) <= 0.005:
+                fin = True
+                break
+            elif perf_counter() - t_start > time_out:
+                fin = False
+                break
+        # Stop robot movement
+        self.robot.force_mode(6*[0.0], 6*[0], 6*[0.0])
+        return fin, self.robot.get_tcp_pose()
+
+    def relax(self, time_duration: float) -> Pose:
+        self._check_control_context(expected=ControlContext.FORCE)
+
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        t_start = perf_counter()
+        # Apply zero wrench and be compliant in all axes
+        wrench = 6 * [0.0]
+        compliant_axes = 6 * [1]
+        while perf_counter() - t_start < time_duration:
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=compliant_axes,
+                wrench=wrench)
+        # Stop robot movement.
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        return self.robot.get_tcp_pose()
 
     def move_joints_random(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)

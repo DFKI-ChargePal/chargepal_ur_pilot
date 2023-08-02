@@ -9,7 +9,7 @@ from pathlib import Path
 import chargepal_aruco as ca
 
 # local
-from ur_pilot import URPilot
+import ur_pilot
 
 # typing
 from typing import Generator, Sequence
@@ -26,43 +26,40 @@ def record_state_sequence(file_name: str) -> None:
     cam = ca.RealSenseCamera('tcp_cam_realsense')
     cam.load_coefficients()
     display = ca.Display('Monitor')
-    # Connect to robot
-    ur10 = URPilot()
-    ur10.move_home()
+    # Connect to pilot
+    with ur_pilot.connect() as pilot:
+        
+        with pilot.position_control():
+            pilot.move_home()
 
-    # Prepare recording
-    state_seq: list[Sequence[float]] = []
-    data_path = Path(_T_IN_DIR)
-    data_path.mkdir(parents=True, exist_ok=True)
-    file_path = data_path.joinpath(file_name)
+        # Prepare recording
+        state_seq: list[Sequence[float]] = []
+        data_path = Path(_T_IN_DIR)
+        data_path.mkdir(parents=True, exist_ok=True)
+        file_path = data_path.joinpath(file_name)
 
-    # Enable free drive mode
-    ur10.teach_mode()
-    LOGGER.info("Start teach in mode: ")
-    LOGGER.info("You can now move the arm and record joint positions pressing 's' or 'S' ...")
-    while True:
-        img = cam.get_color_frame()
-        display.show(img)
-        if ca.EventObserver.state is ca.EventObserver.Type.SAVE:
-            # Save current joint position configuration
-            joint_pos = ur10.get_joint_pos()
-            info_str = f"Save joint pos: " + " ".join(f"{q:.3f}" for q in joint_pos)
-            LOGGER.info(info_str)
-            state_seq.append(joint_pos)
-        elif ca.EventObserver.state is ca.EventObserver.Type.QUIT:
-            LOGGER.info("The recording process is terminated by the user.")
-            break
-    
-    LOGGER.info(f"Save all configurations in {file_path}")
-    with file_path.open('w') as fp:
-        json.dump(state_seq, fp, indent=2)
-
-    # Stop free drive mode
-    ur10.stop_teach_mode()
-    # Clean up
-    ur10.exit()
-    display.destroy()
-    cam.destroy()
+        # Enable free drive mode
+        with pilot.teach_in_control():
+            LOGGER.info("Start teach in mode: ")
+            LOGGER.info("You can now move the arm and record joint positions pressing 's' or 'S' ...")
+            while True:
+                img = cam.get_color_frame()
+                display.show(img)
+                if ca.EventObserver.state is ca.EventObserver.Type.SAVE:
+                    # Save current joint position configuration
+                    joint_pos = pilot.robot.get_joint_pos()
+                    info_str = f"Save joint pos: " + " ".join(f"{q:.3f}" for q in joint_pos)
+                    LOGGER.info(info_str)
+                    state_seq.append(joint_pos)
+                elif ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                    LOGGER.info("The recording process is terminated by the user.")
+                    break
+            LOGGER.info(f"Save all configurations in {file_path}")
+            with file_path.open('w') as fp:
+                json.dump(state_seq, fp, indent=2)
+        # Clean up
+        display.destroy()
+        cam.destroy()
 
 
 def state_sequence_reader(file_name: str) -> Generator[list[float], None, None]:
