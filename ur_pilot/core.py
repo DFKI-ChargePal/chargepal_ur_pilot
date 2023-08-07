@@ -201,7 +201,8 @@ class Pilot:
         selection_vector = [1 if d != 0 else 0 for d in direction]
         task_frame = 6 * [0.0]  # Robot base
         fin = False
-        t_start = perf_counter()
+        x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        t_start = t_ref = perf_counter()
         while True:
             # Apply wrench
             self.robot.force_mode(
@@ -210,11 +211,17 @@ class Pilot:
                 wrench=wrench
                 )
             t_now = perf_counter()
-            time_steps_since_contact = self.robot.rtde.c.toolContact([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
-            if time_steps_since_contact > 0:
-                print(time_steps_since_contact)
-                fin = True
-                break
+            # Check every second if robot is still moving
+            if t_now - t_ref > 0.5:
+                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                if np.allclose(x_ref, x_now, atol=0.001):
+                    fin = True
+                    break
+                t_ref, x_ref = t_now, x_now
+            # time_steps_since_contact = self.robot.rtde.c.toolContact(direction)
+            # if time_steps_since_contact > 0:
+            #     fin = True
+            #     break
             elif t_now - t_start > time_out:
                 fin = False
                 break
