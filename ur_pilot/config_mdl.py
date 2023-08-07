@@ -41,8 +41,8 @@ class ToolModel(BaseModel):
     """
     mass: float = 0.0
     com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
-    p_mounting2tip: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
-    q_mounting2tip: List[float] = Field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
+    tip_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
+    sense_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
 
 
 class Servo(BaseModel):

@@ -32,7 +32,7 @@ class Robot:
 
     FT_SENSOR_FRAMES_ = ['world', 'arm_base', 'ft_sensor']
 
-    EE_FRAMES_ = ['flange', 'ft_sensor', 'tool', 'camera']
+    EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_tip', 'tool_sense', 'camera']
 
     def __init__(self, cfg_path: Path | None = None) -> None:
         
@@ -68,6 +68,7 @@ class Robot:
         self._motion_pd: SpatialPDController | None = None
 
         self.tool = ToolModel(**self.cfg.robot.tool.dict())
+        self.set_tcp()
         self.cam: Camera | None = None
         self.cam_mdl = CameraModel()
 
@@ -293,9 +294,11 @@ class Robot:
         """ Function to set robot back in normal position control mode. """
         self.rtde.c.endTeachMode()
 
-    def set_tcp(self, tcp_offset: Pose) -> None:
+    def set_tcp(self, frame: str = 'tool_tip') -> None:
         """ Function to set the tcp relative to the tool flange. """
-        self.rtde.c.setTcp(tcp_offset.xyz + tcp_offset.axis_angle)
+        offset = self.__frame_to_offset(frame=frame)
+        self.rtde.c.setTcp(offset)
+        LOGGER.info(f"From now on robot end effector is going to work with respect to frame: {frame}")
 
     ##################################
     #       RECEIVER FUNCTIONS       #
@@ -318,33 +321,41 @@ class Robot:
         Returns:
             6D pose
         """
+        tcp_offset = self.__frame_to_offset(frame=frame)
+        q: Sequence[float] = self.rtde.r.getActualQ()
+        pose_vec: Sequence[float] = self.rtde.c.getForwardKinematics(q=q, tcp_offset=tcp_offset)
+        return Pose().from_xyz(pose_vec[:3]).from_axis_angle(pose_vec[3:])
+
+    def __frame_to_offset(self, frame: str) -> tuple[float, ...]:
         if frame not in self.EE_FRAMES_:
             raise ValueError(f"Given frame is not available. Please select one of '{self.EE_FRAMES_}'")
-
         if frame == 'flange':
-            tcp_offset_ = 6 * (0.0,)
+            offset = 6 * (0.0,)
         elif frame == 'ft_sensor':
             if self.extern_sensor:
-                tcp_offset_ = self.ft_sensor_mdl.p_mounting2wrench.xyz + self.ft_sensor_mdl.q_mounting2wrench.axis_angle
+                offset = self.ft_sensor_mdl.p_mounting2wrench.xyz + self.ft_sensor_mdl.q_mounting2wrench.axis_angle
             else:
                 # Tread internal force torque sensor as mounted in flange frame
-                tcp_offset_ = 6 * (0.0,)
+                offset = 6 * (0.0,)
                 LOGGER.warning(f"External ft_sensor is not configured. Return pose of the flange frame.")
-        elif frame == 'tool':
+        elif frame == 'tool_tip':
             if self.extern_sensor:
                 pq_flange2tool = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2tip).pose
-                tcp_offset_ = pq_flange2tool.xyz + pq_flange2tool.axis_angle
+                offset = pq_flange2tool.xyz + pq_flange2tool.axis_angle
             else:
-                tcp_offset_ = self.tool.p_mounting2tip.xyz + self.tool.q_mounting2tip.axis_angle
+                offset = self.tool.tip_frame.xyz + self.tool.tip_frame.axis_angle
+        elif frame == 'tool_sense':
+            if self.extern_sensor:
+                pq_flange2sense = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2sense).pose
+                offset = pq_flange2sense.xyz + pq_flange2sense.axis_angle
+            else:
+                offset = self.tool.sense_frame.xyz + self.tool.tip_frame.axis_angle
         elif frame == 'camera':
             pq_flange2cam = self.cam_mdl.T_flange2camera.pose
-            tcp_offset_ = pq_flange2cam.xyz + pq_flange2cam.axis_angle
+            offset = pq_flange2cam.xyz + pq_flange2cam.axis_angle
         else:
             raise RuntimeError(f"This code should not be reached. Please check the frame definitions.")
-
-        q_: Sequence[float] = self.rtde.r.getActualQ()
-        pose_vec: Sequence[float] = self.rtde.c.getForwardKinematics(q=q_, tcp_offset=tcp_offset_)
-        return Pose().from_xyz(pose_vec[:3]).from_axis_angle(pose_vec[3:])
+        return offset
 
     def get_tcp_offset(self) -> Pose:
         tcp_offset: Sequence[float] = self.rtde.c.getTCPOffset()

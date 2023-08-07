@@ -13,16 +13,35 @@ class ToolModel:
                  mass: float,
                  com: Sequence[float],
                  gravity: Sequence[float] = (0.0, 0.0, -9.80665),
-                 p_mounting2tip: Sequence[float] = (0.0, 0.0, 0.0),
-                 q_mounting2tip: Sequence[float] = (1.0, 0.0, 0.0, 0.0)
+                 tip_frame: Sequence[float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                 sense_frame: Sequence[float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
                  ) -> None:
         self.mass = mass
         self.com = Vector3d().from_xyz(com)
         self.gravity = Vector3d().from_xyz(gravity)
         self.f_inertia = self.mass * self.gravity
-        self.p_mounting2tip = Vector3d().from_xyz(p_mounting2tip)
-        self.q_mounting2tip = Quaternion().from_wxyz(q_mounting2tip)
-        self.T_mounting2tip = Transformation().from_pose(Pose().from_pq(self.p_mounting2tip, self.q_mounting2tip))
+        self._tip_frame = Pose().from_xyz(tip_frame[0:3]).from_axis_angle(tip_frame[3:6])
+        self._sense_frame = Pose().from_xyz(sense_frame[0:3]).from_axis_angle(sense_frame[3:6])
+        self.T_mounting2tip = Transformation().from_pose(self._tip_frame)
+        self.T_mounting2sense = Transformation().from_pose(self._sense_frame)
+
+    @property
+    def tip_frame(self) -> Pose:
+        return self._tip_frame
+    
+    @property.setter
+    def tip_frame(self, tip_frame: Sequence[float]) -> None:
+        self._tip_frame = Pose().from_xyz(tip_frame[0:3]).from_axis_angle(tip_frame[3:6])
+        self.T_mounting2tip = Transformation().from_pose(self._tip_frame)
+
+    @property
+    def sense_frame(self) -> Pose:
+        return self._sense_frame
+    
+    @property.setter
+    def sense_frame(self, sense_frame: Sequence[float]) -> None:
+        self._sense_frame = Pose().from_xyz(sense_frame[0:3]).from_axis_angle(sense_frame[3:6])
+        self.T_mounting2sense = Transformation().from_pose(self._sense_frame)
 
 
 class CameraModel:
