@@ -194,7 +194,7 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return fin, self.robot.get_tcp_pose()
 
-    def find_contact_point(self, direction: list[int], time_out: float) -> tuple[bool, Pose]:
+    def find_contact_point(self, direction: Sequence[int], time_out: float) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.FORCE)
         # Map direction to wrench
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
@@ -218,10 +218,7 @@ class Pilot:
             elif t_now - t_start > time_out:
                 fin = False
                 break
-        return fin, self.robot.get_tcp_pose()
-
-
-
+        return fin, self.robot.get_pose(frame='flange')
 
     def plug_in_motion_mode(self, target: Pose, time_out: float) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.MOTION)
@@ -262,6 +259,32 @@ class Pilot:
         # Stop robot movement.
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return self.robot.get_tcp_pose()
+
+    def retreat(self, task_frame: Sequence[float], direction: Sequence[int], distance: float = 2.0, time_out: float = 3.0) -> tuple[bool, Pose]:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Map direction to wrench
+        wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
+        selection_vector = [1 if d != 0 else 0 for d in direction]
+        fin = False
+        t_start = perf_counter()
+        x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=selection_vector,
+                wrench=wrench
+                )
+            t_now = perf_counter()
+            x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+            l2_norm_dist = np.linalg.norm(x_now - x_ref)
+            if l2_norm_dist >= distance:
+                fin = True
+                break
+            elif t_now - t_start > time_out:
+                fin = False
+                break
+        return fin, self.robot.get_tcp_pose()
 
     def move_joints_random(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)

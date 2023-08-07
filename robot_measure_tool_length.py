@@ -1,15 +1,18 @@
 """ Script to measure the tool length in a certain orientation """
 
 import time
+import logging
 import ur_pilot
 import numpy as np
-from rigmopy import Pose, Vector6d
+from rigmopy import Pose
+
+LOGGER = logging.getLogger(__name__)
 
 rot_15_deg = np.pi / 12
 
-
 START_JOINT_POS = [3.193, -1.099, 1.928, 1.003, 1.555, -1.520]
-START_POSE = Pose().from_xyz([0.469, 0.202, 0.077]).from_axis_angle([0.0, - np.pi + rot_15_deg,0.0])
+START_POSE_STRAIGHT = Pose().from_xyz([0.469, 0.202, 0.077]).from_axis_angle([0.0, - np.pi, 0.0])
+START_POSE_TILTED = Pose().from_xyz([0.469, 0.202, 0.077]).from_axis_angle([0.0, - np.pi + rot_15_deg, 0.0])
 
 
 def main() -> None:
@@ -19,17 +22,40 @@ def main() -> None:
 
         # Move to home position
         with pilot.position_control():
+            # Move to home position
             pilot.move_home()
-            pilot.move_to_tcp_pose(START_POSE)
+            # Move to tiled position
+            pilot.move_to_tcp_pose(START_POSE_TILTED)
 
+        # Measure the surface with tilted tool
         with pilot.force_control():
-            pilot.find_contact_point(direction=[0, 0, -1, 0, 0, 0], time_out=5)
+            success, contact_flange_pose_tilted = pilot.find_contact_point(direction=[0, 0, -1, 0, 0, 0], time_out=5.0)
             time.sleep(3)
-            pilot.plug_out_force_mode(
-                wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -10.0, 0.0, 0.0, 0.0]),
-                compliant_axes=[0, 0, 1, 0, 0, 0],
-                distance=0.05,
-                time_out=5.0)
+            if success:
+                LOGGER.info(f"Find contact pose: {contact_flange_pose_tilted}")
+            success_retreat, _ = pilot.retreat(6*[0.0], [0, 0, 1, 0, 0, 0], distance=5.0, time_out=5.0)
+
+        if not success_retreat:
+            raise RuntimeError("Moving to retreat pose was not successful. Stop moving.")
+
+        with pilot.position_control():
+            # Move to straight position
+            pilot.move_to_tcp_pose(START_POSE_STRAIGHT)
+
+        # Measure the surface with straight tool
+        with pilot.force_control():
+            success, contact_flange_pose_straight = pilot.find_contact_point(direction=[0, 0, -1, 0, 0, 0], time_out=5.0)
+            time.sleep(3)
+            if success:
+                LOGGER.info(f"Find contact pose: {contact_flange_pose_straight}")
+            success_retreat, _ = pilot.retreat(6*[0.0], [0, 0, 1, 0, 0, 0], distance=5.0, time_out=5.0)
+
+        if not success_retreat:
+            raise RuntimeError("Moving to retreat pose was not successful. Stop moving.")
+
+        with pilot.position_control():
+            # Move back to home position()
+            pilot.move_home()
 
 
 if __name__ == '__main__':
