@@ -8,7 +8,7 @@ from enum import auto, Enum
 from contextlib import contextmanager
 
 import chargepal_aruco as ca
-from rigmopy import Pose, Vector6d
+from rigmopy import Pose, Vector6d, Transformation
 
 # local
 from ur_pilot.robot import Robot
@@ -211,21 +211,54 @@ class Pilot:
                 wrench=wrench
                 )
             t_now = perf_counter()
-            # Check every second if robot is still moving
+            # Check every 500 milliseconds if robot is still moving
             if t_now - t_ref > 0.5:
                 x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
                 if np.allclose(x_ref, x_now, atol=0.001):
                     fin = True
                     break
                 t_ref, x_ref = t_now, x_now
-            # time_steps_since_contact = self.robot.rtde.c.toolContact(direction)
-            # if time_steps_since_contact > 0:
-            #     fin = True
-            #     break
             elif t_now - t_start > time_out:
                 fin = False
                 break
         return fin, self.robot.get_pose(frame='flange')
+
+    def sensing_depth(self, T_Base2Target: Transformation, time_out: float) -> tuple[bool, Transformation]:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Parameter set. Sensing is in tool direction
+        selection_vector = [0, 0, 1, 0, 0, 0]
+        wrench = [0.0, 0.0, 10.0, 0.0, 0.0, 0.0]
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        # Process observation variables
+        fin = False
+        x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        t_start = t_ref = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=selection_vector,
+                wrench=wrench
+                )
+            t_now = perf_counter()
+            # Check every 500 millisecond if robot is still moving
+            if t_now - t_ref > 0.5:
+                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                if np.allclose(x_ref, x_now, atol=0.001):
+                    fin = True
+                    break
+                t_ref, x_ref = t_now, x_now
+            elif t_now - t_start > time_out:
+                fin = False
+                break
+        if not fin:
+            return fin, Transformation()
+        else:
+            tau_Base2Target = self.robot.get_tcp_pose().xyz
+            rot = T_Base2Target.rot_matrix
+            tau = np.array(tau_Base2Target)
+            return fin, Transformation().from_rot_tau(rot_mat=rot, tau=tau)
 
     def plug_in_motion_mode(self, target: Pose, time_out: float) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.MOTION)
@@ -267,7 +300,7 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return self.robot.get_tcp_pose()
 
-    def retreat(self, task_frame: Sequence[float], direction: Sequence[int], distance: float = 2.0, time_out: float = 3.0) -> tuple[bool, Pose]:
+    def retreat(self, task_frame: Sequence[float], direction: Sequence[int], distance: float = 0.02, time_out: float = 3.0) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.FORCE)
         # Map direction to wrench
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()

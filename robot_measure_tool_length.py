@@ -14,9 +14,6 @@ START_JOINT_POS = [3.193, -1.099, 1.928, 1.003, 1.555, -1.520]
 START_POSE_STRAIGHT = Pose().from_xyz([0.469, 0.202, 0.077]).from_axis_angle([0.0, - np.pi, 0.0])
 START_POSE_TILTED = Pose().from_xyz([0.469, 0.202, 0.077]).from_axis_angle([0.0, - np.pi + rot_15_deg, 0.0])
 
-# Tilted pose = Pose(xyz=(0.5083401135463013, 0.20196865604992476, 0.1625605107788487), wxyz=(0.13055575770270553, -3.613938400232128e-05, -0.9914409678850301, 4.879763870700817e-06))
-# Straight pose = Pose(xyz=(0.4689866250748727, 0.20201923372461283, 0.1633334585259315), wxyz=(3.762129487057298e-05, 8.89461762450254e-06, -0.9999999991896941, -1.1231022160377069e-05))
-
 # tilted_offset = Vector3d(-0.025, 0.0, 0.15122), (0.0, -0.2618, 0.0)
 
 
@@ -68,7 +65,7 @@ def main() -> None:
         z_flange_tilted = contact_flange_pose_tilted.xyz[-1]
         z_flange_straight = contact_flange_pose_straight.xyz[-1]
         z_diff = z_flange_straight - z_flange_tilted
-        tcp_offset_tilted = Pose().from_pq(p=tcp_offset_straight.p - Vector3d().from_xyz([-0.025, 0.0, z_diff]))
+        tcp_offset_tilted = Pose().from_pq(p=tcp_offset_straight.p - Vector3d().from_xyz([0.025, 0.0, z_diff]))
         tcp_offset_tilted = tcp_offset_tilted.from_pq(q=tcp_offset_straight.q * Quaternion().from_axis_angle([0.0, -rot_15_deg, 0.0])) 
 
         LOGGER.info(f"Find new offset for tilted tool with pose: {tcp_offset_tilted.p, tcp_offset_tilted.axis_angle}")

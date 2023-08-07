@@ -314,10 +314,8 @@ class Robot:
     def get_pose(self, frame: str = 'flange') -> Pose:
         """ Get pose of the desired frame w.r.t the robot base. This function is independent of the TCP offset defined
             on the robot side.
-
         Args:
             frame: One of the frame name defined in the class member variable 'EE_FRAMES_'
-
         Returns:
             6D pose
         """
@@ -349,7 +347,7 @@ class Robot:
                 pq_flange2sense = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2sense).pose
                 offset = pq_flange2sense.xyz + pq_flange2sense.axis_angle
             else:
-                offset = self.tool.sense_frame.xyz + self.tool.tip_frame.axis_angle
+                offset = self.tool.sense_frame.xyz + self.tool.sense_frame.axis_angle
         elif frame == 'camera':
             pq_flange2cam = self.cam_mdl.T_flange2camera.pose
             offset = pq_flange2cam.xyz + pq_flange2cam.axis_angle

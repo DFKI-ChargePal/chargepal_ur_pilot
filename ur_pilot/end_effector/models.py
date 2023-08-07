@@ -29,18 +29,18 @@ class ToolModel:
     def tip_frame(self) -> Pose:
         return self._tip_frame
     
-    @property.setter
-    def tip_frame(self, tip_frame: Sequence[float]) -> None:
-        self._tip_frame = Pose().from_xyz(tip_frame[0:3]).from_axis_angle(tip_frame[3:6])
+    @tip_frame.setter
+    def tip_frame(self, frame: Sequence[float]) -> None:
+        self._tip_frame = Pose().from_xyz(frame[0:3]).from_axis_angle(frame[3:6])
         self.T_mounting2tip = Transformation().from_pose(self._tip_frame)
 
     @property
     def sense_frame(self) -> Pose:
         return self._sense_frame
     
-    @property.setter
-    def sense_frame(self, sense_frame: Sequence[float]) -> None:
-        self._sense_frame = Pose().from_xyz(sense_frame[0:3]).from_axis_angle(sense_frame[3:6])
+    @sense_frame.setter
+    def sense_frame(self, frame: Sequence[float]) -> None:
+        self._sense_frame = Pose().from_xyz(frame[0:3]).from_axis_angle(frame[3:6])
         self.T_mounting2sense = Transformation().from_pose(self._sense_frame)
 
 
