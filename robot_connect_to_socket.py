@@ -9,7 +9,7 @@ import numpy as np
 import chargepal_aruco as ca
 from rigmopy import Vector3d, Vector6d, Pose, Quaternion
 
-# local
+# API
 import ur_pilot
 
 
@@ -210,8 +210,12 @@ def connect_to_socket_with_sensing() -> None:
 
             with pilot.force_control():
                 pair_succeed = pilot.pair_to_socket(enh_T_Base2Socket)
-                print(pair_succeed)
-                pilot.relax(3.0)
+                if pair_succeed:
+                    plug_in_succeed = pilot.jog_in_plug(T_Base2Socket=enh_T_Base2Socket)
+                    if plug_in_succeed:
+                        print("Plugging successful!")
+                pilot.relax(1.0)
+                time.sleep(3.0)
                 # Try to plug out
                 success = pilot.plug_out_force_mode(
                     wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -25.0, 0.0, 0.0, 0.0]),
@@ -227,7 +231,7 @@ def connect_to_socket_with_sensing() -> None:
             else:
                 print(f"Error while trying to disconnect. Plug might still be in the socket.")
                 print(f"Robot will stop moving and shut down...")
-                
+
     # Clean up
     pose_detector.destroy(with_cam=False)
     realsense.destroy()
