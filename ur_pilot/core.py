@@ -163,7 +163,7 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return fin
 
-    def pair_to_socket(self, T_Base2Socket: Transformation, force: float = 10.0, time_out: float = 3.0) -> bool:
+    def pair_to_socket(self, T_Base2Socket: Transformation, force: float = 10.0, time_out: float = 5.0) -> bool:
         """ Pair the plug to the socket while using low force to insert for 2cm
 
         Args:
@@ -179,7 +179,7 @@ class Pilot:
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         select_vec = [1, 1, 1, 0, 0, 1]  # Be compliant as possible
-        wrench = [0.0, 0.0, -1.0 * abs(force), 0.0, 0.0, 0.0]  # Apply force in tool direction
+        wrench = [0.0, 0.0, abs(force), 0.0, 0.0, 0.0]  # Apply force in tool direction
         # Time observation
         fin = False
         t_start = perf_counter()

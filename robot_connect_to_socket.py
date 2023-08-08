@@ -209,7 +209,8 @@ def connect_to_socket_with_sensing() -> None:
                 pilot.move_to_tcp_pose(enh_T_Base2SocketPre.pose)
 
             with pilot.force_control():
-                pilot.pair_to_socket(enh_T_Base2Socket)
+                pair_succeed = pilot.pair_to_socket(enh_T_Base2Socket)
+                print(pair_succeed)
                 pilot.relax(3.0)
                 # Try to plug out
                 success = pilot.plug_out_force_mode(
