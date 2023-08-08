@@ -101,7 +101,7 @@ def connect_to_socket() -> None:
                     time_out=10.0)
                 pilot.relax(3.0)
                 # Try to plug out
-                success, _ = pilot.plug_out_force_mode(
+                success = pilot.plug_out_force_mode(
                     wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -25.0, 0.0, 0.0, 0.0]),
                     compliant_axes=[0, 0, 1, 0, 0, 0],
                     distance=0.05,
@@ -193,7 +193,7 @@ def connect_to_socket_with_sensing() -> None:
                 pilot.move_to_tcp_pose(T_Base2SocketPre.pose)
             time.sleep(1.0)
             with pilot.force_control():
-                _, enhanced_T_Base2Socket = pilot.sensing_depth(T_Base2Target=T_Base2Socket, time_out=5.0)
+                _, enh_T_Base2Socket = pilot.sensing_depth(T_Base2Target=T_Base2Socket, time_out=5.0)
                 # Move to a safe retreat pose
                 X_tcp = pilot.robot.get_tcp_pose()
                 task_frame = X_tcp.xyz + X_tcp.axis_angle
@@ -205,8 +205,31 @@ def connect_to_socket_with_sensing() -> None:
                 # Switch to normal tool tip tcp
                 pilot.robot.set_tcp('tool_tip')
                 # Move to enhanced socket pose with some safety distance
-                enh_T_Base2SocketPre = enhanced_T_Base2Socket @ T_Socket2SocketPre
+                enh_T_Base2SocketPre = enh_T_Base2Socket @ T_Socket2SocketPre
                 pilot.move_to_tcp_pose(enh_T_Base2SocketPre.pose)
+
+            with pilot.force_control():
+                pilot.pair_to_socket(enh_T_Base2Socket)
+                pilot.relax(3.0)
+                # Try to plug out
+                success = pilot.plug_out_force_mode(
+                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -25.0, 0.0, 0.0, 0.0]),
+                    compliant_axes=[0, 0, 1, 0, 0, 0],
+                    distance=0.05,
+                    time_out=10.0)
+                time.sleep(1.0)
+
+            if success:
+                # Move back to home
+                with pilot.position_control():
+                    pilot.move_home()
+            else:
+                print(f"Error while trying to disconnect. Plug might still be in the socket.")
+                print(f"Robot will stop moving and shut down...")
+                
+    # Clean up
+    pose_detector.destroy(with_cam=False)
+    realsense.destroy()
 
 
 def main() -> None:

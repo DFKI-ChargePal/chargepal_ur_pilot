@@ -132,7 +132,7 @@ class Pilot:
         new_pose = self.robot.get_tcp_pose()
         return fin, new_pose
 
-    def plug_in_force_mode(self, wrench: Vector6d, compliant_axes: list[int], time_out: float) -> tuple[bool, Pose]:
+    def plug_in_force_mode(self, wrench: Vector6d, compliant_axes: list[int], time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
@@ -161,13 +161,54 @@ class Pilot:
                 break
         # Stop robot movement.
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
-        return fin, self.robot.get_tcp_pose()
+        return fin
+
+    def pair_to_socket(self, T_Base2Socket: Transformation, force: float = 10.0, time_out: float = 3.0) -> bool:
+        """ Pair the plug to the socket while using low force to insert for 2cm
+
+        Args:
+            T_Base2Socket: Transformation from robot base to socket. 
+            force: Used force. Should be low to avoid damage.
+            time_out: Time window to execute this action
+
+        Returns:
+            Success flag
+        """
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        select_vec = [1, 1, 1, 0, 0, 1]  # Be compliant as possible
+        wrench = [0.0, 0.0, -1.0 * abs(force), 0.0, 0.0, 0.0]  # Apply force in tool direction
+        # Time observation
+        fin = False
+        t_start = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=select_vec,
+                wrench=wrench
+            )
+            # Get current transformation from base to end-effector
+            T_Base2Tip = Transformation().from_pose(self.robot.get_pose('tool_tip'))
+            T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
+            if T_Tip2Socket.tau[2] <= -0.02:
+                fin = True
+                break
+            t_now = perf_counter()
+            if t_now - t_start > time_out:
+                fin = False
+                break
+        # Stop robot movement.
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        return fin
 
     def plug_out_force_mode(self,
                             wrench: Vector6d, 
                             compliant_axes: list[int], 
                             distance: float, 
-                            time_out: float) -> tuple[bool, Pose]:
+                            time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
@@ -192,7 +233,7 @@ class Pilot:
                 break
         # Stop robot movement
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
-        return fin, self.robot.get_tcp_pose()
+        return fin
 
     def find_contact_point(self, direction: Sequence[int], time_out: float) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.FORCE)
