@@ -14,9 +14,11 @@ chargepal-aruco = {path = "../libs/chargepal_aruco"}
 rigmopy = {path = "../libs/rigmopy"}
 pysoem = "^1.0.8"
 pydantic = "^1.10.9"
+pandas = "^2.0.3"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.0.0"
+pandas-stubs = "1.5.3.230321"
 
 [build-system]
 requires = ["poetry-core"]
