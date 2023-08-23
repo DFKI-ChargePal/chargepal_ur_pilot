@@ -102,7 +102,6 @@ def evaluate(file_name: str) -> None:
         54: (-60, 0),
     }
     aru_pattern = ca.ArucoPattern("DICT_4X4_100", 25, pattern_layout)
-    calibration = ca.Calibration(cam)
     pose_detector = ca.PatternDetector(cam, aru_pattern, display=True)
 
     X_ref: Pose | None = None
