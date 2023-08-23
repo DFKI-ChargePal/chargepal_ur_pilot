@@ -110,6 +110,9 @@ def evaluate(file_name: str) -> None:
 
     # Connect to pilot
     with ur_pilot.connect() as pilot:
+        # Link to camera
+        pilot.robot.register_ee_cam(cam)
+
         with pilot.position_control():
             pilot.move_home()
 
