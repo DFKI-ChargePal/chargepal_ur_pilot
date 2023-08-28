@@ -183,7 +183,7 @@ class Robot:
         )
         self.rtde.c.waitPeriod(self.rtde.dt)
         # Since there is no real time kernel at the moment use python time library
-        time.sleep(self.rtde.dt)  # Do we need this?
+        # time.sleep(self.rtde.dt)  # Do we need this?
         if not success:
             cur_pose = self.rtde.r.getActualTCPPose()
             tgt_msg = f"\nTarget pose: {target}"
