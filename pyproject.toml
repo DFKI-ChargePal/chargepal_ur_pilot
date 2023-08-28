@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "chargepal-ur-pilot"
-version = "0.1.1"
+version = "0.1.2"
 description = ""
 authors = ["Georg John <georg.john@dfki.de>"]
 license = "BSD3"
@@ -10,11 +10,11 @@ packages = [{include = "ur_pilot"}]
 [tool.poetry.dependencies]
 python = "^3.8, <3.12"
 ur-rtde = "^1.5.6"
-chargepal-aruco = {path = "../libs/chargepal_aruco"}
-rigmopy = {path = "../libs/rigmopy"}
 pysoem = "^1.0.8"
 pydantic = "^1.10.9"
 pandas = "^2.0.3"
+rigmopy = {git = "git@git.ni.dfki.de:gjohn/rigmopy.git"}
+chargepal-aruco = {git = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_aruco.git"}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.0.0"
