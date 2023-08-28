@@ -60,44 +60,46 @@ class Pilot:
         if type(expected) == ControlContext and self.control_context is not expected:
             raise RuntimeError(f"This action is not able to use the control context '{self.control_context}'")
 
+    def exit_control_context(self) -> None:
+        if self.control_context == ControlContext.POSITION:
+            pass
+        elif self.control_context == ControlContext.SERVO:
+            self.robot.stop_servoing()
+        elif self.control_context == ControlContext.FORCE:
+            self.robot.stop_force_mode()
+        elif self.control_context == ControlContext.MOTION:
+            self.robot.stop_motion_mode()
+        elif self.control_context == ControlContext.TEACH_IN:
+            self.robot.stop_teach_mode()
+        self.control_context = ControlContext.DISABLED
+
     def enter_position_control(self) -> None:
         self.control_context = ControlContext.POSITION
-
-    def exit_position_control(self) -> None:
-        self.control_context = ControlContext.DISABLED
 
     @contextmanager
     def position_control(self) -> Iterator[None]:
         self.enter_position_control()
         yield
-        self.exit_position_control()
+        self.exit_control_context()
 
     def enter_servo_control(self) -> None:
         self.control_context = ControlContext.SERVO
-
-    def exit_servo_control(self) -> None:
-        self.robot.stop_servoing()
-        self.control_context = ControlContext.DISABLED
 
     @contextmanager
     def servo_control(self) -> Iterator[None]:
         self.enter_servo_control()
         yield
-        self.exit_servo_control()
+        self.exit_control_context()
 
     def enter_force_control(self, gain: float | None = None, damping: float | None = None) -> None:
         self.robot.set_up_force_mode(gain=gain, damping=damping)
         self.control_context = ControlContext.FORCE
 
-    def exit_force_control(self) -> None:
-        self.robot.stop_force_mode()
-        self.control_context = ControlContext.DISABLED
-
     @contextmanager
     def force_control(self, gain: float | None = None, damping: float | None = None) -> Iterator[None]:
         self.enter_force_control(gain=gain, damping=damping)
         yield
-        self.exit_force_control()
+        self.exit_control_context()
 
     def enter_motion_control(self,
                              error_scale: float | None = None,
@@ -109,10 +111,6 @@ class Pilot:
             error_scale=error_scale, Kp_6=Kp_6, Kd_6=Kd_6, ft_gain=ft_gain, ft_damping=ft_damping)
         self.control_context = ControlContext.MOTION
 
-    def exit_motion_control(self) -> None:
-        self.robot.stop_motion_mode()
-        self.control_context = ControlContext.DISABLED
-
     @contextmanager
     def motion_control(self,
                        error_scale: float | None = None,
@@ -122,21 +120,17 @@ class Pilot:
                        ft_damping: float | None = None) -> Iterator[None]:
         self.enter_motion_control(error_scale=error_scale, Kp_6=Kp_6, Kd_6=Kd_6, ft_gain=ft_gain, ft_damping=ft_damping)
         yield
-        self.exit_motion_control()
+        self.exit_control_context()
 
     def enter_teach_in_control(self) -> None:
         self.robot.set_up_teach_mode()
         self.control_context = ControlContext.TEACH_IN
 
-    def exit_teach_in_control(self) -> None:
-        self.robot.stop_teach_mode()
-        self.control_context = ControlContext.DISABLED
-
     @contextmanager
     def teach_in_control(self) -> Iterator[None]:
         self.enter_teach_in_control()
         yield
-        self.exit_teach_in_control()
+        self.exit_control_context()
 
     def move_home(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
