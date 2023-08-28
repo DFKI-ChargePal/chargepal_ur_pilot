@@ -129,4 +129,4 @@ camera_info/
 
 # PyCharm
 python-sudo.sh
-config/laptop_dev.toml
+ur_pilot/config/laptop_dev.toml

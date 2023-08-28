@@ -70,6 +70,7 @@ class MotionMode(BaseModel):
     Kp: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     Kd: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
 
+
 class FTSensor(BaseModel):
     """ Force torque sensor configuration
     """

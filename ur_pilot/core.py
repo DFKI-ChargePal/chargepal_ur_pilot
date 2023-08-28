@@ -462,4 +462,5 @@ class Pilot:
 
     def disconnect(self) -> None:
         """ Exit function which will be called from the context manager at the end """
+        self.exit_control_context()
         self.robot.exit()

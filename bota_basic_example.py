@@ -8,7 +8,7 @@ from pathlib import Path
 # local
 import time
 import math
-import config
+from ur_pilot import config
 from ur_pilot.utils import set_logging_level
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.config_mdl import Config, read_toml

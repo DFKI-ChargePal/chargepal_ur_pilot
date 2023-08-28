@@ -12,7 +12,7 @@ from rigmopy import utils_math as rp_math
 from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
 # local
-import config
+from ur_pilot import config
 from ur_pilot.utils import SpatialPDController
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
