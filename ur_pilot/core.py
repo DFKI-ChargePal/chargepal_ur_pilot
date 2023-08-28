@@ -23,7 +23,7 @@ def connect(config: Path | None = None) -> Iterator[Pilot]:
     try:
         yield pilot
     finally:
-        pilot.exit()
+        pilot.disconnect()
 
 
 class ControlContext(Enum):
@@ -460,6 +460,6 @@ class Pilot:
         self.robot.move_home()
         return tgt_joint_q
 
-    def exit(self) -> None:
+    def disconnect(self) -> None:
         """ Exit function which will be called from the context manager at the end """
         self.robot.exit()
