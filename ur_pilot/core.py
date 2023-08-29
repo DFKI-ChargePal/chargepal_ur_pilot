@@ -31,6 +31,7 @@ class ControlContext(Enum):
     FORCE = auto()
     SERVO = auto()
     MOTION = auto()
+    HYBRID = auto()
     POSITION = auto()
     VELOCITY = auto()
     TEACH_IN = auto()
@@ -69,6 +70,8 @@ class Pilot:
             self.robot.stop_force_mode()
         elif self.control_context == ControlContext.MOTION:
             self.robot.stop_motion_mode()
+        elif self.control_context == ControlContext.HYBRID:
+            self.robot.stop_hybrid_mode()
         elif self.control_context == ControlContext.TEACH_IN:
             self.robot.stop_teach_mode()
         self.control_context = ControlContext.DISABLED
@@ -103,22 +106,75 @@ class Pilot:
 
     def enter_motion_control(self,
                              error_scale: float | None = None,
+                             force_limit: float | None = None,
                              Kp_6: Sequence[float] | None = None,
                              Kd_6: Sequence[float] | None = None,
                              ft_gain: float | None = None,
                              ft_damping: float | None = None) -> None:
         self.robot.set_up_motion_mode(
-            error_scale=error_scale, Kp_6=Kp_6, Kd_6=Kd_6, ft_gain=ft_gain, ft_damping=ft_damping)
+            error_scale=error_scale,
+            force_limit=force_limit,
+            Kp_6=Kp_6, Kd_6=Kd_6,
+            ft_gain=ft_gain,
+            ft_damping=ft_damping)
         self.control_context = ControlContext.MOTION
 
     @contextmanager
     def motion_control(self,
                        error_scale: float | None = None,
+                       force_limit: float | None = None,
                        Kp_6: Sequence[float] | None = None,
                        Kd_6: Sequence[float] | None = None,
                        ft_gain: float | None = None,
                        ft_damping: float | None = None) -> Iterator[None]:
-        self.enter_motion_control(error_scale=error_scale, Kp_6=Kp_6, Kd_6=Kd_6, ft_gain=ft_gain, ft_damping=ft_damping)
+        self.enter_motion_control(
+            error_scale=error_scale,
+            force_limit=force_limit,
+            Kp_6=Kp_6, Kd_6=Kd_6,
+            ft_gain=ft_gain,
+            ft_damping=ft_damping)
+        yield
+        self.exit_control_context()
+
+    def enter_hybrid_control(self,
+                             error_scale: float | None = None,
+                             force_limit: float | None = None,
+                             Kp_6_force: Sequence[float] | None = None,
+                             Kd_6_force: Sequence[float] | None = None,
+                             Kp_6_motion: Sequence[float] | None = None,
+                             Kd_6_motion: Sequence[float] | None = None,
+                             ft_gain: float | None = None,
+                             ft_damping: float | None = None) -> None:
+        self.robot.set_up_hybrid_mode(
+            error_scale=error_scale,
+            force_limit=force_limit,
+            Kp_6_force=Kp_6_force,
+            Kd_6_force=Kd_6_force,
+            Kp_6_motion=Kp_6_motion,
+            Kd_6_motion=Kd_6_motion,
+            ft_gain=ft_gain,
+            ft_damping=ft_damping)
+        self.control_context = ControlContext.MOTION
+
+    @contextmanager
+    def hybrid_control(self,
+                       error_scale: float | None = None,
+                       force_limit: float | None = None,
+                       Kp_6_force: Sequence[float] | None = None,
+                       Kd_6_force: Sequence[float] | None = None,
+                       Kp_6_motion: Sequence[float] | None = None,
+                       Kd_6_motion: Sequence[float] | None = None,
+                       ft_gain: float | None = None,
+                       ft_damping: float | None = None) -> Iterator[None]:
+        self.enter_hybrid_control(
+            error_scale=error_scale,
+            force_limit=force_limit,
+            Kp_6_force=Kp_6_force,
+            Kd_6_force=Kd_6_force,
+            Kp_6_motion=Kp_6_motion,
+            Kd_6_motion=Kd_6_motion,
+            ft_gain=ft_gain,
+            ft_damping=ft_damping)
         yield
         self.exit_control_context()
 
