@@ -20,8 +20,8 @@ from typing import Generator, Sequence
 
 LOGGER = logging.getLogger(__name__)
 
-_T_IN_DIR = "data/teach_in/"
-_EVAL_DIR = "data/eval/"
+_T_IN_DIR = "../data/teach_in/"
+_EVAL_DIR = "../data/eval/"
 
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 X_SOCKET_2_PATTERN = Pose().from_xyz_xyzw(xyz=[0.0, 0.0, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])

@@ -17,7 +17,7 @@ from typing import Generator, Sequence
 
 LOGGER = logging.getLogger(__name__)
 
-_T_IN_DIR = "data/teach_in/"
+_T_IN_DIR = "../data/teach_in/"
 _T_IN_FILE = "hand_eye_calibration.json"
 
 
