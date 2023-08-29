@@ -25,13 +25,15 @@ def hybrid_mode_ctrl() -> None:
         ref_pose = pilot.robot.get_tcp_pose()
         with pilot.hybrid_control():
 
-            for i in range(6):
-                # Shift pose randomly relative to the reference pose
-                rel_pose = ref_pose.random((0.05, 0.05, 0.05), (3*180/np.pi, 3*180/np.pi, 3*180/np.pi))
-
+            # Shift pose randomly relative to the reference pose
+            new_pose = ref_pose.random((0.025, 0.025, 0.025), (np.deg2rad(3), np.deg2rad(3), np.deg2rad(3))) 
+            
+            for i in range(50):
                 t_start_ = perf_counter()
-                while perf_counter() - t_start_ < 3.0:  # run for 3 seconds
-                    pilot.robot.hybrid_mode(rel_pose, Vector6d())
+                wrench = np.random.randn(1)[-1] * Vector6d().from_random()
+                # wrench = Vector6d().from_xyzXYZ([0, 0, 1, 0, 0, 0])
+                while perf_counter() - t_start_ < 1/5:  # run for xx seconds
+                    pilot.robot.hybrid_mode(new_pose, wrench)
 
 
 if __name__ == '__main__':

@@ -77,11 +77,10 @@ class HybridMode(BaseModel):
     """
     error_scale = 5000.0
     force_limit = 20.0
-    Kp_force: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
-    Kd_force: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
-    Kp_motion: List[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-    Kd_motion: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-
+    Kp_force: List[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    Kd_force: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    Kp_motion: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
+    Kd_motion: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
 
 class FTSensor(BaseModel):
     """ Force torque sensor configuration
