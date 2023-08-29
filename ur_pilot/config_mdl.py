@@ -67,8 +67,20 @@ class MotionMode(BaseModel):
     """ Data model for robot motion mode.
     """
     error_scale = 5000.0
+    force_limit = 50.0
     Kp: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     Kd: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
+
+
+class HybridMode(BaseModel):
+    """ Data model for robot hybrid mode.
+    """
+    error_scale = 5000.0
+    force_limit = 20.0
+    Kp_force: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
+    Kd_force: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
+    Kp_motion: List[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    Kd_motion: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 
 class FTSensor(BaseModel):
@@ -96,6 +108,7 @@ class Robot(BaseModel):
     ft_sensor: Optional[FTSensor] = None
     force_mode: ForceMode = ForceMode()
     motion_mode: MotionMode = MotionMode()
+    hybrid_mode: HybridMode = HybridMode()
 
 
 class Config(Robot):

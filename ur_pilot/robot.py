@@ -46,6 +46,7 @@ class Robot:
 
         # Constants
         self.error_scale_motion_mode = 1.0
+        self.force_limit = 0.0
 
         # Robot interface
         self.rtde = RTDEInterface(self.cfg.robot.ip_address, self.cfg.robot.rtde_freq, True)
@@ -66,6 +67,7 @@ class Robot:
             self._ft_sensor.start()
 
         self._motion_pd: SpatialPDController | None = None
+        self._force_pd: SpatialPDController | None = None
 
         self.tool = ToolModel(**self.cfg.robot.tool.dict())
         self.set_tcp()
@@ -100,6 +102,14 @@ class Robot:
         else:
             raise RuntimeError(
                 "Motion PD controller is not initialized. Please run URPilot.set_up_motion_mode(...) first")
+
+    @property
+    def force_pd(self) -> SpatialPDController:
+        if self._force_pd is None:
+            raise RuntimeError(
+                "Hybrid PD controller is not initialized. Please run URPilot.set_up_motion_mode(...) first")
+        else:
+            return self._force_pd
 
     @property
     def q_world2arm(self) -> Quaternion:
@@ -227,6 +237,7 @@ class Robot:
 
     def set_up_motion_mode(self, 
                            error_scale: float | None = None,
+                           force_limit: float | None = None,
                            Kp_6: Sequence[float] | None = None,
                            Kd_6: Sequence[float] | None = None, 
                            ft_gain: float | None = None, 
@@ -234,10 +245,15 @@ class Robot:
         """ Function to set up force based motion controller
 
         Args:
-            ft_gain: _description_. Defaults to None.
-            ft_damping: _description_. Defaults to None.
+            error_scale: Overall scaling parameter
+            force_limit: The absolute value of the applied forces in tool space
+            Kp_6: 6 dimensional motion controller proportional gain
+            Kd_6: 6 dimensional motion controller derivative gain
+            ft_gain: Force torque gain parameter
+            ft_damping: Force torque damping parameter
         """
         self.error_scale_motion_mode = error_scale if error_scale else self.cfg.robot.motion_mode.error_scale
+        self.force_limit = force_limit if force_limit else self.cfg.robot.motion_mode.force_limit
         Kp = Kp_6 if Kp_6 is not None else self.cfg.robot.motion_mode.Kp
         Kd = Kd_6 if Kd_6 is not None else self.cfg.robot.motion_mode.Kd
         self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
@@ -247,9 +263,9 @@ class Robot:
         """ Function to update motion target and let the motion controller keep running
 
         Args:
-            tcp_pose: Target pose of the TCP
+            target: Target pose of the TCP
         """
-        task_frame = 6 * (0.0, )  # Move wrt. robot base?
+        task_frame = 6 * (0.0, )  # Move w.r.t. robot base
         # Get current Pose
         actual = self.get_tcp_pose()
         # Compute spatial error
@@ -274,7 +290,7 @@ class Robot:
         motion_error = Vector6d().from_Vector3d(po_error, ax_error)
         f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.rtde.dt)
         # Clip to maximum forces
-        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-100, a_max=100)
+        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
         self.force_mode(
             task_frame=task_frame,
             selection_vector=6 * (1,),
@@ -283,6 +299,85 @@ class Robot:
 
     def stop_motion_mode(self) -> None:
         """ Function to set robot back in normal position control mode. """
+        self.motion_pd.reset()
+        self.stop_force_mode()
+
+    def set_up_hybrid_mode(self,
+                           error_scale: float | None = None,
+                           force_limit: float | None = None,
+                           Kp_6_force: Sequence[float] | None = None,
+                           Kd_6_force: Sequence[float] | None = None,
+                           Kp_6_motion: Sequence[float] | None = None,
+                           Kd_6_motion: Sequence[float] | None = None,
+                           ft_gain: float | None = None,
+                           ft_damping: float | None = None) -> None:
+        """ Function to set up the hybrid controller. Error signal is a combination of a pose and wrench error
+
+        Args:
+            error_scale: Overall error scaling parameter
+            force_limit: The absolute value of the applied forces in tool space
+            Kp_6_force: 6 dimensional controller proportional gain (force part)
+            Kd_6_force: 6 dimensional controller derivative gain (force part)
+            Kp_6_motion: 6 dimensional controller proportional gain (motion part)
+            Kd_6_motion: 6 dimensional controller derivative gain (motion part)
+            ft_gain: Force torque gain parameter (low level controller)
+            ft_damping: Force torque damping parameter (low level controller)
+
+        Returns:
+            None
+        """
+        self.error_scale_motion_mode = error_scale if error_scale else self.cfg.robot.hybrid_mode.error_scale
+        self.force_limit = force_limit if force_limit else self.cfg.robot.hybrid_mode.force_limit
+        f_Kp = Kp_6_force if Kp_6_force is not None else self.cfg.robot.hybrid_mode.Kp_force
+        f_Kd = Kd_6_force if Kd_6_force is not None else self.cfg.robot.hybrid_mode.Kd_force
+        m_Kp = Kp_6_motion if Kp_6_motion is not None else self.cfg.robot.hybrid_mode.Kp_motion
+        m_Kd = Kd_6_motion if Kd_6_motion is not None else self.cfg.robot.hybrid_mode.Kd_motion
+        self._force_pd = SpatialPDController(Kp_6=f_Kp, Kd_6=f_Kd)
+        self._motion_pd = SpatialPDController(Kp_6=m_Kp, Kd_6=m_Kd)
+        self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
+
+    def hybrid_mode(self, pose: Pose, wrench: Vector6d) -> None:
+        """
+
+        Args:
+            pose: Target pose of the TCP
+            wrench: Target wrench w.r.t. the TCP
+
+        Returns:
+            None
+        """
+        task_frame = 6 * (0.0, )  # Move w.r.t. robot bose
+        # Get current pose
+        cur_pose = self.get_tcp_pose()
+        # Compute spatial error
+        pos_error = pose.p - cur_pose.p
+        aa_error = np.array(rp_math.quaternion_difference(cur_pose.q, pose.q).axis_angle)
+        # Angles error always within [0,Pi)
+        angle_error = np.max(np.abs(aa_error))
+        if angle_error < 1e7:
+            axis_error = aa_error
+        else:
+            axis_error = aa_error/angle_error
+        # Clamp maximal tolerated error.
+        # The remaining error will be handled in the next control cycle.
+        # Note that this is also the maximal offset that the
+        # cartesian_compliance_controller can use to build up a restoring stiffness
+        # wrench.
+        angle_error = np.clip(angle_error, 0.0, 1.0)
+        ax_error = Vector3d().from_xyz(angle_error * axis_error)
+        distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
+        po_error = distance_error * pos_error
+        motion_error = Vector6d().from_Vector3d(po_error, ax_error)
+        force_error = wrench
+        f_net = self.error_scale_motion_mode * (
+            self.motion_pd.update(motion_error, self.rtde.dt) + self.force_pd.update(force_error, self.rtde.dt))
+        # Clip to maximum forces
+        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
+        self.force_mode(task_frame=task_frame, selection_vector=6 * (1, ), wrench=f_net_clip.tolist())
+
+    def stop_hybrid_mode(self) -> None:
+        """ Function to set robot back in default control mode """
+        self.force_pd.reset()
         self.motion_pd.reset()
         self.stop_force_mode()
 
@@ -378,18 +473,17 @@ class Robot:
         """
         if frame not in self.FT_SENSOR_FRAMES_:
             raise ValueError(f"Given frame is not available. Please select one of '{self.FT_SENSOR_FRAMES_}'")
+        # The default build in sensor readings are w.r.t the arm base frame
+        ft = Vector6d()
         if self.extern_sensor:
             # The default sensor readings are w.r.t the sensor frame
             ft_raw = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
             if frame == 'ft_sensor':
                 ft = ft_raw
-        else:
-            # The default build in sensor readings are w.r.t the arm base frame
-            ft = Vector6d()
         return ft
 
-    def get_tcp_force(self, extern: bool = False) -> Vector6d:
-        if extern:
+    def get_tcp_force(self) -> Vector6d:
+        if self.extern_sensor:
             tcp_force = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
         else:
             tcp_force = Vector6d().from_xyzXYZ(self.rtde.r.getActualTCPForce())

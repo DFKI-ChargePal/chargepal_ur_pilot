@@ -22,6 +22,8 @@ max_acc = 0.2
 [robot.tool]
 mass = 0.2020638
 com = [0.00057, 0.00017, 0.0089]
+tip_frame = [0.0, 0.0, 0.187, 0.0, 0.0, 0.0]  # These values are incorrect
+sense_frame = [-0.025, 0.0, 0.18631, 0.0, -0.2618, 0.0]  # These values are incorrect
 
 [robot.servo]
 vel = 0.0
@@ -39,3 +41,11 @@ tcp_speed_limits = [0.025, 0.025, 0.025, 0.025, 0.025, 0.025]
 error_scale = 5000.0
 Kp = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 Kd = [0.01, 0.01, 0.01, 1e-5, 1e-5, 1e-5]
+
+[robot.hybrid_mode]
+error_scale = 5000.0
+force_limit = 20.0
+Kp_force = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+Kd_force = [0.99, 0.99, 0.99, 0.99, 0.99, 0.99]
+Kp_motion = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+Kd_motion = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
