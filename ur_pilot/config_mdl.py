@@ -75,9 +75,9 @@ class MotionMode(BaseModel):
 class HybridMode(BaseModel):
     """ Data model for robot hybrid mode.
     """
-    error_scale = 5000.0
+    error_scale = 100.0
     force_limit = 20.0
-    Kp_force: List[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    Kp_force: List[float] = Field(default_factory=lambda: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
     Kd_force: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     Kp_motion: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     Kd_motion: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
