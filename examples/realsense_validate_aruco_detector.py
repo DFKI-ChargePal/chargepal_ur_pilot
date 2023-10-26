@@ -54,8 +54,6 @@ DETECTORS = {
         'geo_pattern': None,
     },
 }
-
-
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 X_SOCKET_2_PATTERN = Pose().from_xyz_xyzw(xyz=[0.0, 0.0, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
 
@@ -204,7 +202,7 @@ def evaluate(file_name: str, detector_type: str) -> None:
     # Log data
     data_frame = pd.DataFrame(X_log, columns=["Position [xyz]", "Orientation [wxyz]"])
     # Update extension
-    fn = "".join(file_name.split(".")[:-1]) + '.csv'
+    fn = "".join(file_name.split(".")[:-1]) + '_' + detector_type + '.csv'
     file_path = Path(_EVAL_DIR, fn)
     file_path.parent.mkdir(exist_ok=True)
     data_frame.to_csv(path_or_buf=file_path, index=False)
