@@ -1026,13 +1026,13 @@ test = ["asv", "gmpy2", "mpmath", "pooch", "pytest", "pytest-cov", "pytest-timeo
 
 [[package]]
 name = "segno"
-version = "1.5.2"
+version = "1.5.3"
 description = "QR Code and Micro QR Code generator for Python 2 and Python 3"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 files = [
-    {file = "segno-1.5.2-py2.py3-none-any.whl", hash = "sha256:b17ace8171aad3987e01bb4aeadf7e0450c40674024c4c57b4da54028e55f1e9"},
-    {file = "segno-1.5.2.tar.gz", hash = "sha256:983424b296e62189d70fc73460cd946cf56dcbe82b9bda18c066fc1b24371cdc"},
+    {file = "segno-1.5.3-py2.py3-none-any.whl", hash = "sha256:9bf88c8be5ca99657881889399f73ad595231230236d89a16b4eb4933513fe07"},
+    {file = "segno-1.5.3.tar.gz", hash = "sha256:08f678ee3d0c96854f916879d2b953829332c6efcaa387d4b41b7b7a78d75e49"},
 ]
 
 [[package]]
