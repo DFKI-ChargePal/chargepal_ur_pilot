@@ -23,6 +23,39 @@ LOGGER = logging.getLogger(__name__)
 _T_IN_DIR = "../data/teach_in/"
 _EVAL_DIR = "../data/eval/"
 
+DETECTORS = {
+    'aruco_pattern': {
+        'detector': ca.PatternDetector,
+        'geo_pattern': ca.ArucoPattern(
+            "DICT_4X4_100", 25,
+            {
+                51: (0, 60),
+                52: (60, 0),
+                53: (0, -100),
+                54: (-60, 0),
+            }),
+    },
+    'cp_logo': {
+        'detector': ca.FeatureDetector,
+        'geo_pattern': ca.ImageTemplate(
+            Path('./object_templates/cpLogoLong.png'),
+            (154, 50), (0, 100)
+        )
+    },
+    'qr_code': {
+        'detector': ca.QRCodeDetector,
+        'geo_pattern': ca.QRCode(
+            'https://www.dfki.de/en/web/research/research-departments/plan-based-robot-control',
+            40, (0, 75)
+        )
+    },
+    'qr_code_pattern': {
+        'detector': ca.QRCodePatternDetector,
+        'geo_pattern': None,
+    },
+}
+
+
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 X_SOCKET_2_PATTERN = Pose().from_xyz_xyzw(xyz=[0.0, 0.0, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
 
@@ -90,19 +123,14 @@ def state_sequence_reader(file_name: str) -> Generator[list[float], None, None]:
         LOGGER.warning(f"No file with path '{file_path}'")
 
 
-def evaluate(file_name: str) -> None:
+def evaluate(file_name: str, detector_type: str) -> None:
 
     # Create AruCo setup
     cam = ca.RealSenseCamera("tcp_cam_realsense")
     cam.load_coefficients()
-    pattern_layout = {
-        51: (0, 60),
-        52: (60, 0),
-        53: (0, -100),
-        54: (-60, 0),
-    }
-    aru_pattern = ca.ArucoPattern("DICT_4X4_100", 25, pattern_layout)
-    pose_detector = ca.PatternDetector(cam, aru_pattern, display=True)
+
+    pose_detector = DETECTORS[detector_type]['detector'](  # type: ignore
+        cam, DETECTORS[detector_type]['geo_pattern'], display=True)  # type: ignore
 
     X_ref: Pose | None = None
     X_log: list[tuple[tuple[float, ...], tuple[float, ...]]] = []
@@ -177,7 +205,8 @@ def evaluate(file_name: str) -> None:
     data_frame = pd.DataFrame(X_log, columns=["Position [xyz]", "Orientation [wxyz]"])
     # Update extension
     fn = "".join(file_name.split(".")[:-1]) + '.csv'
-    file_path = Path(_T_IN_DIR, fn)
+    file_path = Path(_EVAL_DIR, fn)
+    file_path.parent.mkdir(exist_ok=True)
     data_frame.to_csv(path_or_buf=file_path, index=False)
     # Clean up
     pose_detector.destroy(with_cam=True)
@@ -186,23 +215,37 @@ def evaluate(file_name: str) -> None:
 def main() -> None:
     """ Script to evaluate aruco marker detector. """
     parser = argparse.ArgumentParser(description='ArUco marker detector evaluation script.')
-    parser.add_argument('file_name', type=str, help='.json file name to store teach-in configurations')
     parser.add_argument('--teach', action='store_true', help='Option to teach in new evaluation poses')
+    parser.add_argument('--teach_in_file', default='detector_validation_joint_poses.json',
+                        type=str, help='.json file name to store teach-in configurations')
+    parser.add_argument('--eval', action='store_true', help='Flag to run evaluation script.')
+    parser.add_argument('--eval_file', type=str, help='.csv file name to store evaluation results')
+    parser.add_argument('--detector_type', default='aruco_pattern', choices=DETECTORS.keys())
     parser.add_argument('--debug', action='store_true', help='Option to set global debug flag')
     # Parse input arguments
     args = parser.parse_args()
-    fn: str = args.file_name
-    if not fn.endswith('.json'):
-        raise ValueError(f"JSON file with extension .json is mandatory. Given file name: {fn}")
     if args.debug:
         ca.set_logging_level(logging.DEBUG)
     else:
         ca.set_logging_level(logging.INFO)
 
+    fn: str
     if args.teach:
+        fn = args.teach_in_file
+        if not fn.endswith('.json'):
+            raise ValueError(f"JSON file with extension .json is mandatory. Given file name: {fn}")
         teach_in(fn)
-    else:
-        evaluate(fn)
+
+    if args.eval:
+        fn = args.eval_file
+        if len(fn) <= 0:
+            raise ValueError(f"Please specify a evaluation file name to store the results to.")
+        if not fn.endswith('.csv'):
+            raise ValueError(f"CSV file with extension .csv is mandatory. Given file name: {fn}")
+        evaluate(fn, args.detector_type)
+
+    if not args.teach and not args.eval:
+        LOGGER.info('No task given. Exit program idly')
 
 
 if __name__ == '__main__':
