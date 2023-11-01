@@ -246,9 +246,9 @@ def main() -> None:
                         help='Option to use active end-effector sensing for better depth estimation')
     args = parser.parse_args()
     if args.debug:
-        ur_pilot.set_logging_level(logging.DEBUG)
+        ur_pilot.logger.set_logging_level(logging.DEBUG)
     else:
-        ur_pilot.set_logging_level(logging.INFO)
+        ur_pilot.logger.set_logging_level(logging.INFO)
     # Connect to socket
     if args.with_sensing:
         connect_to_socket_with_sensing()

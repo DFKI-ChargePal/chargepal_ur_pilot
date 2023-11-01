@@ -6,7 +6,6 @@ import argparse
 import numpy as np
 from time import perf_counter
 from rigmopy import Vector6d
-from chargepal_aruco import set_logging_level
 
 # local
 import ur_pilot
@@ -43,8 +42,8 @@ if __name__ == '__main__':
     # Parse input arguments
     args = parser.parse_args()
     if args.debug:
-        set_logging_level(logging.DEBUG)
+        ur_pilot.logger.set_logging_level(logging.DEBUG)
     else:
-        set_logging_level(logging.INFO)
+        ur_pilot.logger.set_logging_level(logging.INFO)
     # Run demo
     hybrid_mode_ctrl()

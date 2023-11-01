@@ -33,9 +33,12 @@ def follow_state_sequence() -> None:
             t_start_ = time.time()
             t_next_ = t_start_
             while True:
-                ft_signal = np.reshape(pilot.robot.get_tcp_force(extern=True).xyzXYZ, [6, 1])
+                ft_signal = np.reshape(pilot.robot.get_tcp_force(extern=True).xyzXYZ, [6, 1])  # type: ignore
                 for i in range(sub_steps - 1):
-                    ft_signal = np.hstack([ft_signal, np.reshape(pilot.robot.get_tcp_force(extern=True).xyzXYZ, [6, 1])])
+                    ft_signal = np.hstack([
+                        ft_signal,
+                        np.reshape(pilot.robot.get_tcp_force(extern=True).xyzXYZ, [6, 1])  # type: ignore
+                    ])
                     time.sleep(pilot.robot.ft_sensor.time_step)
 
                 t_next_ += ft_monitor.display_rate
@@ -45,7 +48,6 @@ def follow_state_sequence() -> None:
                 ft_monitor.add(ft_signal)
 
 
-
 if __name__ == '__main__':
     """ Script to move the robot by hand and display force-torque readings in parallel """
     parser = argparse.ArgumentParser(description="Demo to demonstrate FT-sensor calibration results.")
@@ -53,8 +55,8 @@ if __name__ == '__main__':
     # Parse input arguments
     args = parser.parse_args()
     if args.debug:
-        ur_pilot.set_logging_level(logging.DEBUG)
+        ur_pilot.logger.set_logging_level(logging.DEBUG)
     else:
-        ur_pilot.set_logging_level(logging.INFO)
+        ur_pilot.logger.set_logging_level(logging.INFO)
 
     follow_state_sequence()

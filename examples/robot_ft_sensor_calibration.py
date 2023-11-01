@@ -14,7 +14,7 @@ from rigmopy import Vector3d, Vector6d
 # local
 import ur_pilot
 from ur_pilot.end_effector.ft_calib import FTCalibration
-from robot_record_state_sequence import record_state_sequence, state_sequence_reader
+from robot_teach_in import state_sequence_reader, teach_in_joint_sequence
 
 
 LOGGER = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def teach_in() -> None:
         None
     """
     LOGGER.info("Teach new robot sequence")
-    record_state_sequence(TEACH_IN_FILE_)
+    teach_in_joint_sequence(TEACH_IN_FILE_)
 
 
 def record_ft_measurements() -> None:

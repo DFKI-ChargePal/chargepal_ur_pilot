@@ -3,25 +3,22 @@ from __future__ import annotations
 import json
 import time
 import logging
+import ur_pilot
 import argparse
 import cv2 as cv
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import chargepal_aruco as ca
+from argparse import Namespace
 from rigmopy import Quaternion, Vector3d, Pose
 
 # local
-import ur_pilot
-
-# typing
-from typing import Generator, Sequence
+from robot_teach_in import teach_in_joint_sequence, state_sequence_reader
 
 
 LOGGER = logging.getLogger(__name__)
 
-_T_IN_DIR = "../data/teach_in/"
-_EVAL_DIR = "../data/eval/"
 
 DETECTORS = {
     'aruco_pattern': {
@@ -58,77 +55,23 @@ c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 X_SOCKET_2_PATTERN = Pose().from_xyz_xyzw(xyz=[0.0, 0.0, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
 
 
-def teach_in(file_name: str) -> None:
-    # Use camera for user interaction
-    cam = ca.RealSenseCamera('tcp_cam_realsense')
-    cam.load_coefficients()
-    display = ca.Display('Monitor')
-    # Connect to pilot
-    with ur_pilot.connect() as pilot:
+def evaluate(opt: Namespace) -> None:
 
-        with pilot.position_control():
-            pilot.move_home()
-
-        # Prepare recording
-        state_seq: list[Sequence[float]] = []
-        data_path = Path(_T_IN_DIR)
-        data_path.mkdir(parents=True, exist_ok=True)
-        file_path = data_path.joinpath(file_name)
-
-        # Enable free drive mode
-        with pilot.teach_in_control():
-            LOGGER.info("Start teach in mode: ")
-            LOGGER.info("You can now move the arm and record joint positions pressing 's' or 'S' ...")
-            while True:
-                img = cam.get_color_frame()
-                display.show(img)
-                if ca.EventObserver.state is ca.EventObserver.Type.SAVE:
-                    # Save current joint position configuration
-                    joint_pos = pilot.robot.get_joint_pos()
-                    info_str = f"Save joint pos: " + " ".join(f"{q:.3f}" for q in joint_pos)
-                    LOGGER.info(info_str)
-                    state_seq.append(joint_pos)
-                elif ca.EventObserver.state is ca.EventObserver.Type.QUIT:
-                    LOGGER.info("The recording process is terminated by the user.")
-                    break
-            LOGGER.info(f"Save all configurations in {file_path}")
-            with file_path.open('w') as fp:
-                json.dump(state_seq, fp, indent=2)
-        # Clean up
-        display.destroy()
-        cam.destroy()
-
-
-def state_sequence_reader(file_name: str) -> Generator[list[float], None, None]:
-    """ Helper function to read a state sequence from a JSON file
-
-    Args:
-        file_name: JSON file name
-
-    Returns:
-        A generator that gives the next robot state
-    """
-    # file_path = os.path.join(_T_IN_DIR, file_name)
-    file_path = Path(_T_IN_DIR, file_name)
-
-    if file_path.exists():
-        with file_path.open('r') as fp:
-            state_seq = json.load(fp)
-            # Iterate through the sequence
-            for joint_pos in state_seq:
-                yield joint_pos
-    else:
-        LOGGER.warning(f"No file with path '{file_path}'")
-
-
-def evaluate(file_name: str, detector_type: str) -> None:
+    # Build data file paths
+    fp_teach = ur_pilot.utils.get_pkg_path().joinpath(opt.dir_teach).joinpath(opt.file_name_teach)
+    ur_pilot.utils.check_file_extension(fp_teach, 'json')
+    fp_eval = ur_pilot.utils.get_pkg_path().joinpath(opt.dir_eval).joinpath(opt.file_name_eval)
+    ur_pilot.utils.check_file_extension(fp_eval, '.csv')
+    # Update evaluation file name
+    file_name = fp_eval.name.split('.')[0] + '_' + opt.detector_type + '_detector' + '.csv'
+    fp_eval = fp_eval.parent.joinpath(file_name)
 
     # Create AruCo setup
     cam = ca.RealSenseCamera("tcp_cam_realsense")
     cam.load_coefficients()
 
-    pose_detector = DETECTORS[detector_type]['detector'](  # type: ignore
-        cam, DETECTORS[detector_type]['geo_pattern'], display=True)  # type: ignore
+    pose_detector = DETECTORS[opt.detector_type]['detector'](  # type: ignore
+        cam, DETECTORS[opt.detector_type]['geo_pattern'], display=True)  # type: ignore
 
     X_ref: Pose | None = None
     X_log: list[tuple[tuple[float, ...], tuple[float, ...]]] = []
@@ -144,7 +87,7 @@ def evaluate(file_name: str, detector_type: str) -> None:
             # Move to all states in sequence
             stop_reading = False
             LOGGER.info(f"Relative measurement errors:")
-            for i, joint_pos in enumerate(state_sequence_reader(file_name)):
+            for i, joint_pos in enumerate(state_sequence_reader(fp_teach)):
                 pilot.move_to_joint_pos(joint_pos)
                 found, est_pose = pose_detector.find_pose()
                 if found:
@@ -200,50 +143,49 @@ def evaluate(file_name: str, detector_type: str) -> None:
             # Move back to home
             pilot.move_home()
     # Log data
+    fp_eval.parent.mkdir(exist_ok=True)
     data_frame = pd.DataFrame(X_log, columns=["Position [xyz]", "Orientation [wxyz]"])
-    # Update extension
-    fn = "".join(file_name.split(".")[:-1]) + '_' + detector_type + '.csv'
-    file_path = Path(_EVAL_DIR, fn)
-    file_path.parent.mkdir(exist_ok=True)
-    data_frame.to_csv(path_or_buf=file_path, index=False)
+    data_frame.to_csv(path_or_buf=fp_eval, index=False)
     # Clean up
     pose_detector.destroy(with_cam=True)
 
 
 def main() -> None:
     """ Script to evaluate aruco marker detector. """
-    parser = argparse.ArgumentParser(description='ArUco marker detector evaluation script.')
-    parser.add_argument('--teach', action='store_true', help='Option to teach in new evaluation poses')
-    parser.add_argument('--teach_in_file', default='detector_validation_joint_poses.json',
-                        type=str, help='.json file name to store teach-in configurations')
-    parser.add_argument('--eval', action='store_true', help='Flag to run evaluation script.')
-    parser.add_argument('--eval_file', type=str, help='.csv file name to store evaluation results')
-    parser.add_argument('--detector_type', default='aruco_pattern', choices=DETECTORS.keys())
-    parser.add_argument('--debug', action='store_true', help='Option to set global debug flag')
+    parser = argparse.ArgumentParser(prog='camera-validation', description='ArUco marker detector evaluation script.')
+    subparsers = parser.add_subparsers(title='jobs', description='valid jobs', required=True)
+    parser.add_argument('--debug',
+                        action='store_true', help='Option to set global debug flag')
+    # Teach-in options
+    parser_teach = subparsers.add_parser('teach')
+    parser_teach.add_argument('--file_name', default='detector_validation_joint_poses.json',
+                              type=str, help='.json file name to store teach-in configurations')
+    parser_teach.add_argument('--data_dir', default='data/teach_in',
+                              type=str, help='Path of data directory')
+    parser_teach.add_argument('--no_camera', action='store_true',
+                              help='Do not use end-effector camera')
+    parser_teach.set_defaults(func=teach_in_joint_sequence)
+    # Evaluation options
+    parser_eval = subparsers.add_parser('evaluate')
+    parser_eval.add_argument('--file_name_teach', default='detector_validation_joint_poses.json',
+                             type=str, help='.json file name to load teach-in configurations')
+    parser_eval.add_argument('--file_name_eval', default='results.csv',
+                             type=str, help='.csv file name to store evaluation results')
+    parser_eval.add_argument('--dir_teach', default='data/teach_in',
+                             type=str, help='Path of teach-in data directory')
+    parser_eval.add_argument('--dir_eval', default='data/eval',
+                             type=str, help='Path of evaluation records directory')
+    parser_eval.add_argument('--detector_type', default='aruco_pattern',
+                             choices=DETECTORS.keys())
+    parser_eval.set_defaults(func=evaluate)
     # Parse input arguments
     args = parser.parse_args()
     if args.debug:
-        ca.set_logging_level(logging.DEBUG)
+        ur_pilot.logger.set_logging_level(logging.DEBUG)
     else:
-        ca.set_logging_level(logging.INFO)
-
-    fn: str
-    if args.teach:
-        fn = args.teach_in_file
-        if not fn.endswith('.json'):
-            raise ValueError(f"JSON file with extension .json is mandatory. Given file name: {fn}")
-        teach_in(fn)
-
-    if args.eval:
-        fn = args.eval_file
-        if len(fn) <= 0:
-            raise ValueError(f"Please specify a evaluation file name to store the results to.")
-        if not fn.endswith('.csv'):
-            raise ValueError(f"CSV file with extension .csv is mandatory. Given file name: {fn}")
-        evaluate(fn, args.detector_type)
-
-    if not args.teach and not args.eval:
-        LOGGER.info('No task given. Exit program idly')
+        ur_pilot.logger.set_logging_level(logging.INFO)
+    # Call the right job with corresponding arguments
+    args.func(args)
 
 
 if __name__ == '__main__':

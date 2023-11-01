@@ -9,6 +9,8 @@ import chargepal_aruco as ca
 # typing
 from numpy import typing as npt
 
+LOGGER = logging.getLogger(__name__)
+
 
 def estimate_board_pose() -> None:
 
@@ -24,7 +26,7 @@ def estimate_board_pose() -> None:
             print("Press any key to continue")
             ca.EventObserver.wait_for_user()
     if pose is not None:
-        print(f"Pose found: \n {pose}")
+        LOGGER.info(f"Pose found: \n {pose}")
 
 
 if __name__ == '__main__':

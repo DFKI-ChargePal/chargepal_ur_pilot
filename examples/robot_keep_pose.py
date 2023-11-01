@@ -1,6 +1,7 @@
 """ Short demo to demonstrate motion mode. Goal is to keep the current pose """
 import ur_pilot
 
+
 def keep_pose(soft: bool, time_out: float) -> None:
 
     # Connect to pilot/robot arm
