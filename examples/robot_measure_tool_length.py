@@ -70,6 +70,7 @@ def main() -> None:
 
         LOGGER.info(f"Find new offset for tilted tool with pose: {tcp_offset_tilted.p, tcp_offset_tilted.axis_angle}")
 
+
 if __name__ == '__main__':
     """ Script to measure the tool length in a odd orientation """
     parser = argparse.ArgumentParser(description="Demo to measure the tool length in a odd orientation.")
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     # Parse input arguments
     args = parser.parse_args()
     if args.debug:
-        ur_pilot.set_logging_level(logging.DEBUG)
+        ur_pilot.logger.set_logging_level(logging.DEBUG)
     else:
-        ur_pilot.set_logging_level(logging.INFO)
+        ur_pilot.logger.set_logging_level(logging.INFO)
     main()

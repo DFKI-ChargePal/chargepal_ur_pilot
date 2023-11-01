@@ -94,5 +94,8 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='Debug flag')
     # Parse input arguments
     args = parser.parse_args()
-
+    if args.debug:
+        ur_pilot.logger.set_logging_level(logging.DEBUG)
+    else:
+        ur_pilot.logger.set_logging_level(logging.INFO)
     teach_in_joint_sequence(args)
