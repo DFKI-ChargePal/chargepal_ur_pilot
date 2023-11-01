@@ -1,49 +1,51 @@
 from __future__ import annotations
-
 # global
-import os
 import json
 import logging
 import argparse
+import ur_pilot
+import numpy as np
 from pathlib import Path
 import chargepal_aruco as ca
-
-# local
-import ur_pilot
+from argparse import Namespace
 
 # typing
 from typing import Generator, Sequence
 
-
 LOGGER = logging.getLogger(__name__)
 
-_T_IN_DIR = "../data/teach_in/"
-_T_IN_FILE = "hand_eye_calibration.json"
 
-
-def record_state_sequence(file_name: str) -> None:
-    # Use camera for user interaction
-    cam = ca.RealSenseCamera('tcp_cam_realsense')
-    cam.load_coefficients()
+def teach_in_joint_sequence(opt: Namespace) -> None:
+    file_path = ur_pilot.utils.get_pkg_path().joinpath(opt.data_dir).joinpath(opt.file_name)
+    ur_pilot.utils.check_file_extension(file_path, 'json')
+    if not ur_pilot.utils.check_file_path(file_path):
+        LOGGER.info(f"Nothing is going to happen. Exit script.")
+        return
+    # Use a display for user interaction
     display = ca.Display('Monitor')
+    if not opt.no_camera:
+        cam = ca.RealSenseCamera('tcp_cam_realsense')
+        cam.load_coefficients()
+    else:
+        cam = None
     # Connect to pilot
     with ur_pilot.connect() as pilot:
-        
         with pilot.position_control():
             pilot.move_home()
 
         # Prepare recording
         state_seq: list[Sequence[float]] = []
-        data_path = Path(_T_IN_DIR)
-        data_path.mkdir(parents=True, exist_ok=True)
-        file_path = data_path.joinpath(file_name)
+        file_path.parent.mkdir(exist_ok=True)
 
         # Enable free drive mode
         with pilot.teach_in_control():
-            LOGGER.info("Start teach in mode: ")
+            LOGGER.info('Start teach in mode:')
             LOGGER.info("You can now move the arm and record joint positions pressing 's' or 'S' ...")
             while True:
-                img = cam.get_color_frame()
+                if cam is not None:
+                    img = cam.get_color_frame()
+                else:
+                    img = (np.random.rand(480, 640, 3) * 255).astype(dtype=np.uint8)
                 display.show(img)
                 if ca.EventObserver.state is ca.EventObserver.Type.SAVE:
                     # Save current joint position configuration
@@ -59,43 +61,38 @@ def record_state_sequence(file_name: str) -> None:
                 json.dump(state_seq, fp, indent=2)
         # Clean up
         display.destroy()
-        cam.destroy()
+        if cam is not None:
+            cam.destroy()
 
 
-def state_sequence_reader(file_name: str) -> Generator[list[float], None, None]:
+def state_sequence_reader(file_path: Path) -> Generator[list[float], None, None]:
     """ Helper function to read a state sequence from a JSON file
 
     Args:
-        file_name: JSON file name
+        file_path: file path to JSON file
 
     Returns:
         A generator that gives the next robot state
     """
-    file_path = os.path.join(_T_IN_DIR, file_name)
-
-    if os.path.exists(file_path):
+    ur_pilot.utils.check_file_extension(file_path, 'json')
+    if file_path.exists():
         with open(file_path, 'r') as fp:
             state_seq = json.load(fp)
             # Iterate through the sequence
             for joint_pos in state_seq:
                 yield joint_pos
     else:
-        LOGGER.warning(f"No file with path '{file_path}'")
+        LOGGER.info(f"File not exists. Nothing is going to happen. Exit")
 
 
 if __name__ == '__main__':
-    """ Script to record a sequence of robot states (joint positions) """
+    """ Script to teach-in a sequence of robot states (joint positions) """
     parser = argparse.ArgumentParser(description="Record a sequence of robot states")
     parser.add_argument('file_name', type=str, help='.json file name')
+    parser.add_argument('--data_dir', type=str, default='data/teach_in')
+    parser.add_argument('--no_camera', action='store_true', help='Do not use end-effector camera')
     parser.add_argument('--debug', action='store_true', help='Debug flag')
     # Parse input arguments
     args = parser.parse_args()
-    fn: str = args.file_name
-    if not fn.endswith('.json'):
-        raise ValueError(f"JSON file with extension .json is mandatory. Given file name: {fn}")
-    if args.debug:
-        ca.set_logging_level(logging.DEBUG)
-    else:
-        ca.set_logging_level(logging.INFO)
-    # Start recording
-    record_state_sequence(fn)
+
+    teach_in_joint_sequence(args)

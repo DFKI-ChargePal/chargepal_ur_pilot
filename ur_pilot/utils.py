@@ -5,23 +5,45 @@ from __future__ import annotations
 import abc
 import sys
 import pysoem
-import logging
 from rigmopy import Vector6d
+from pathlib import Path
 
 # typing
 from typing import Sequence
 
 
-def set_logging_level(level: int) -> None:
-    """ Helper to configure logging
+def get_pkg_path() -> Path:
+    current_path = Path(__file__).absolute()
+    path_parts = list(current_path.parts)
+    path_parts.reverse()
+    idx = 0
+    for i, pp in enumerate(path_parts):
+        if pp == 'chargepal_ur_pilot':
+            idx = -i
+    pkg_path = Path(*current_path.parts[:idx])
+    return pkg_path
+
+
+def check_file_extension(file_path: Path, file_ext: str) -> None:
+    if file_path.suffix.strip('.') != file_ext.strip('.'):
+        raise ValueError(f"{file_ext.upper()} file with extension .{file_ext} is mandatory. "
+                         f"Given file name: {file_path.name}")
+
+
+def check_file_path(file_path: Path) -> bool:
+    """ File exist check with user interaction.
 
     Args:
-        level: Logging level
+        file_path: File path
 
     Returns:
-        None
+        True if file does not exist or user has given permission to overwrite.
     """
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=level)
+    if file_path.exists():
+        proceed = query_yes_no(f"The file {file_path.name} already exists. Do you want to overwrite it?")
+    else:
+        proceed = True
+    return proceed
 
 
 def query_yes_no(question: str, default: str = "yes") -> bool:
