@@ -315,6 +315,48 @@ class Pilot:
             self.relax(0.25)
         return fin
 
+    def plug_in_with_target(
+            self, force: float, T_Base2Socket: Transformation, axis: str = 'z',  time_out: float = 10.0) -> bool:
+        """
+
+        Args:
+            force:         Plugging force
+            T_Base2Socket: Target in the arm base frame
+            axis:          Plugging direction
+            time_out:      Maximum time period
+
+        Returns:
+            Success
+        """
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        wrench_idx = utils.axis2index(axis.lower())
+        wrench_vec = 6 * [0.0]
+        wrench_vec[wrench_idx] = force
+        select_vec = [1, 1, 1, 0, 0, 0]
+        select_vec[wrench_idx + 2] = 1
+        t_start = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=select_vec,
+                wrench=wrench_vec
+            )
+            # Get current transformation from base to end-effector
+            T_Base2Tip = Transformation().from_pose(self.robot.get_pose('tool_tip'))
+            T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
+            if T_Tip2Socket.tau[wrench_idx] <= -0.032:
+                fin = True
+                break
+            t_now = perf_counter()
+            if t_now - t_start > time_out:
+                fin = False
+                break
+        return fin
+
     def pair_to_socket(self, T_Base2Socket: Transformation, force: float = 10.0, time_out: float = 5.0) -> bool:
         """ Pair the plug to the socket while using low force to insert for 1.5cm
 
@@ -333,7 +375,6 @@ class Pilot:
         select_vec = [1, 1, 1, 0, 0, 1]  # Be compliant as possible
         wrench = [0.0, 0.0, abs(force), 0.0, 0.0, 0.0]  # Apply force in tool direction
         # Time observation
-        fin = False
         t_start = perf_counter()
         while True:
             # Apply wrench
