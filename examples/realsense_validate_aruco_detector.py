@@ -35,7 +35,7 @@ DETECTORS = {
     'cp_logo': {
         'detector': ca.FeatureDetector,
         'geo_pattern': ca.ImageTemplate(
-            Path('./object_templates/cpLogoLong.png'),
+            Path('./examples/object_templates/cpLogoLong.png'),
             (154, 50), (0, 100)
         )
     },
