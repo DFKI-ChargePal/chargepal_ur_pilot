@@ -77,6 +77,48 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
 
 
+def ramp(start: float, end: float, duration: float) -> list[float]:
+    """ Get a list with values from start to end with a step size of one second
+
+    Args:
+        start:    Start value of the list
+        end:      End value of the list
+        duration: Duration in seconds
+
+    Returns:
+        A list with values from start to end in a step size of one second
+    """
+    if start >= end:
+        raise ValueError("Start value is greater or equal to end value. This is not allowed")
+
+    n_steps = int(abs(duration))
+    if n_steps <= 0:
+        raise ValueError("Time period has to be at least one second.")
+
+    step_size = (end - start) / n_steps
+    vals = [start + n * step_size for n in range(n_steps)]
+    vals.append(float(end))
+    return vals
+
+
+def axis2index(axis: str) -> int:
+    """ Map from axis to 6D vector index
+
+    Args:
+        axis: Character defining the axis. Possible 'x', 'y', 'z', 'R', 'P' or 'Y'
+
+    Returns:
+        Vector index
+    """
+    if len(axis) != 1:
+        raise ValueError('Only one character is allowed as axis parameter')
+    a2i = {'x': 0, 'y': 1, 'z': 2, 'R': 3, 'P': 4, 'Y': 5}
+    idx = a2i.get(axis)
+    if idx is None:
+        raise ValueError(f"Unknown axis {axis}! Possible are {a2i.keys()}")
+    return idx
+
+
 def find_ethernet_adapters() -> None:
 
     adapters = pysoem.find_adapters()
@@ -216,8 +258,8 @@ class SpatialPDController(SpatialController):
         """ Six dimensional spatial PD controller
 
         Args:
-            kp6: 6 kp values
-            kd6: 6 kd values
+            Kp_6: 6 kp values
+            Kd_6: 6 kd values
         """
         super().__init__()
         if len(Kp_6) == 6 and len(Kd_6) == 6:

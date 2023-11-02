@@ -96,25 +96,7 @@ def connect_to_socket() -> None:
                 pilot.move_to_tcp_pose(T_Base2SocketPre.pose)
             time.sleep(1.0)
             with pilot.force_control():
-                pilot.plug_in_force_mode(
-                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 75.0, 0.0, 0.0, 0.0]),
-                    compliant_axes=[1, 1, 1, 0, 0, 1], 
-                    time_out=4.0)
-                pilot.relax(1.0)
-                pilot.plug_in_force_mode(
-                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 100.0, 0.0, 0.0, 0.0]),
-                    compliant_axes=[1, 1, 1, 0, 0, 1], 
-                    time_out=2.0)
-                pilot.relax(1.0)
-                pilot.plug_in_force_mode(
-                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 125.0, 0.0, 0.0, 0.0]),
-                    compliant_axes=[1, 1, 1, 0, 0, 1], 
-                    time_out=2.0)
-                # pilot.relax(1.0)
-                # pilot.plug_in_force_mode(
-                #     wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 150.0, 0.0, 0.0, 0.0]),
-                #     compliant_axes=[1, 1, 1, 0, 0, 1], 
-                #     time_out=2.0)
+                pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=5.0)
                 pilot.relax(3.0)
                 # Try to plug out
                 success = pilot.plug_out_force_mode(
@@ -130,7 +112,7 @@ def connect_to_socket() -> None:
             else:
                 print(f"Error while trying to disconnect. Plug might still be in the socket.")
                 print(f"Robot will stop moving and shut down...")
-                
+
     # Clean up
     pose_detector.destroy(with_cam=False)
     realsense.destroy()

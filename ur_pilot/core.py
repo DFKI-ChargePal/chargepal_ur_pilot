@@ -8,9 +8,10 @@ from enum import auto, Enum
 import chargepal_aruco as ca
 from time import perf_counter
 from contextlib import contextmanager
-from rigmopy import Pose, Vector6d, Transformation
+from rigmopy import Pose, Vector3d, Vector6d, Transformation
 
 # local
+from ur_pilot import utils
 from ur_pilot.robot import Robot
 
 # typing
@@ -255,6 +256,60 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return fin
 
+    def push_linear(self, force: Vector3d, compliant_axes: list[int], duration: float) -> float:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        wrench = Vector6d().from_Vector3d(force, Vector3d()).xyzXYZ
+        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        t_start = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=compliant_axes,
+                wrench=wrench)
+            if (perf_counter() - t_start) > duration:
+                break
+            if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                break
+        x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        dist: float = np.sum(np.abs(x_now - x_ref))  # L1 norm
+        # Stop robot movement.
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
+        return dist
+
+    def plug_in_force_ramp(
+            self, f_axis: str = 'z', f_start: float = 0, f_end: float = 50, duration: float = 10) -> bool:
+        """ Method to plug in with gradual increasing force
+
+        Args:
+            f_axis:   Plugging direction
+            f_start:  Start force that will be applied at the beginning
+            f_end:    Maximum force that will be applied
+            duration: Time period for the process. Has to be at least one second
+
+        Returns:
+            True when there is no more movement; False otherwise
+        """
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        fin = False
+        wrench_idx = utils.axis2index(f_axis.lower())
+        compliant_axes = [1, 1, 1, 0, 0, 0]
+        compliant_axes[wrench_idx + 2] = 1
+        force_ramp = utils.ramp(f_start, f_end, duration)
+        force = 3 * [0.0]
+        for f in force_ramp:
+            force[wrench_idx] = f
+            mov_dt = self.push_linear(Vector3d().from_xyz(force), compliant_axes, 1.0)
+            if mov_dt < 0.0025:
+                fin = True
+                break
+            self.relax(0.5)
+        return fin
+
     def pair_to_socket(self, T_Base2Socket: Transformation, force: float = 10.0, time_out: float = 5.0) -> bool:
         """ Pair the plug to the socket while using low force to insert for 1.5cm
 
@@ -296,11 +351,15 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return fin
     
-    def jog_in_plug(self, T_Base2Socket: Transformation, force: float = 20.0, moment: float = 1.0, time_out: float = 5.0) -> bool:
+    def jog_in_plug(self,
+                    T_Base2Socket: Transformation, force: float = 20.0, moment: float = 1.0,
+                    time_out: float = 5.0) -> bool:
         """ Push in plug with additional (sinusoidal) jiggling
 
         Args:
             T_Base2Socket: Transformation from robot base to socket (target).
+            force:
+            moment:
             time_out: Time window to execute this action
 
         Returns:
