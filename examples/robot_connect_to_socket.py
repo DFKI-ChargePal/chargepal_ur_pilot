@@ -12,6 +12,7 @@ from rigmopy import Vector3d, Vector6d, Pose, Quaternion
 # API
 import ur_pilot
 
+LOGGER = logging.getLogger(__name__)
 
 # Fixed configurations
 # SOCKET_POSE_ESTIMATION_CFG_J = [3.148, -1.824, 2.096, -0.028, 1.590, -1.565]
@@ -56,7 +57,6 @@ def connect_to_socket() -> None:
         _t_start = time.time()
         while time.time() - _t_start <= time_out and not found_socket:
             time.sleep(1.0)
-            img = realsense.get_color_frame()
             _ret, _board_pose = pose_detector.find_pose()
             if _ret:
                 r_vec, t_vec = _board_pose[0], _board_pose[1]
@@ -96,9 +96,8 @@ def connect_to_socket() -> None:
                 pilot.move_to_tcp_pose(T_Base2SocketPre.pose)
             time.sleep(1.0)
             with pilot.force_control():
-                fin = pilot.plug_in_force_mode(axis='z', force=20.0, time_out=4.0)
-                fin = pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)
-                print(f"Finished early: {fin}")
+                pilot.plug_in_force_mode(axis='z', force=20.0, time_out=4.0)
+                pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)
                 pilot.relax(3.0)
                 # Try to plug out
                 success = pilot.plug_out_force_mode(
@@ -112,8 +111,8 @@ def connect_to_socket() -> None:
                 with pilot.position_control():
                     pilot.move_home()
             else:
-                print(f"Error while trying to disconnect. Plug might still be in the socket.")
-                print(f"Robot will stop moving and shut down...")
+                LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
+                             f"Robot will stop moving and shut down...")
 
     # Clean up
     pose_detector.destroy(with_cam=False)
@@ -213,7 +212,7 @@ def connect_to_socket_with_sensing() -> None:
                 if pair_succeed:
                     plug_in_succeed = pilot.plug_in_with_target(100.0, enh_T_Base2Socket)
                     if plug_in_succeed:
-                        print("Plugging successful!")
+                        LOGGER.info("Plugging successful!")
                 pilot.relax(1.0)
                 time.sleep(3.0)
                 # Try to plug out
@@ -229,8 +228,8 @@ def connect_to_socket_with_sensing() -> None:
                 with pilot.position_control():
                     pilot.move_home()
             else:
-                print(f"Error while trying to disconnect. Plug might still be in the socket.")
-                print(f"Robot will stop moving and shut down...")
+                LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
+                             f"Robot will stop moving and shut down...")
 
     # Clean up
     pose_detector.destroy(with_cam=False)

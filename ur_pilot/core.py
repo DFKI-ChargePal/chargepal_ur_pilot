@@ -57,9 +57,9 @@ class Pilot:
     def _check_control_context(self, expected: ControlContext | list[ControlContext]) -> None:
         if self.control_context is ControlContext.DISABLED:
             raise RuntimeError(f"Pilot is not in any control context. Running actions is not possible.")
-        if type(expected) == list and self.control_context not in expected:
+        if isinstance(expected, list) and self.control_context not in expected:
             raise RuntimeError(f"This action is not able to use one of the control context '{self.control_context}'")
-        if type(expected) == ControlContext and self.control_context is not expected:
+        if isinstance(expected, ControlContext) and self.control_context is not expected:
             raise RuntimeError(f"This action is not able to use the control context '{self.control_context}'")
 
     def exit_control_context(self) -> None:
@@ -420,7 +420,6 @@ class Pilot:
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         select_vec = [0, 0, 1, 0, 1, 0]
-        fin = False
         t_start = perf_counter()
         while True:
             dt = perf_counter() - t_start
@@ -455,7 +454,6 @@ class Pilot:
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
-        fin = False
         t_start = perf_counter()
         x_ref = np.array(X_tcp.xyz, dtype=np.float32)
         while True:
@@ -483,7 +481,6 @@ class Pilot:
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
         selection_vector = [1 if d != 0 else 0 for d in direction]
         task_frame = 6 * [0.0]  # Robot base
-        fin = False
         x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
         t_start = t_ref = perf_counter()
         while True:
@@ -514,7 +511,6 @@ class Pilot:
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         # Process observation variables
-        fin = False
         x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
         t_start = t_ref = perf_counter()
         while True:
@@ -545,7 +541,6 @@ class Pilot:
 
     def plug_in_motion_mode(self, target: Pose, time_out: float) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.MOTION)
-        fin = False
         t_start = perf_counter()
         while True:
             # Move linear to target
@@ -583,12 +578,13 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return self.robot.get_tcp_pose()
 
-    def retreat(self, task_frame: Sequence[float], direction: Sequence[int], distance: float = 0.02, time_out: float = 3.0) -> tuple[bool, Pose]:
+    def retreat(self,
+                task_frame: Sequence[float], direction: Sequence[int],
+                distance: float = 0.02, time_out: float = 3.0) -> tuple[bool, Pose]:
         self._check_control_context(expected=ControlContext.FORCE)
         # Map direction to wrench
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
         selection_vector = [1 if d != 0 else 0 for d in direction]
-        fin = False
         t_start = perf_counter()
         x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
         while True:
