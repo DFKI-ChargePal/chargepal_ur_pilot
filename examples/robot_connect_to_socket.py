@@ -211,7 +211,7 @@ def connect_to_socket_with_sensing() -> None:
             with pilot.force_control():
                 pair_succeed = pilot.pair_to_socket(enh_T_Base2Socket)
                 if pair_succeed:
-                    plug_in_succeed = pilot.plug_in_with_target(20.0, enh_T_Base2Socket)
+                    plug_in_succeed = pilot.plug_in_with_target(100.0, enh_T_Base2Socket)
                     if plug_in_succeed:
                         print("Plugging successful!")
                 pilot.relax(1.0)
