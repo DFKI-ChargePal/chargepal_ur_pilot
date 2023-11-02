@@ -2,11 +2,11 @@ from __future__ import annotations
 
 # global
 import logging
+import ur_pilot
 import numpy as np
 from matplotlib import pyplot as plt
 
 # local
-from ur_pilot.utils import set_logging_level
 from ur_pilot.config_mdl import FTSensor
 from ur_pilot.end_effector import bota_helper as helper
 
@@ -46,5 +46,5 @@ def main() -> None:
 
 if __name__ == '__main__':
     print("Bota force-torque sensor plot")
-    set_logging_level(logging.INFO)
+    ur_pilot.logger.set_logging_level(logging.INFO)
     main()

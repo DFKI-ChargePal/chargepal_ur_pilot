@@ -8,8 +8,8 @@ from pathlib import Path
 # local
 import time
 import math
+import ur_pilot
 from ur_pilot import config
-from ur_pilot.utils import set_logging_level
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.monitor.signal_monitor import SignalMonitor
@@ -56,5 +56,5 @@ def main() -> None:
 
 if __name__ == '__main__':
     print("Bota force-torque sensor example!")
-    set_logging_level(logging.INFO)
+    ur_pilot.logger.set_logging_level(logging.INFO)
     main()

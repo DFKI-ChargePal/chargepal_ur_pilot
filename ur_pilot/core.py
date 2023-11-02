@@ -307,7 +307,7 @@ class Pilot:
             if mov_dt < 0.0025:
                 fin = True
                 break
-            self.relax(0.5)
+            self.relax(0.25)
         return fin
 
     def pair_to_socket(self, T_Base2Socket: Transformation, force: float = 10.0, time_out: float = 5.0) -> bool:
