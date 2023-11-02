@@ -96,7 +96,7 @@ def connect_to_socket() -> None:
                 pilot.move_to_tcp_pose(T_Base2SocketPre.pose)
             time.sleep(1.0)
             with pilot.force_control():
-                fin, _ = pilot.find_contact_point(direction=[0, 0, 1, 0, 0, 0], time_out=5.0)
+                fin = pilot.plug_in_force_mode(axis='z', force=20.0, time_out=4)
                 fin = pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)
                 print(f"Finished early: {fin}")
                 pilot.relax(3.0)

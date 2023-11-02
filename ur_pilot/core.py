@@ -225,37 +225,6 @@ class Pilot:
         new_pose = self.robot.get_tcp_pose()
         return fin, new_pose
 
-    def plug_in_force_mode(self, wrench: Vector6d, compliant_axes: list[int], time_out: float) -> bool:
-        self._check_control_context(expected=ControlContext.FORCE)
-        # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
-        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
-        # Time observation
-        fin = False
-        t_ref = t_start = perf_counter()
-        while True:
-            # Apply wrench
-            self.robot.force_mode(
-                task_frame=task_frame,
-                selection_vector=compliant_axes,
-                wrench=wrench.xyzXYZ)
-            t_now = perf_counter()
-            # Check every second if robot is still moving
-            if t_now - t_ref > 1.0:
-                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
-                if np.allclose(x_ref, x_now, atol=0.001):
-                    fin = True
-                    break
-                t_ref, x_ref = t_now, x_now
-            if t_now - t_start > time_out:
-                break
-            if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
-                break
-        # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
-        return fin
-
     def push_linear(self, force: Vector3d, compliant_axes: list[int], duration: float) -> float:
         self._check_control_context(expected=ControlContext.FORCE)
         # Wrench will be applied with respect to the current TCP pose
@@ -279,6 +248,42 @@ class Pilot:
         # Stop robot movement.
         self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return dist
+
+    def plug_in_force_mode(self, axis: str, force: float, time_out: float) -> bool:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        wrench_idx = utils.axis2index(axis.lower())
+        wrench_vec = 6 * [0.0]
+        wrench_vec[wrench_idx] = force
+        compliant_axes = [1, 1, 1, 0, 0, 0]
+        compliant_axes[wrench_idx + 2] = 1
+        # Time observation
+        fin = False
+        t_ref = t_start = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=compliant_axes,
+                wrench=wrench_vec)
+            t_now = perf_counter()
+            # Check every second if robot is still moving
+            if t_now - t_ref > 1.0:
+                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                if np.allclose(x_ref, x_now, atol=0.001):
+                    fin = True
+                    break
+                t_ref, x_ref = t_now, x_now
+            if t_now - t_start > time_out:
+                break
+            if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                break
+        # Stop robot movement.
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        return fin
 
     def plug_in_force_ramp(
             self, f_axis: str = 'z', f_start: float = 0, f_end: float = 50, duration: float = 10) -> bool:
