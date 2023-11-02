@@ -129,6 +129,9 @@ def evaluate(opt: Namespace) -> None:
                         ang_error = np.arccos(np.clip((2 * (q_ref.dot(q_new))**2 - 1), -1.0, 1.0)) * 1000.0
                         LOGGER.info(
                             f"Nr. {i} - Position error: {int(pos_error)} [mm] - Angular error: {int(ang_error)} [mRad]")
+                else:
+                    dummy_res = Pose()
+                    X_log.append((dummy_res.xyz, dummy_res.wxyz))
 
                 if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
                     print("The recording process is terminated by the user.")
