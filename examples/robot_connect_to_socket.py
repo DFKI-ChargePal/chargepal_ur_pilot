@@ -14,10 +14,11 @@ import ur_pilot
 
 
 # Fixed configurations
-SOCKET_POSE_ESTIMATION_CFG_J = [3.148, -1.824, 2.096, -0.028, 1.590, -1.565]
+# SOCKET_POSE_ESTIMATION_CFG_J = [3.148, -1.824, 2.096, -0.028, 1.590, -1.565]
+SOCKET_POSE_ESTIMATION_CFG_J = [3.409, -1.578, 2.062, -0.464, 1.809, -1.565]
 c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
 board_2 = 0.075 / 2  # half board size 
-X_SOCKET_2_PATTERN = Pose().from_xyz_xyzw(xyz=[0.005, 0.0, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
+X_SOCKET_2_PATTERN = Pose().from_xyz_xyzw(xyz=[0.0, 0.0, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
 X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, 0.0 - 0.02])  # Retreat pose with respect to the socket
 # X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[0.0, 0.0, 0.05])
 
@@ -96,13 +97,28 @@ def connect_to_socket() -> None:
             time.sleep(1.0)
             with pilot.force_control():
                 pilot.plug_in_force_mode(
-                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 20.0, 0.0, 0.0, 0.0]),
+                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 75.0, 0.0, 0.0, 0.0]),
                     compliant_axes=[1, 1, 1, 0, 0, 1], 
-                    time_out=10.0)
+                    time_out=4.0)
+                pilot.relax(1.0)
+                pilot.plug_in_force_mode(
+                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 100.0, 0.0, 0.0, 0.0]),
+                    compliant_axes=[1, 1, 1, 0, 0, 1], 
+                    time_out=2.0)
+                pilot.relax(1.0)
+                pilot.plug_in_force_mode(
+                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 125.0, 0.0, 0.0, 0.0]),
+                    compliant_axes=[1, 1, 1, 0, 0, 1], 
+                    time_out=2.0)
+                # pilot.relax(1.0)
+                # pilot.plug_in_force_mode(
+                #     wrench=Vector6d().from_xyzXYZ([0.0, 0.0, 150.0, 0.0, 0.0, 0.0]),
+                #     compliant_axes=[1, 1, 1, 0, 0, 1], 
+                #     time_out=2.0)
                 pilot.relax(3.0)
                 # Try to plug out
                 success = pilot.plug_out_force_mode(
-                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -25.0, 0.0, 0.0, 0.0]),
+                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
                     compliant_axes=[0, 0, 1, 0, 0, 0],
                     distance=0.05,
                     time_out=10.0)
