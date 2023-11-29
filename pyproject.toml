@@ -16,6 +16,7 @@ pandas = "^2.0.3"
 rigmopy = {git = "git@git.ni.dfki.de:gjohn/rigmopy.git"}
 chargepal-aruco = {git = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_aruco.git"}
 testresources = "^2.0.1"
+pyrealsense2 = "^2.54.2.5684"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.0.0"
