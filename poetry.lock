@@ -59,7 +59,7 @@ tqdm = "^4.66.1"
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git"
 reference = "HEAD"
-resolved_reference = "377f901904b13eaf3f68b995fab6734d96285f84"
+resolved_reference = "9a4ca67f3e6561d91487858a46495af4aac44cfd"
 
 [[package]]
 name = "charset-normalizer"

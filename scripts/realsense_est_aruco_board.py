@@ -3,32 +3,28 @@ from __future__ import annotations
 
 # global
 import logging
-import numpy as np
-import chargepal_aruco as ca
+import cvpd as pd
+import camera_kit as ck
+from pathlib import Path
 
-# typing
-from numpy import typing as npt
 
 LOGGER = logging.getLogger(__name__)
+
+_cfg_fp = Path(__file__).absolute().parent.joinpath('config', 'charuco_calibration.yaml')
 
 
 def estimate_board_pose() -> None:
 
-    camera = ca.RealSenseCamera("tcp_cam_realsense")
-    camera.load_coefficients()
-    aru_board = ca.CharucoBoard("DICT_4X4_100", 19, (10, 7), 25)
-    detector = ca.CharucoboardDetector(camera, aru_board, display=True)
-
-    pose: npt.NDArray[np.float64] | None = None
-    while ca.EventObserver.state is not ca.EventObserver.Type.QUIT:
-        _, pose = detector.find_pose()
-        if detector.display and ca.EventObserver.state is ca.EventObserver.Type.PAUSE:
-            print("Press any key to continue")
-            ca.EventObserver.wait_for_user()
-    if pose is not None:
-        LOGGER.info(f"Pose found: \n {pose}")
+    with ck.camera_manager('realsense_tcp_cam', logger_level=logging.INFO) as cam:
+        cam.load_coefficients()
+        pose_detector = pd.CharucoDetector(_cfg_fp)
+        pose_detector.register_camera(cam)
+        found, pose = False, None
+        while not ck.user_signal.stop():
+            found, pose = pose_detector.find_pose(render=True)
+        if found:
+            LOGGER.info(f"Last found pose: \n {pose}")
 
 
 if __name__ == '__main__':
-    ca.set_logging_level(logging.INFO)
     estimate_board_pose()
