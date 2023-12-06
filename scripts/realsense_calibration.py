@@ -1,30 +1,23 @@
 """ Script to calibrate the robot camera. """
 import logging
-import chargepal_aruco as ca
+import camera_kit as ck
 
 
 _CHECKER_SIZE = 16
-_CHESSBOARD_DIM = (11, 17)
+_CHESSBOARD_SIZE = (11, 17)
+_chessboard = ck.ChessboardDescription(_CHESSBOARD_SIZE, _CHECKER_SIZE)
 
 
 def realsense_calibration() -> None:
 
-    # Create calibration instance
-    ca.set_logging_level(logging.INFO)
-    cam = ca.RealSenseCamera('tcp_cam_realsense')
-    board = ca.Chessboard(_CHESSBOARD_DIM, _CHECKER_SIZE)
-
-    calib = ca.Calibration(cam)
-
-    # Record calibration images
-    calib.camera_calibration_record_images()
-
-    # Run camera calibration and save coefficients
-    coeffs = calib.camera_calibration_find_coeffs(board=board, display=True)
-    cam.save_coefficients(coeffs)
-
-    cam.destroy()
+    with ck.camera_manager('realsense_tcp_cam', logger_level=logging.INFO) as camera:
+        # Record some images
+        ck.CameraCalibration().record_images(camera)
+        # Run calibration
+        cc = ck.CameraCalibration().find_coeffs(camera, _chessboard, display=True)
+        camera.save_coefficients(cc)
 
 
 if __name__ == '__main__':
     realsense_calibration()
+

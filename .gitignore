@@ -125,8 +125,10 @@ dmypy.json
 
 # Project data
 data/
+detector/
 camera_info/
 
 # PyCharm
 python-sudo.sh
+
 ur_pilot/config/laptop_dev.toml
