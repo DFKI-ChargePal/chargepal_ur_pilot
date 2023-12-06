@@ -10,7 +10,7 @@ from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 
-_cfg_fp = Path(__file__).absolute().parent.joinpath('config', 'charuco_calibration.yaml')
+_cfg_fp = Path(__file__).absolute().parent.joinpath('detector', 'charuco_calibration.yaml')
 
 
 def estimate_board_pose() -> None:
