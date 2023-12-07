@@ -4,25 +4,29 @@ import logging
 import ur_pilot
 import argparse
 import cv2 as cv
+import cvpd as pd
 import numpy as np
-import chargepal_aruco as ca
+import camera_kit as ck
+from pathlib import Path
 from argparse import Namespace
 from rigmopy import Transformation
+from ur_pilot import HandEyeCalibration
 
 # local
-from robot_teach_in import state_sequence_reader
+from scripts.robot_teach_in import state_sequence_reader
 
 LOGGER = logging.getLogger(__name__)
+
+_charuco_cfg = Path(__file__).absolute().parent.joinpath('detector', 'charuco_calibration.yaml')
 
 
 def record_calibration_imgs(opt: Namespace) -> None:
 
     # Create perception setup
-    cam = ca.RealSenseCamera("tcp_cam_realsense")
+    cam = ck.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
-    aru_board = ca.CharucoBoard("DICT_4X4_100", 19, (10, 7), 25)
-    calibration = ca.Calibration(cam)
-    detector = ca.CharucoboardDetector(cam, aru_board, display=True)
+    detector = pd.CharucoDetector(_charuco_cfg)
+    detector.register_camera(cam)
 
     # Connect to arm
     with ur_pilot.connect() as pilot:
@@ -34,7 +38,7 @@ def record_calibration_imgs(opt: Namespace) -> None:
             counter = 1
             stop_reading = False
             dbg_lvl = ur_pilot.logger.get_logging_level()
-            calibration.hand_eye_calibration_clear_directories()
+            HandEyeCalibration.clear_directories(cam)
             file_path = ur_pilot.utils.get_pkg_path().joinpath(opt.data_dir).joinpath(opt.file_name)
             for joint_pos in state_sequence_reader(file_path):
                 pilot.move_to_joint_pos(joint_pos)
@@ -56,37 +60,36 @@ def record_calibration_imgs(opt: Namespace) -> None:
                                      f"\nTransformation UR10-TCP to UR10-base\n {T_base2tcp}"
                                      f"Debug mode! No recordings will be saved.")
                     else:
-                        calibration.hand_eye_calibration_record_sample(
+                        HandEyeCalibration.record_sample(
+                            camera=cam,
                             file_prefix=file_name,
                             T_base2tcp=T_base2tcp.trans_matrix,
-                            T_cam2tgt=T_cam2tgt.trans_matrix,
+                            T_cam2tgt=T_cam2tgt.trans_matrix
                         )
                         counter += 1
-                if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                if ck.user.stop():
                     LOGGER.warning("The recording process is terminated by the user.")
                     stop_reading = True
                 if dbg_lvl <= logging.DEBUG:
                     # Pause by user
                     LOGGER.info(f"Hit any bottom to continue.")
-                    ca.EventObserver.wait_for_user()
+                    ck.user.wait_for_command()
                 else:
                     time.sleep(0.1)
                 if stop_reading:
                     break
             # Move back to home
             pilot.move_home()
-
     # Clean up
-    detector.destroy(with_cam=True)
+    cam.end()
 
 
 def run_hand_eye_calibration(opt: Namespace) -> None:
     """ Function to execute the hand eye calibration. Please make sure to run the recording step first. """
-    camera = ca.RealSenseCamera("tcp_cam_realsense")
-    camera.load_coefficients()
-    calibration = ca.Calibration(camera)
+    cam = ck.create("realsense_tcp_cam", opt.logging_level)
+    cam.load_coefficients()
     # Get transformation matrix of camera in the tcp frame
-    np_T_tcp2cam = calibration.hand_eye_calibration_est_transformation()
+    np_T_tcp2cam = HandEyeCalibration.est_transformation(cam)
     # Log results
     T_tcp2cam = Transformation().from_trans_matrix(np_T_tcp2cam)
     LOGGER.info(f"Result - TCP to camera transformation (T_tcp2cam):")
@@ -94,7 +97,7 @@ def run_hand_eye_calibration(opt: Namespace) -> None:
     LOGGER.info(f"Tau in [m]:              {X_tcp2cam.xyz}")
     LOGGER.info(f"Rotation in euler [deg]: {X_tcp2cam.to_euler_angle(degrees=True)}")
     # Save results
-    calibration.hand_eye_calibration_save_transformation(camera, np_T_tcp2cam)
+    HandEyeCalibration.save_transformation(cam, np_T_tcp2cam)
 
 
 def main() -> None:
@@ -108,9 +111,9 @@ def main() -> None:
     # Parse input arguments
     args = parser.parse_args()
     if args.debug:
-        ca.set_logging_level(logging.DEBUG)
+        args.logging_level = logging.DEBUG
     else:
-        ca.set_logging_level(logging.INFO)
+        args.logging_level = logging.INFO
     # Check if a new recording step is needed
     if args.rec:
         record_calibration_imgs(args)

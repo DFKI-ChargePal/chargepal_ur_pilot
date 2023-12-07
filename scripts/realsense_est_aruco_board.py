@@ -20,7 +20,7 @@ def estimate_board_pose() -> None:
         pose_detector = pd.CharucoDetector(_cfg_fp)
         pose_detector.register_camera(cam)
         found, pose = False, None
-        while not ck.user_signal.stop():
+        while not ck.user.stop():
             found, pose = pose_detector.find_pose(render=True)
         if found:
             LOGGER.info(f"Last found pose: \n {pose}")

@@ -4,10 +4,6 @@ import time
 import logging
 import numpy as np
 from pathlib import Path
-
-
-import chargepal_aruco as ca
-from chargepal_aruco import Camera
 from rigmopy import utils_math as rp_math
 from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
@@ -16,11 +12,13 @@ from ur_pilot import config
 from ur_pilot.utils import SpatialPDController
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
-from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
+from ur_pilot.end_effector.hand_eye_calibration import HandEyeCalibration
+from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 
 # typing
 from typing import Sequence
+from camera_kit import CameraBase
 
 
 LOGGER = logging.getLogger(__name__)
@@ -71,7 +69,7 @@ class Robot:
 
         self.tool = ToolModel(**self.cfg.robot.tool.dict())
         self.set_tcp()
-        self.cam: Camera | None = None
+        self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
 
     @property
@@ -142,11 +140,11 @@ class Robot:
             self._ft_sensor.stop()
         self.rtde.exit()
 
-    def register_ee_cam(self, cam: Camera) -> None:
+    def register_ee_cam(self, cam: CameraBase) -> None:
         self.cam = cam
         if not self.cam.is_calibrated:
             self.cam.load_coefficients()
-        T_tcp2cam = ca.Calibration.hand_eye_calibration_load_transformation(self.cam)
+        T_tcp2cam = HandEyeCalibration.load_transformation(self.cam)
         self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_tcp2cam)
 
     ####################################

@@ -5,8 +5,8 @@ import logging
 import argparse
 import ur_pilot
 import numpy as np
+import camera_kit as ck
 from pathlib import Path
-import chargepal_aruco as ca
 from argparse import Namespace
 
 # typing
@@ -22,9 +22,9 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
         LOGGER.info(f"Nothing is going to happen. Exit script.")
         return
     # Use a display for user interaction
-    display = ca.Display('Monitor')
+    display = ck.Display('Monitor')
     if not opt.no_camera:
-        cam = ca.RealSenseCamera('tcp_cam_realsense')
+        cam = ck.create("realsense_tcp_cam")
         cam.load_coefficients()
     else:
         cam = None
@@ -47,13 +47,13 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
                 else:
                     img = (np.random.rand(480, 640, 3) * 255).astype(dtype=np.uint8)
                 display.show(img)
-                if ca.EventObserver.state is ca.EventObserver.Type.SAVE:
+                if ck.user.save():
                     # Save current joint position configuration
                     joint_pos = pilot.robot.get_joint_pos()
                     info_str = f"Save joint pos: " + " ".join(f"{q:.3f}" for q in joint_pos)
                     LOGGER.info(info_str)
                     state_seq.append(joint_pos)
-                elif ca.EventObserver.state is ca.EventObserver.Type.QUIT:
+                elif ck.user.stop():
                     LOGGER.info("The recording process is terminated by the user.")
                     break
             LOGGER.info(f"Save all configurations in {file_path}")
@@ -62,7 +62,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
         # Clean up
         display.destroy()
         if cam is not None:
-            cam.destroy()
+            cam.end()
 
 
 def state_sequence_reader(file_path: Path) -> Generator[list[float], None, None]:

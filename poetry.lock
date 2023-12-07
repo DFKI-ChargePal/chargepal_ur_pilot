@@ -34,7 +34,7 @@ tqdm = "^4.66.1"
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_camera_kit.git"
 reference = "HEAD"
-resolved_reference = "348c953d854289f67f2b11f6f0795e32c44c2b89"
+resolved_reference = "ee3513090e3f5746761d8a09e4619cb550e235c0"
 
 [[package]]
 name = "chargepal-cvpd"
@@ -59,7 +59,7 @@ tqdm = "^4.66.1"
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git"
 reference = "HEAD"
-resolved_reference = "9a4ca67f3e6561d91487858a46495af4aac44cfd"
+resolved_reference = "be04be2de33c14214f52e2bb4b70a946e49d7ef3"
 
 [[package]]
 name = "charset-normalizer"
@@ -869,4 +869,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8, <3.12"
-content-hash = "0fd3427356240dffe60775ea1d6f88b11f10e99f773e935f017c3f8be72ec545"
+content-hash = "00be585859e7648e67f3ff916aa0b77f021fd6c545fda250054e24bd8ece6a4b"
