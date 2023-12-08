@@ -7,6 +7,7 @@ _CHECKER_SIZE = 16
 _CHESSBOARD_SIZE = (11, 17)
 _chessboard = ck.ChessboardDescription(_CHESSBOARD_SIZE, _CHECKER_SIZE)
 
+
 def realsense_calibration() -> None:
 
     with ck.camera_manager('realsense_tcp_cam', logger_level=logging.INFO) as camera:
@@ -19,4 +20,3 @@ def realsense_calibration() -> None:
 
 if __name__ == '__main__':
     realsense_calibration()
-
