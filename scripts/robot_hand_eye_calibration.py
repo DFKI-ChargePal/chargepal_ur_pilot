@@ -9,7 +9,7 @@ import numpy as np
 import camera_kit as ck
 from pathlib import Path
 from argparse import Namespace
-from rigmopy import Transformation
+from rigmopy import Transformation, Pose, Vector3d, Quaternion
 from ur_pilot import HandEyeCalibration
 
 # local
@@ -17,7 +17,7 @@ from scripts.robot_teach_in import state_sequence_reader
 
 LOGGER = logging.getLogger(__name__)
 
-_charuco_cfg = Path(__file__).absolute().parent.joinpath('detector', 'charuco_calibration.yaml')
+_charuco_cfg = Path(__file__).absolute().parent.parent.joinpath('detector', 'charuco_calibration.yaml')
 
 
 def record_calibration_imgs(opt: Namespace) -> None:
@@ -25,6 +25,8 @@ def record_calibration_imgs(opt: Namespace) -> None:
     # Create perception setup
     cam = ck.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
+    cam.render()
+    print(_charuco_cfg)
     detector = pd.CharucoDetector(_charuco_cfg)
     detector.register_camera(cam)
 
@@ -42,10 +44,12 @@ def record_calibration_imgs(opt: Namespace) -> None:
             file_path = ur_pilot.utils.get_pkg_path().joinpath(opt.data_dir).joinpath(opt.file_name)
             for joint_pos in state_sequence_reader(file_path):
                 pilot.move_to_joint_pos(joint_pos)
-                _ret, board_pose = detector.find_pose()
+                _ret, board_pose = detector.find_pose(render=True)
                 if _ret:
+                    # Get OpenCV style transformation
+                    board_pose = ck.converter.pq_to_cv(board_pose)
                     r_vec, t_vec = board_pose[0], board_pose[1]
-                    # Build target to camera transformation
+                    # Build camera to target transformation
                     R_cam2tgt, _ = cv.Rodrigues(r_vec)
                     tau_cam2tgt = np.array(t_vec).squeeze()
                     # Transformation matrix of target in camera frame
@@ -117,8 +121,9 @@ def main() -> None:
     # Check if a new recording step is needed
     if args.rec:
         record_calibration_imgs(args)
-    # Run calibration
-    run_hand_eye_calibration(args)
+    if not args.logging_level == logging.DEBUG:
+        # Run calibration
+        run_hand_eye_calibration(args)
 
 
 if __name__ == '__main__':
