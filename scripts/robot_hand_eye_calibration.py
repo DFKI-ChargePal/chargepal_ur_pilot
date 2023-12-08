@@ -9,7 +9,7 @@ import numpy as np
 import camera_kit as ck
 from pathlib import Path
 from argparse import Namespace
-from rigmopy import Transformation, Pose, Vector3d, Quaternion
+from rigmopy import Transformation
 from ur_pilot import HandEyeCalibration
 
 # local
@@ -26,7 +26,6 @@ def record_calibration_imgs(opt: Namespace) -> None:
     cam = ck.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
-    print(_charuco_cfg)
     detector = pd.CharucoDetector(_charuco_cfg)
     detector.register_camera(cam)
 
@@ -47,8 +46,8 @@ def record_calibration_imgs(opt: Namespace) -> None:
                 _ret, board_pose = detector.find_pose(render=True)
                 if _ret:
                     # Get OpenCV style transformation
-                    board_pose = ck.converter.pq_to_cv(board_pose)
-                    r_vec, t_vec = board_pose[0], board_pose[1]
+                    board_pose_cv = ck.converter.pq_to_cv(board_pose)
+                    r_vec, t_vec = board_pose_cv[0], board_pose_cv[1]
                     # Build camera to target transformation
                     R_cam2tgt, _ = cv.Rodrigues(r_vec)
                     tau_cam2tgt = np.array(t_vec).squeeze()
