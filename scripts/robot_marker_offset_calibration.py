@@ -62,7 +62,7 @@ def calibration_procedure(opt: Namespace) -> None:
 
     if found:
         LOGGER.info('Found marker')
-        # Get pose from target2marker
+        # Get pose from target to marker
         T_base2tcp = pose_base2tcp.transformation
         T_cam2marker = pose_cam2marker.transformation
         T_base2target = pose_base2target.transformation
@@ -80,6 +80,8 @@ def calibration_procedure(opt: Namespace) -> None:
         # print(f"Target - Marker: {T_target2marker}")
         # Convert to pose
         pose_target2marker = Pose().from_transformation(T_target2marker)
+        # Save new offset position
+        dtt.marker.adjust_configuration(pose_target2marker.xyz, pose_target2marker.xyzw)
         LOGGER.info(f"  Calculated transformation from target to marker:")
         LOGGER.info(f"  {pose_target2marker}\n")
     else:
