@@ -5,7 +5,6 @@ import math
 import numpy as np
 from pathlib import Path
 from enum import auto, Enum
-import chargepal_aruco as ca
 from time import perf_counter
 from contextlib import contextmanager
 from rigmopy import Pose, Vector3d, Vector6d, Transformation
@@ -241,8 +240,6 @@ class Pilot:
                 wrench=wrench)
             if (perf_counter() - t_start) > duration:
                 break
-            if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
-                break
         x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
         dist: float = np.sum(np.abs(x_now - x_ref))  # L1 norm
         # Stop robot movement.
@@ -278,8 +275,6 @@ class Pilot:
                     break
                 t_ref, x_ref = t_now, x_now
             if t_now - t_start > time_out:
-                break
-            if ca.EventObserver.state is ca.EventObserver.Type.QUIT:
                 break
         # Stop robot movement.
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])

@@ -4,15 +4,21 @@ from __future__ import annotations
 import time
 import logging
 import argparse
+import ur_pilot
 import cv2 as cv
+import cvpd as pd
 import numpy as np
-import chargepal_aruco as ca
+import camera_kit as ck
+from pathlib import Path
 from rigmopy import Vector3d, Vector6d, Pose, Quaternion
 
-# API
-import ur_pilot
+# typing
+from argparse import Namespace
+
 
 LOGGER = logging.getLogger(__name__)
+
+_dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 
 # Fixed configurations
 # SOCKET_POSE_ESTIMATION_CFG_J = [3.148, -1.824, 2.096, -0.028, 1.590, -1.565]
@@ -24,25 +30,22 @@ X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, 0.0 - 0.02])  # Retreat p
 # X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[0.0, 0.0, 0.05])
 
 
-def connect_to_socket() -> None:
-    # Build AruCo detection setup()
-    realsense = ca.RealSenseCamera("tcp_cam_realsense")
-    realsense.load_coefficients()
+def connect_to_socket(opt: Namespace) -> None:
+    """ Function to run through the connection procedure
 
-    pattern_layout = {
-        51: (0, 60),
-        52: (60, 0),
-        53: (0, -100),
-        54: (-60, 0),
-    }
-    aru_pattern = ca.ArucoPattern("DICT_4X4_100", 25, pattern_layout)
-    pose_detector = ca.PatternDetector(realsense, aru_pattern, display=True)
+    Args:
+        opt: Script arguments
+    """
+    # Perception setup
+    cam = ck.create("realsense_tcp_cam", opt.logging_level)
+    cam.load_coefficients()
+    cam.render()
+    dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.marker_config_file))
 
     # Connect to pilot
     with ur_pilot.connect() as pilot:
         # Link to camera
-        pilot.robot.register_ee_cam(realsense)
-    
+        pilot.robot.register_ee_cam(cam)
         with pilot.position_control():
             # Start at home position
             pilot.move_home()
@@ -57,33 +60,17 @@ def connect_to_socket() -> None:
         _t_start = time.time()
         while time.time() - _t_start <= time_out and not found_socket:
             time.sleep(1.0)
-            _ret, _board_pose = pose_detector.find_pose()
-            if _ret:
-                r_vec, t_vec = _board_pose[0], _board_pose[1]
-                # Convert to body motion object
-                R_Cam2Board, _ = cv.Rodrigues(r_vec)
-                q_Cam2Board = Quaternion().from_matrix(R_Cam2Board)
-                Cam_x_Cam2Board = Vector3d().from_xyz(t_vec)
-                # Pose of the camera frame with respect to the ArUco board frame
-                X_Cam2Board = Pose().from_pq(Cam_x_Cam2Board, q_Cam2Board)
-
-                # Pose of the plug frame with respect to the robot base frame
-                X_Base2Plug = pilot.robot.get_tcp_pose()
-
+            found, pose_cam2socket = dtt.find_pose(render=True)
+            if found:
                 # Get transformation matrices
-                T_Plug2Cam = pilot.robot.cam_mdl.T_flange2camera
-                T_Base2Plug = X_Base2Plug.transformation
-                T_Cam2Board = X_Cam2Board.transformation
-                T_Board2Socket = X_SOCKET_2_PATTERN.transformation.inverse()
-                T_Socket2SocketPre = X_SOCKET_2_SOCKET_PRE.transformation
-                # T_Socket2SocketIn = X_SOCKET_2_SOCKET_IN.transformation
+                T_plug2cam = pilot.robot.cam_mdl.T_flange2camera
+                T_base2plug = pilot.robot.get_tcp_pose().transformation
+                T_socket2socket_pre = X_SOCKET_2_SOCKET_PRE.transformation
+                T_cam2socket = Pose().from_xyz_wxyz(*pose_cam2socket).transformation
 
                 # Get searched transformations
-                T_Plug2Board = T_Plug2Cam @ T_Cam2Board
-                T_Plug2Socket = T_Plug2Board @ T_Board2Socket 
-                T_Base2Socket = T_Base2Plug @ T_Plug2Socket
-                # T_Base2SocketIn = T_Base2Socket @ T_Socket2SocketIn
-                T_Base2SocketPre = T_Base2Socket @ T_Socket2SocketPre
+                T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                T_base2socket_pre = T_base2socket @ T_socket2socket_pre
                 found_socket = True
     
         if not found_socket:
@@ -93,7 +80,7 @@ def connect_to_socket() -> None:
         else:
             with pilot.position_control():    
                 # Move to socket with some safety distance
-                pilot.move_to_tcp_pose(T_Base2SocketPre.pose)
+                pilot.move_to_tcp_pose(T_base2socket_pre.pose)
             time.sleep(1.0)
             with pilot.force_control():
                 pilot.plug_in_force_mode(axis='z', force=20.0, time_out=4.0)
@@ -113,146 +100,148 @@ def connect_to_socket() -> None:
             else:
                 LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
                              f"Robot will stop moving and shut down...")
-
-    # Clean up
-    pose_detector.destroy(with_cam=False)
-    realsense.destroy()
+    # Stop camera stream
+    cam.end()
 
 
-def connect_to_socket_with_sensing() -> None:
-    # Build AruCo detection setup()
-    realsense = ca.RealSenseCamera("tcp_cam_realsense")
-    realsense.load_coefficients()
+# def connect_to_socket_with_sensing() -> None:
+#     # Build AruCo detection setup()
+#     realsense = ca.RealSenseCamera("tcp_cam_realsense")
+#     realsense.load_coefficients()
 
-    pattern_layout = {
-        51: (0, 60),
-        52: (60, 0),
-        53: (0, -100),
-        54: (-60, 0),
-    }
-    aru_pattern = ca.ArucoPattern("DICT_4X4_100", 25, pattern_layout)
-    pose_detector = ca.PatternDetector(realsense, aru_pattern, display=True)
+#     pattern_layout = {
+#         51: (0, 60),
+#         52: (60, 0),
+#         53: (0, -100),
+#         54: (-60, 0),
+#     }
+#     aru_pattern = ca.ArucoPattern("DICT_4X4_100", 25, pattern_layout)
+#     pose_detector = ca.PatternDetector(realsense, aru_pattern, display=True)
 
-    # Connect to pilot
-    with ur_pilot.connect() as pilot:
-        # Link to camera
-        pilot.robot.register_ee_cam(realsense)
+#     # Connect to pilot
+#     with ur_pilot.connect() as pilot:
+#         # Link to camera
+#         pilot.robot.register_ee_cam(realsense)
 
-        with pilot.position_control():
-            # Start at home position
-            pilot.move_home()
-            # Move to camera estimation pose to have all marker in camera field of view
-            pilot.move_to_joint_pos(SOCKET_POSE_ESTIMATION_CFG_J)
+#         with pilot.position_control():
+#             # Start at home position
+#             pilot.move_home()
+#             # Move to camera estimation pose to have all marker in camera field of view
+#             pilot.move_to_joint_pos(SOCKET_POSE_ESTIMATION_CFG_J)
 
-        # Search for ArUco marker
-        found_socket = False
-        # Use time out to exit loop
-        time_out = 5.0
-        _t_start = time.time()
-        while time.time() - _t_start <= time_out and not found_socket:
-            time.sleep(0.5)
-            _ret, _board_pose = pose_detector.find_pose()
-            if _ret:
-                r_vec, t_vec = _board_pose[0], _board_pose[1]
-                # Convert to body motion object
-                R_Cam2Board, _ = cv.Rodrigues(r_vec)
-                q_Cam2Board = Quaternion().from_matrix(R_Cam2Board)
-                Cam_x_Cam2Board = Vector3d().from_xyz(t_vec)
-                # Pose of the camera frame with respect to the ArUco board frame
-                X_Cam2Board = Pose().from_pq(Cam_x_Cam2Board, q_Cam2Board)
+#         # Search for ArUco marker
+#         found_socket = False
+#         # Use time out to exit loop
+#         time_out = 5.0
+#         _t_start = time.time()
+#         while time.time() - _t_start <= time_out and not found_socket:
+#             time.sleep(0.5)
+#             _ret, _board_pose = pose_detector.find_pose()
+#             if _ret:
+#                 r_vec, t_vec = _board_pose[0], _board_pose[1]
+#                 # Convert to body motion object
+#                 R_Cam2Board, _ = cv.Rodrigues(r_vec)
+#                 q_Cam2Board = Quaternion().from_matrix(R_Cam2Board)
+#                 Cam_x_Cam2Board = Vector3d().from_xyz(t_vec)
+#                 # Pose of the camera frame with respect to the ArUco board frame
+#                 X_Cam2Board = Pose().from_pq(Cam_x_Cam2Board, q_Cam2Board)
 
-                # Pose of the plug frame with respect to the robot base frame
-                X_Base2Plug = pilot.robot.get_tcp_pose()
+#                 # Pose of the plug frame with respect to the robot base frame
+#                 X_Base2Plug = pilot.robot.get_tcp_pose()
 
-                # Get transformation matrices
-                T_Plug2Cam = pilot.robot.cam_mdl.T_flange2camera
-                T_Base2Plug = X_Base2Plug.transformation
-                T_Cam2Board = X_Cam2Board.transformation
-                T_Board2Socket = X_SOCKET_2_PATTERN.transformation.inverse()
-                T_Socket2SocketPre = X_SOCKET_2_SOCKET_PRE.transformation
-                # T_Socket2SocketIn = X_SOCKET_2_SOCKET_IN.transformation
+#                 # Get transformation matrices
+#                 T_Plug2Cam = pilot.robot.cam_mdl.T_flange2camera
+#                 T_Base2Plug = X_Base2Plug.transformation
+#                 T_Cam2Board = X_Cam2Board.transformation
+#                 T_Board2Socket = X_SOCKET_2_PATTERN.transformation.inverse()
+#                 T_Socket2SocketPre = X_SOCKET_2_SOCKET_PRE.transformation
+#                 # T_Socket2SocketIn = X_SOCKET_2_SOCKET_IN.transformation
 
-                # Get searched transformations
-                T_Plug2Board = T_Plug2Cam @ T_Cam2Board
-                T_Plug2Socket = T_Plug2Board @ T_Board2Socket 
-                T_Base2Socket = T_Base2Plug @ T_Plug2Socket
-                # T_Base2SocketIn = T_Base2Socket @ T_Socket2SocketIn
-                T_Base2SocketPre = T_Base2Socket @ T_Socket2SocketPre
-                found_socket = True
+#                 # Get searched transformations
+#                 T_Plug2Board = T_Plug2Cam @ T_Cam2Board
+#                 T_Plug2Socket = T_Plug2Board @ T_Board2Socket 
+#                 T_Base2Socket = T_Base2Plug @ T_Plug2Socket
+#                 # T_Base2SocketIn = T_Base2Socket @ T_Socket2SocketIn
+#                 T_Base2SocketPre = T_Base2Socket @ T_Socket2SocketPre
+#                 found_socket = True
 
-        if not found_socket:
-            # Move back to home
-            with pilot.position_control():
-                pilot.move_home()
-        else:
-            with pilot.position_control():
-                # Switch to sense tcp
-                pilot.robot.set_tcp('tool_sense')
-                # Move to socket with some safety distance
-                pilot.move_to_tcp_pose(T_Base2SocketPre.pose)
-            time.sleep(1.0)
-            with pilot.force_control():
-                _, enh_T_Base2Socket = pilot.sensing_depth(T_Base2Target=T_Base2Socket, time_out=5.0)
-                # Move to a safe retreat pose
-                X_tcp = pilot.robot.get_tcp_pose()
-                task_frame = X_tcp.xyz + X_tcp.axis_angle
-                success_retreat, _ = pilot.retreat(task_frame=task_frame, direction=[0, 0, -1, 0, 0, 0])
-            if not success_retreat:
-                raise RuntimeError("Moving to retreat pose was not successful. Stop moving.")
+#         if not found_socket:
+#             # Move back to home
+#             with pilot.position_control():
+#                 pilot.move_home()
+#         else:
+#             with pilot.position_control():
+#                 # Switch to sense tcp
+#                 pilot.robot.set_tcp('tool_sense')
+#                 # Move to socket with some safety distance
+#                 pilot.move_to_tcp_pose(T_Base2SocketPre.pose)
+#             time.sleep(1.0)
+#             with pilot.force_control():
+#                 _, enh_T_Base2Socket = pilot.sensing_depth(T_Base2Target=T_Base2Socket, time_out=5.0)
+#                 # Move to a safe retreat pose
+#                 X_tcp = pilot.robot.get_tcp_pose()
+#                 task_frame = X_tcp.xyz + X_tcp.axis_angle
+#                 success_retreat, _ = pilot.retreat(task_frame=task_frame, direction=[0, 0, -1, 0, 0, 0])
+#             if not success_retreat:
+#                 raise RuntimeError("Moving to retreat pose was not successful. Stop moving.")
             
-            with pilot.position_control():
-                # Switch to normal tool tip tcp
-                pilot.robot.set_tcp('tool_tip')
-                # Move to enhanced socket pose with some safety distance
-                enh_T_Base2SocketPre = enh_T_Base2Socket @ T_Socket2SocketPre
-                pilot.move_to_tcp_pose(enh_T_Base2SocketPre.pose)
+#             with pilot.position_control():
+#                 # Switch to normal tool tip tcp
+#                 pilot.robot.set_tcp('tool_tip')
+#                 # Move to enhanced socket pose with some safety distance
+#                 enh_T_Base2SocketPre = enh_T_Base2Socket @ T_Socket2SocketPre
+#                 pilot.move_to_tcp_pose(enh_T_Base2SocketPre.pose)
 
-            with pilot.force_control():
-                pair_succeed = pilot.pair_to_socket(enh_T_Base2Socket)
-                if pair_succeed:
-                    plug_in_succeed = pilot.plug_in_with_target(100.0, enh_T_Base2Socket)
-                    if plug_in_succeed:
-                        LOGGER.info("Plugging successful!")
-                pilot.relax(1.0)
-                time.sleep(3.0)
-                # Try to plug out
-                success = pilot.plug_out_force_mode(
-                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
-                    compliant_axes=[0, 0, 1, 0, 0, 0],
-                    distance=0.05,
-                    time_out=10.0)
-                time.sleep(1.0)
+#             with pilot.force_control():
+#                 pair_succeed = pilot.pair_to_socket(enh_T_Base2Socket)
+#                 if pair_succeed:
+#                     plug_in_succeed = pilot.plug_in_with_target(100.0, enh_T_Base2Socket)
+#                     if plug_in_succeed:
+#                         LOGGER.info("Plugging successful!")
+#                 pilot.relax(1.0)
+#                 time.sleep(3.0)
+#                 # Try to plug out
+#                 success = pilot.plug_out_force_mode(
+#                     wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
+#                     compliant_axes=[0, 0, 1, 0, 0, 0],
+#                     distance=0.05,
+#                     time_out=10.0)
+#                 time.sleep(1.0)
 
-            if success:
-                # Move back to home
-                with pilot.position_control():
-                    pilot.move_home()
-            else:
-                LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
-                             f"Robot will stop moving and shut down...")
+#             if success:
+#                 # Move back to home
+#                 with pilot.position_control():
+#                     pilot.move_home()
+#             else:
+#                 LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
+#                              f"Robot will stop moving and shut down...")
 
-    # Clean up
-    pose_detector.destroy(with_cam=False)
-    realsense.destroy()
+#     # Clean up
+#     pose_detector.destroy(with_cam=False)
+#     realsense.destroy()
 
 
 def main() -> None:
     """ Main function to start process. """
     # Input parsing
     parser = argparse.ArgumentParser(description='Script to connect the plug with the socket.')
-    parser.add_argument('--debug', action='store_true', help='Debug flag')
+    parser.add_argument('marker_config_file', type=str, 
+                        help='Description and configuration of the used marker as .yaml file')
     parser.add_argument('--with_sensing', action='store_true', 
                         help='Option to use active end-effector sensing for better depth estimation')
+    parser.add_argument('--debug', action='store_true', help='Debug flag')
     args = parser.parse_args()
+    ur_pilot.utils.check_file_extension(Path(args.marker_config_file), '.yaml')
     if args.debug:
-        ur_pilot.logger.set_logging_level(logging.DEBUG)
+        args.logging_level = logging.DEBUG
     else:
-        ur_pilot.logger.set_logging_level(logging.INFO)
+        args.logging_level = logging.INFO
     # Connect to socket
     if args.with_sensing:
-        connect_to_socket_with_sensing()
+        pass
+        # connect_to_socket_with_sensing()
     else:
-        connect_to_socket()
+        connect_to_socket(args)
 
 
 if __name__ == '__main__':
