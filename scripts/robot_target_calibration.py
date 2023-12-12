@@ -57,7 +57,7 @@ def run(opt: Namespace) -> None:
 
         with pilot.force_control():
             # Try to plug out
-            success = pilot.plug_out_force_mode(
+            success = pilot.tcp_force_mode(
                 wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
                 compliant_axes=[0, 0, 1, 0, 0, 0],
                 distance=0.05,

@@ -41,6 +41,7 @@ def connect_to_socket(opt: Namespace) -> None:
     cam.load_coefficients()
     cam.render()
     dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.marker_config_file))
+    dtt.register_camera(cam)
 
     # Connect to pilot
     with ur_pilot.connect() as pilot:
@@ -48,7 +49,7 @@ def connect_to_socket(opt: Namespace) -> None:
         pilot.robot.register_ee_cam(cam)
         with pilot.position_control():
             # Start at home position
-            pilot.move_home()
+            # pilot.move_home()
             # Move to camera estimation pose to have all marker in camera field of view
             pilot.move_to_joint_pos(SOCKET_POSE_ESTIMATION_CFG_J)
             # pilot.move_to_tcp_pose(SOCKET_POSE_ESTIMATION_CFG_X)
@@ -70,36 +71,42 @@ def connect_to_socket(opt: Namespace) -> None:
 
                 # Get searched transformations
                 T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                print(T_cam2socket.pose.xyz, T_cam2socket.pose.to_euler_angle(degrees=True))
+                pose = T_base2socket.pose 
+                print(pose.xyz, pose.axis_angle)
                 T_base2socket_pre = T_base2socket @ T_socket2socket_pre
                 found_socket = True
     
-        if not found_socket:
-            # Move back to home
-            with pilot.position_control():
-                pilot.move_home()
-        else:
-            with pilot.position_control():    
-                # Move to socket with some safety distance
-                pilot.move_to_tcp_pose(T_base2socket_pre.pose)
-            time.sleep(1.0)
-            with pilot.force_control():
-                pilot.plug_in_force_mode(axis='z', force=20.0, time_out=4.0)
-                pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)
-                pilot.relax(3.0)
-                # Try to plug out
-                success = pilot.plug_out_force_mode(
-                    wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
-                    compliant_axes=[0, 0, 1, 0, 0, 0],
-                    distance=0.05,
-                    time_out=10.0)
-                time.sleep(1.0)
-            if success:
-                # Move back to home
-                with pilot.position_control():
-                    pilot.move_home()
-            else:
-                LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
-                             f"Robot will stop moving and shut down...")
+        # if not found_socket:
+        #     # Move back to home
+        #     with pilot.position_control():
+        #         pilot.move_home()
+        # else:
+        #     with pilot.position_control():    
+        #         # Move to socket with some safety distance
+        #         pilot.move_to_tcp_pose(T_base2socket_pre.pose)
+            time.sleep(10.0)
+            # with pilot.force_control():
+            #     pilot.one_axis_tcp_force_mode(axis='z', force=20.0, time_out=4.0)
+            #     pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)
+            #     pilot.relax(3.0)
+            #     # Check if robot is in target area
+            #     pose_base2plug = pilot.robot.get_pose('plug_tip')
+
+            #     # Try to plug out
+            #     success = pilot.tcp_force_mode(
+            #         wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
+            #         compliant_axes=[0, 0, 1, 0, 0, 0],
+            #         distance=0.05,
+            #         time_out=10.0)
+            #     time.sleep(1.0)
+            # if success:
+            #     # Move back to home
+            #     with pilot.position_control():
+            #         pilot.move_home()
+            # else:
+            #     LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
+            #                  f"Robot will stop moving and shut down...")
     # Stop camera stream
     cam.end()
 

@@ -246,7 +246,7 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return dist
 
-    def plug_in_force_mode(self, axis: str, force: float, time_out: float) -> bool:
+    def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
@@ -440,11 +440,11 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
         return fin
 
-    def plug_out_force_mode(self,
-                            wrench: Vector6d, 
-                            compliant_axes: list[int], 
-                            distance: float, 
-                            time_out: float) -> bool:
+    def tcp_force_mode(self,
+                       wrench: Vector6d,
+                       compliant_axes: list[int],
+                       distance: float,
+                       time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()

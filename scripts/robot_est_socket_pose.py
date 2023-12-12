@@ -3,8 +3,10 @@ import logging
 import argparse
 import ur_pilot
 import cvpd as pd
+import numpy as np
 import camera_kit as ck
 from pathlib import Path
+from rigmopy import Pose
 
 
 # typing
@@ -33,7 +35,17 @@ def run(opt: Namespace) -> None:
         pilot.robot.register_ee_cam(cam)
         with pilot.teach_in_control():
             while not ck.user.stop():
-                found, pose = dtt.find_pose(render=True)
+                found, pose_cam2socket = dtt.find_pose(render=True)
+                if found:
+                    # Get transformation matrices
+                    T_plug2cam = pilot.robot.cam_mdl.T_flange2camera  # Correct
+                    T_base2plug = pilot.robot.get_tcp_pose().transformation
+                    T_cam2socket = Pose().from_xyz_wxyz(*pose_cam2socket).transformation
+
+                    # Get searched transformations
+                    T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                    # print(T_cam2socket.pose.xyz, T_cam2socket.pose.to_euler_angle(degrees=True))
+                    print(T_base2socket.pose.xyz, T_base2socket.pose.to_euler_angle(degrees=True))
 
 
 if __name__ == '__main__':

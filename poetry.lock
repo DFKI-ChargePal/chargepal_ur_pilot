@@ -34,7 +34,7 @@ tqdm = "^4.66.1"
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_camera_kit.git"
 reference = "HEAD"
-resolved_reference = "ee4e7b0a7e971e15b0447ea8aa2869f3726e5db7"
+resolved_reference = "36909eda4f4df90f51b570565c0e2198dfc5115b"
 
 [[package]]
 name = "chargepal-cvpd"
@@ -60,7 +60,7 @@ tqdm = "^4.66.1"
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git"
 reference = "HEAD"
-resolved_reference = "38b4db7fbcadaddaaff59aea0c9aaaee4ab35c49"
+resolved_reference = "d5d0325b2dda88274ae65d1de75e472567752d22"
 
 [[package]]
 name = "charset-normalizer"

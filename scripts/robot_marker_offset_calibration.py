@@ -71,6 +71,7 @@ def calibration_procedure(opt: Namespace) -> None:
         T_base2target = pose_base2target.transformation
         T_target2base = T_base2target.inverse()
         T_tcp2cam = pilot.robot.cam_mdl.T_flange2camera
+        
         T_tcp2marker = T_tcp2cam @ T_cam2marker
         T_base2marker = T_base2tcp @ T_tcp2marker
         T_target2marker = T_target2base @ T_base2marker
@@ -82,7 +83,7 @@ def calibration_procedure(opt: Namespace) -> None:
         LOGGER.debug(f"Base - Marker: {T_base2marker}")
         LOGGER.debug(f"Target - Marker: {T_target2marker}")
         # Convert to pose
-        pose_target2marker = Pose().from_transformation(T_target2marker).inverse()
+        pose_target2marker = Pose().from_transformation(T_target2marker)
         xyz = [float(v) for v in pose_target2marker.xyz]
         xyzw = [float(v) for v in pose_target2marker.xyzw]
         # Save new offset position
