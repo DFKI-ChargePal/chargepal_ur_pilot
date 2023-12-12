@@ -44,6 +44,7 @@ def calibration_procedure(opt: Namespace) -> None:
                     cam.render()
                 LOGGER.info('Stop teach in mode\n')
         # Measure target pose
+        time.sleep(0.5)
         pose_base2target = pilot.robot.get_tcp_pose()
         if opt.observation is not None:
             with pilot.position_control():
@@ -56,6 +57,8 @@ def calibration_procedure(opt: Namespace) -> None:
                 while not ck.user.resume():
                     cam.render()
                 LOGGER.info('Stop teach in mode\n')
+        # Measure observation pose
+        time.sleep(0.5)
         pose_base2tcp = pilot.robot.get_tcp_pose()
         found, pose_marker = dtt.find_pose(render=True)
         pose_cam2marker = Pose().from_xyz_wxyz(*pose_marker)
@@ -71,17 +74,19 @@ def calibration_procedure(opt: Namespace) -> None:
         T_tcp2marker = T_tcp2cam @ T_cam2marker
         T_base2marker = T_base2tcp @ T_tcp2marker
         T_target2marker = T_target2base @ T_base2marker
-        # print(f"TCP - Cam: {T_tcp2cam}")
-        # print(f"Base - TCP: {T_base2tcp}")
-        # print(f"Base - Target: {T_base2target}")
-        # print(f"Cam - Marker: {T_cam2marker}")
-        # print(f"TCP - Marker: {T_tcp2marker}")
-        # print(f"Base - Marker: {T_base2marker}")
-        # print(f"Target - Marker: {T_target2marker}")
+        LOGGER.debug(f"TCP - Cam: {T_tcp2cam}")
+        LOGGER.debug(f"Base - TCP: {T_base2tcp}")
+        LOGGER.debug(f"Base - Target: {T_base2target}")
+        LOGGER.debug(f"Cam - Marker: {T_cam2marker}")
+        LOGGER.debug(f"TCP - Marker: {T_tcp2marker}")
+        LOGGER.debug(f"Base - Marker: {T_base2marker}")
+        LOGGER.debug(f"Target - Marker: {T_target2marker}")
         # Convert to pose
-        pose_target2marker = Pose().from_transformation(T_target2marker)
+        pose_target2marker = Pose().from_transformation(T_target2marker).inverse()
+        xyz = [float(v) for v in pose_target2marker.xyz]
+        xyzw = [float(v) for v in pose_target2marker.xyzw]
         # Save new offset position
-        dtt.marker.adjust_configuration(pose_target2marker.xyz, pose_target2marker.xyzw)
+        dtt.marker.adjust_configuration(xyz, xyzw)
         LOGGER.info(f"  Calculated transformation from target to marker:")
         LOGGER.info(f"  {pose_target2marker}\n")
     else:
