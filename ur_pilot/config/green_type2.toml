@@ -38,8 +38,8 @@ damping = 0.075
 tcp_speed_limits = [0.025, 0.025, 0.025, 0.025, 0.025, 0.025]
 
 [robot.motion_mode]
-error_scale = 5000.0
-Kp = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+error_scale = 10000.0
+Kp = [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
 Kd = [0.01, 0.01, 0.01, 1e-5, 1e-5, 1e-5]
 
 [robot.hybrid_mode]

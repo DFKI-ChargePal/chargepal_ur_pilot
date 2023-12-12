@@ -26,22 +26,22 @@ def move_to_square(ctrl_type: str, length: float) -> None:
             ref_p, ref_q = ref_pose.p, ref_pose.q
             # Move 10 cm in y direction
             new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, -length, 0.0)), ref_q.wxyz)
-            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=5.0)
+            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=15.0)
             if not success:
                 LOGGER.warning(f"Target was not reached")
             # Move 10cm in z direction
             new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, -length, length)), ref_q.wxyz)
-            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=5.0)
+            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=15.0)
             if not success:
                 LOGGER.warning(f"Warning: Target was not reached")
             # Move 10cm back in y direction
             new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, 0.0, length)), ref_q.wxyz)
-            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=5.0)
+            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=15.0)
             if not success:
                 LOGGER.warning(f"Warning: Target was not reached")
             # Move 10cm back in z direction
             new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, 0.0, 0.0)), ref_q.wxyz)
-            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=5.0)
+            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=15.0)
             if not success:
                 LOGGER.warning(f"Warning: Target was not reached")
             LOGGER.info(f"Final error wrt. start position: {ref_p - pilot.robot.get_tcp_pose().p}")

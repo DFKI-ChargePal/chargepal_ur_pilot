@@ -3,10 +3,10 @@ import logging
 import argparse
 import ur_pilot
 import cvpd as pd
-import numpy as np
 import camera_kit as ck
 from pathlib import Path
 from rigmopy import Pose
+from time import perf_counter
 
 
 # typing
@@ -30,22 +30,25 @@ def run(opt: Namespace) -> None:
     dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.marker_config_file))
     dtt.register_camera(cam)
 
+    log_interval = 2.0
     # Connect to arm
     with ur_pilot.connect() as pilot:
         pilot.robot.register_ee_cam(cam)
         with pilot.teach_in_control():
+            _t_start = perf_counter()
             while not ck.user.stop():
                 found, pose_cam2socket = dtt.find_pose(render=True)
                 if found:
                     # Get transformation matrices
-                    T_plug2cam = pilot.robot.cam_mdl.T_flange2camera  # Correct
+                    T_plug2cam = pilot.robot.cam_mdl.T_flange2camera
                     T_base2plug = pilot.robot.get_tcp_pose().transformation
-                    T_cam2socket = Pose().from_xyz_wxyz(*pose_cam2socket).transformation
-
+                    T_cam2socket = Pose().from_xyz_xyzw(*pose_cam2socket).transformation
                     # Get searched transformations
                     T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
-                    # print(T_cam2socket.pose.xyz, T_cam2socket.pose.to_euler_angle(degrees=True))
-                    print(T_base2socket.pose.xyz, T_base2socket.pose.to_euler_angle(degrees=True))
+                    # Print only every two seconds
+                    if perf_counter() - _t_start > log_interval:    
+                        LOGGER.info(f"Transformation Base - Socket: {T_base2socket.pose.xyz} {T_base2socket.pose.axis_angle}")
+                        _t_start = perf_counter()
 
 
 if __name__ == '__main__':

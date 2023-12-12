@@ -61,8 +61,7 @@ def calibration_procedure(opt: Namespace) -> None:
         time.sleep(0.5)
         pose_base2tcp = pilot.robot.get_tcp_pose()
         found, pose_marker = dtt.find_pose(render=True)
-        pose_cam2marker = Pose().from_xyz_wxyz(*pose_marker)
-
+        pose_cam2marker = Pose().from_xyz_xyzw(*pose_marker)
     if found:
         LOGGER.info('Found marker')
         # Get pose from target to marker
@@ -83,13 +82,13 @@ def calibration_procedure(opt: Namespace) -> None:
         LOGGER.debug(f"Base - Marker: {T_base2marker}")
         LOGGER.debug(f"Target - Marker: {T_target2marker}")
         # Convert to pose
-        pose_target2marker = Pose().from_transformation(T_target2marker)
-        xyz = [float(v) for v in pose_target2marker.xyz]
-        xyzw = [float(v) for v in pose_target2marker.xyzw]
+        pose_marker2target = Pose().from_transformation(T_target2marker).inverse()
+        xyz = [float(v) for v in pose_marker2target.xyz]
+        xyzw = [float(v) for v in pose_marker2target.xyzw]
         # Save new offset position
         dtt.marker.adjust_configuration(xyz, xyzw)
-        LOGGER.info(f"  Calculated transformation from target to marker:")
-        LOGGER.info(f"  {pose_target2marker}\n")
+        LOGGER.info(f"  Calculated transformation from marker to target:")
+        LOGGER.info(f"  {pose_marker2target.xyz, pose_marker2target.to_euler_angle(degrees=True)}\n")
     else:
         LOGGER.info(f"Marker not found. Please check configuration and make sure marker is in camera fov")
     time.sleep(2.0)

@@ -23,11 +23,9 @@ _dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 # Fixed configurations
 # SOCKET_POSE_ESTIMATION_CFG_J = [3.148, -1.824, 2.096, -0.028, 1.590, -1.565]
 SOCKET_POSE_ESTIMATION_CFG_J = [3.409, -1.578, 2.062, -0.464, 1.809, -1.565]
-c_pi_4 = np.cos(np.pi/4)  # cos of 45 deg
-board_2 = 0.075 / 2  # half board size 
-X_SOCKET_2_PATTERN = Pose().from_xyz_xyzw(xyz=[0.0, 0.0, 0.0], xyzw=[0.0, 0.0, -c_pi_4, c_pi_4])
 X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, 0.0 - 0.02])  # Retreat pose with respect to the socket
 # X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[0.0, 0.0, 0.05])
+X_SOCKET_2_FPI = Pose().from_xyz(xyz=[0.0, 0.0, 0.034])
 
 
 def connect_to_socket(opt: Namespace) -> None:
@@ -49,7 +47,7 @@ def connect_to_socket(opt: Namespace) -> None:
         pilot.robot.register_ee_cam(cam)
         with pilot.position_control():
             # Start at home position
-            # pilot.move_home()
+            pilot.move_home()
             # Move to camera estimation pose to have all marker in camera field of view
             pilot.move_to_joint_pos(SOCKET_POSE_ESTIMATION_CFG_J)
             # pilot.move_to_tcp_pose(SOCKET_POSE_ESTIMATION_CFG_X)
@@ -67,46 +65,62 @@ def connect_to_socket(opt: Namespace) -> None:
                 T_plug2cam = pilot.robot.cam_mdl.T_flange2camera
                 T_base2plug = pilot.robot.get_tcp_pose().transformation
                 T_socket2socket_pre = X_SOCKET_2_SOCKET_PRE.transformation
-                T_cam2socket = Pose().from_xyz_wxyz(*pose_cam2socket).transformation
+                T_cam2socket = Pose().from_xyz_xyzw(*pose_cam2socket).transformation
 
                 # Get searched transformations
-                T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
-                print(T_cam2socket.pose.xyz, T_cam2socket.pose.to_euler_angle(degrees=True))
-                pose = T_base2socket.pose 
-                print(pose.xyz, pose.axis_angle)
+                # T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                T_base2socket = Pose().from_xyz((0.908, 0.294, 0.477)).from_axis_angle((-0.006, 1.568, 0.001)).transformation
                 T_base2socket_pre = T_base2socket @ T_socket2socket_pre
                 found_socket = True
     
-        # if not found_socket:
-        #     # Move back to home
-        #     with pilot.position_control():
-        #         pilot.move_home()
-        # else:
-        #     with pilot.position_control():    
-        #         # Move to socket with some safety distance
-        #         pilot.move_to_tcp_pose(T_base2socket_pre.pose)
-            time.sleep(10.0)
-            # with pilot.force_control():
-            #     pilot.one_axis_tcp_force_mode(axis='z', force=20.0, time_out=4.0)
-            #     pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)
-            #     pilot.relax(3.0)
-            #     # Check if robot is in target area
-            #     pose_base2plug = pilot.robot.get_pose('plug_tip')
-
-            #     # Try to plug out
-            #     success = pilot.tcp_force_mode(
-            #         wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
-            #         compliant_axes=[0, 0, 1, 0, 0, 0],
-            #         distance=0.05,
-            #         time_out=10.0)
-            #     time.sleep(1.0)
-            # if success:
-            #     # Move back to home
-            #     with pilot.position_control():
-            #         pilot.move_home()
-            # else:
-            #     LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
-            #                  f"Robot will stop moving and shut down...")
+        if not found_socket:
+            # Move back to home
+            with pilot.position_control():
+                pilot.move_home()
+        else:
+            with pilot.position_control():    
+                # Move to socket with some safety distance
+                pilot.move_to_tcp_pose(T_base2socket_pre.pose)
+            time.sleep(1.0)
+            with pilot.force_control():
+                pilot.one_axis_tcp_force_mode(axis='z', force=20.0, time_out=4.0)
+                pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)
+                pilot.relax(2.0)
+                # Check if robot is in target area
+                T_socket2fpi = X_SOCKET_2_FPI.transformation
+                T_base2fpi = T_base2socket @ T_socket2fpi
+                xyz_base2fpi_base_est = np.reshape(T_base2fpi.tau, 3)
+                xyz_base2fpi_base_meas = np.reshape(pilot.robot.get_tcp_pose().xyz, 3)
+                error = np.sqrt(np.sum(np.square(xyz_base2fpi_base_est - xyz_base2fpi_base_meas)))
+                if error > 0.01:
+                    # Plug-in process not successful
+                    # Try to plug out again
+                    success = pilot.tcp_force_mode(
+                        wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
+                        compliant_axes=[0, 0, 1, 0, 0, 0],
+                        distance=0.05,
+                        time_out=10.0)
+                    time.sleep(1.0)
+                else:
+                    with pilot.motion_control():
+                        # Move 30 mm in tcp x direction to open the plug lock
+                        pose_tcp2target = Pose().from_xyz([0.030, 0.0, 0.0]) 
+                        pose_base2tcp = pilot.robot.get_tcp_pose()
+                        pose_base2target = pose_base2tcp * pose_tcp2target
+                        pilot.move_to_tcp_pose(pose_base2target, time_out=5.0)
+                        # Move -20 mm in tcp z direction to disconnect from plug
+                        pose_tcp2target = Pose().from_xyz([0.0, 0.0, -0.020])
+                        pose_base2tcp = pilot.robot.get_tcp_pose()
+                        pose_base2target = pose_base2tcp * pose_tcp2target
+                        pilot.move_to_tcp_pose(pose_base2target)
+                    success = True
+                if success:
+                    # Move back to home
+                    with pilot.position_control():
+                        pilot.move_home()
+                else:
+                    LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"
+                                f"Robot will stop moving and shut down...")
     # Stop camera stream
     cam.end()
 
