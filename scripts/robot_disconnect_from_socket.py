@@ -18,15 +18,18 @@ LOGGER = logging.getLogger(__name__)
 
 _dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 
-_marker_pose_estimation_cfg_joints = [3.409, -1.578, 2.062, -0.464, 1.809, -1.565]
+_marker_pose_estimation_cfg_joints = [3.445, -1.558, 1.940, -0.243, 1.854, -1.573]
 
 _pose_socket2hook = Pose().from_xyz([0.0, 0.0, -0.097])
+_pose_socket2hook = Pose().from_xyz([0.0-0.01, 0.0, 0.034])
 
 # 2 cm safety distance in Z-direction + shifted in x-direction
-_pose_socket2hook_pre = Pose().from_xyz([0.03, 0.0, -(0.097 + 0.02)])  
+# _pose_socket2hook_pre = Pose().from_xyz([0.03, 0.0, -(0.097 + 0.02)])
+_pose_socket2hook_pre = Pose().from_xyz([0.03, 0.0, 0.034 - 0.02])
 
 # Intermediate step to hook up plug
-_pose_socket2hook_itm = Pose().from_xyz([0.03, 0.0, -0.097])
+# _pose_socket2hook_itm = Pose().from_xyz([0.03, 0.0, -0.097])
+_pose_socket2hook_itm = Pose().from_xyz([0.03, 0.0, 0.034])
 
 
 def disconnect_from_socket(opt: Namespace) -> None:
@@ -71,7 +74,8 @@ def disconnect_from_socket(opt: Namespace) -> None:
                 T_socket2hook_itm = _pose_socket2hook_itm.transformation
                 T_cam2socket = Pose().from_xyz_xyzw(*pose_cam2socket).transformation
                 # Apply transformation chain
-                T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                # T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                T_base2socket = Pose().from_xyz((0.908, 0.294, 0.477)).from_axis_angle((-0.006, 1.568, 0.001)).transformation
                 T_base2hook = T_base2socket @ T_socket2hook
                 T_base2hook_pre = T_base2socket @ T_socket2hook_pre
                 T_base2hook_itm = T_base2socket @ T_socket2hook_itm
@@ -84,11 +88,8 @@ def disconnect_from_socket(opt: Namespace) -> None:
             with pilot.position_control():
                 # Move to pre-pose to hook up to plug
                 pilot.move_to_tcp_pose(T_base2hook_pre.pose)
-            time.sleep(1.0)
             with pilot.motion_control():
                 pilot.move_to_tcp_pose(T_base2hook_itm.pose, time_out=5.0)
-                LOGGER.info(f"Push any key to continue.")
-                ck.user.wait_for_command()
                 pilot.move_to_tcp_pose(T_base2hook.pose, time_out=5.0)
             LOGGER.info(f"Push any key to continue.")
             ck.user.wait_for_command()
