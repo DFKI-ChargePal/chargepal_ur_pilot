@@ -26,7 +26,11 @@ def calibration_procedure(opt: Namespace) -> None:
     cam = ck.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
-    dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.marker_config_file))
+    dtt: pd.Detector
+    if opt.detector_config_file.startswith("aruco_marker"):
+        dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
+    elif opt.detector_config_file.startswith("charuco"):
+        dtt = pd.CharucoDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
 
     # Connect to arm
@@ -83,10 +87,10 @@ def calibration_procedure(opt: Namespace) -> None:
         LOGGER.debug(f"Target - Marker: {T_target2marker}")
         # Convert to pose
         pose_marker2target = Pose().from_transformation(T_target2marker).inverse()
-        xyz = [float(v) for v in pose_marker2target.xyz]
-        xyzw = [float(v) for v in pose_marker2target.xyzw]
+        # xyz = [float(v) for v in pose_marker2target.xyz]
+        # xyzw = [float(v) for v in pose_marker2target.xyzw]
         # Save new offset position
-        dtt.marker.adjust_configuration(xyz, xyzw)
+        dtt.adjust_offset(*pose_marker2target.xyz_xyzw)
         LOGGER.info(f"  Calculated transformation from marker to target:")
         LOGGER.info(f"  {pose_marker2target.xyz, pose_marker2target.to_euler_angle(degrees=True)}\n")
     else:
@@ -98,7 +102,7 @@ def calibration_procedure(opt: Namespace) -> None:
 if __name__ == '__main__':
     des = """ Marker offset calibration script """
     parser = argparse.ArgumentParser(description=des)
-    parser.add_argument('marker_config_file', type=str, 
+    parser.add_argument('detector_config_file', type=str, 
                         help='Description and configuration of the used marker as .yaml file')
     parser.add_argument('--target', nargs='+', type=float, 
                         help="Target pose in format position [x y z] and axis-angle representation [Rx Ry Rz]")
@@ -118,5 +122,5 @@ if __name__ == '__main__':
     if args.observation:
         if len(args.observation) != 6:
             raise ValueError(f"Not a valid observation pose {args.observation}. Need exact 6 float values")
-    ur_pilot.utils.check_file_extension(Path(args.marker_config_file), '.yaml')
+    ur_pilot.utils.check_file_extension(Path(args.detector_config_file), '.yaml')
     calibration_procedure(args)

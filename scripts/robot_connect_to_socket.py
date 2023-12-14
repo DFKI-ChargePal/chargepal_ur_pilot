@@ -38,7 +38,11 @@ def connect_to_socket(opt: Namespace) -> None:
     cam = ck.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
-    dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.marker_config_file))
+    dtt: pd.Detector
+    if opt.detector_config_file.startswith("aruco_marker"):
+        dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
+    elif opt.detector_config_file.startswith("charuco"):
+        dtt = pd.CharucoDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
 
     # Connect to pilot
@@ -68,8 +72,9 @@ def connect_to_socket(opt: Namespace) -> None:
                 T_cam2socket = Pose().from_xyz_xyzw(*pose_cam2socket).transformation
 
                 # Get searched transformations
-                # T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
-                T_base2socket = Pose().from_xyz((0.908, 0.294, 0.477)).from_axis_angle((-0.006, 1.568, 0.001)).transformation
+                T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                print(T_base2socket.pose.xyz, T_base2socket.pose.axis_angle)
+                # T_base2socket = Pose().from_xyz((0.908, 0.294, 0.477)).from_axis_angle((-0.006, 1.568, 0.001)).transformation
                 T_base2socket_pre = T_base2socket @ T_socket2socket_pre
                 found_socket = True
     
@@ -246,13 +251,13 @@ def main() -> None:
     """ Main function to start process. """
     # Input parsing
     parser = argparse.ArgumentParser(description='Script to connect the plug with the socket.')
-    parser.add_argument('marker_config_file', type=str, 
+    parser.add_argument('detector_config_file', type=str, 
                         help='Description and configuration of the used marker as .yaml file')
     parser.add_argument('--with_sensing', action='store_true', 
                         help='Option to use active end-effector sensing for better depth estimation')
     parser.add_argument('--debug', action='store_true', help='Debug flag')
     args = parser.parse_args()
-    ur_pilot.utils.check_file_extension(Path(args.marker_config_file), '.yaml')
+    ur_pilot.utils.check_file_extension(Path(args.detector_config_file), '.yaml')
     if args.debug:
         args.logging_level = logging.DEBUG
     else:
