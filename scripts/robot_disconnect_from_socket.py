@@ -81,6 +81,7 @@ def disconnect_from_socket(opt: Namespace) -> None:
                 T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
                 print(T_base2socket.pose.xyz, T_base2socket.pose.axis_angle)
                 T_base2socket = Pose().from_xyz((0.908, 0.294, 0.477)).from_axis_angle((-0.006, 1.568, 0.001)).transformation
+                LOGGER.warn(f"Use fix pose for target")
                 T_base2hook = T_base2socket @ T_socket2hook
                 T_base2hook_pre = T_base2socket @ T_socket2hook_pre
                 T_base2hook_itm = T_base2socket @ T_socket2hook_itm

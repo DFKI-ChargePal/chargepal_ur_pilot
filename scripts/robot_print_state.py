@@ -3,7 +3,6 @@ Script to print the current robot state.
 Contains: Joint positions
           TCP pose
 """
-# local
 import logging
 import ur_pilot
 
