@@ -52,7 +52,7 @@ def run(opt: Namespace) -> None:
         LOGGER.info(f"New measured pose:")
         LOGGER.info(f"  Base - Socket: {pose_base2socket}")
         _tgt_cfg_dir.mkdir(parents=True, exist_ok=True)
-        dump_fp = _tgt_cfg_dir.joinpath('pose_base2socket.yaml')
+        dump_fp = _tgt_cfg_dir.joinpath(f"pose_base2{opt.target_frame}.yaml")
         ur_pilot.yaml_helpers.dump_yaml(pose_base2socket_dict, dump_fp)
 
         with pilot.force_control():
@@ -76,6 +76,7 @@ def run(opt: Namespace) -> None:
 if __name__ == '__main__':
     des = """ Script to calibrate the ground truth socket pose """
     parser = argparse.ArgumentParser(description=des)
+    parser.add_argument('target_frame', type=str, help='Name of the target frame')
     parser.add_argument('--debug', action='store_true', help='Option to set global logger level')
     # Parse input arguments
     args = parser.parse_args()

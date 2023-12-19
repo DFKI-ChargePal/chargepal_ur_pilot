@@ -29,6 +29,8 @@ def calibration_procedure(opt: Namespace) -> None:
     dtt: pd.Detector
     if opt.detector_config_file.startswith("aruco_marker"):
         dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
+    elif opt.detector_config_file.startswith("aruco_pattern"):
+        dtt = pd.ArucoPatternDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     elif opt.detector_config_file.startswith("charuco"):
         dtt = pd.CharucoDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
