@@ -140,11 +140,11 @@ class Robot:
             self._ft_sensor.stop()
         self.rtde.exit()
 
-    def register_ee_cam(self, cam: CameraBase) -> None:
+    def register_ee_cam(self, cam: CameraBase, tf_dir: str = "") -> None:
         self.cam = cam
         if not self.cam.is_calibrated:
             self.cam.load_coefficients()
-        T_tcp2cam = HandEyeCalibration.load_transformation(self.cam)
+        T_tcp2cam = HandEyeCalibration.load_transformation(self.cam, tf_dir)
         self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_tcp2cam)
 
     ####################################
