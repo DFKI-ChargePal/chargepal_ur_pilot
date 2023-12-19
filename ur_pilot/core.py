@@ -556,8 +556,7 @@ class Pilot:
         return fin, self.robot.get_tcp_pose()
 
     def relax(self, time_duration: float) -> Pose:
-        self._check_control_context(expected=ControlContext.FORCE)
-
+        self._check_control_context(expected=[ControlContext.FORCE, ControlContext.MOTION, ControlContext.HYBRID])
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         t_start = perf_counter()

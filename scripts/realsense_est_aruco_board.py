@@ -11,6 +11,7 @@ from pathlib import Path
 LOGGER = logging.getLogger(__name__)
 
 _cfg_fp = Path(__file__).absolute().parent.parent.joinpath('detector/aruco_pattern_bat_socket_ccs_adj.yaml')
+# _cfg_fp = Path(__file__).absolute().parent.parent.joinpath('detector/charuco_ads_socket_ty2.yaml')
 
 
 def estimate_board_pose() -> None:
@@ -18,6 +19,7 @@ def estimate_board_pose() -> None:
     with ck.camera_manager('realsense_tcp_cam', logger_level=logging.INFO) as cam:
         cam.load_coefficients()
         pose_detector = pd.ArucoPatternDetector(_cfg_fp)
+        # pose_detector = pd.CharucoDetector(_cfg_fp)
         pose_detector.register_camera(cam)
         found, pose = False, None
         while not ck.user.stop():

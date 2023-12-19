@@ -22,7 +22,8 @@ _dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 
 # Fixed configurations
 # SOCKET_POSE_ESTIMATION_CFG_J = [3.148, -1.824, 2.096, -0.028, 1.590, -1.565]
-SOCKET_POSE_ESTIMATION_CFG_J = [3.409, -1.578, 2.062, -0.464, 1.809, -1.565]
+# SOCKET_POSE_ESTIMATION_CFG_J = [3.409, -1.578, 2.062, -0.464, 1.809, -1.565]
+_socket_obs_j_pos = (3.387, -1.469, 1.747, -0.016, 1.789, -1.565)
 X_SOCKET_2_SOCKET_PRE = Pose().from_xyz(xyz=[0.0, 0.0, 0.0 - 0.02])  # Retreat pose with respect to the socket
 # X_SOCKET_2_SOCKET_IN = Pose().from_xyz(xyz=[0.0, 0.0, 0.05])
 X_SOCKET_2_FPI = Pose().from_xyz(xyz=[0.0, 0.0, 0.034])
@@ -43,6 +44,8 @@ def connect_to_socket(opt: Namespace) -> None:
         dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     elif opt.detector_config_file.startswith("charuco"):
         dtt = pd.CharucoDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
+    else:
+        raise RuntimeError(f"Configuration file can not be addressed to a detector class")
     dtt.register_camera(cam)
 
     # Connect to pilot
@@ -53,7 +56,7 @@ def connect_to_socket(opt: Namespace) -> None:
             # Start at home position
             pilot.move_home()
             # Move to camera estimation pose to have all marker in camera field of view
-            pilot.move_to_joint_pos(SOCKET_POSE_ESTIMATION_CFG_J)
+            pilot.move_to_joint_pos(_socket_obs_j_pos)
             # pilot.move_to_tcp_pose(SOCKET_POSE_ESTIMATION_CFG_X)
 
         # Search for ArUco marker
@@ -87,6 +90,7 @@ def connect_to_socket(opt: Namespace) -> None:
                 # Move to socket with some safety distance
                 pilot.move_to_tcp_pose(T_base2socket_pre.pose)
             time.sleep(1.0)
+            ck.user.wait_for_command()
             with pilot.force_control():
                 pilot.one_axis_tcp_force_mode(axis='z', force=20.0, time_out=4.0)
                 pilot.plug_in_force_ramp(f_axis='z', f_start=75.0, f_end=125, duration=4.0)

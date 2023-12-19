@@ -8,7 +8,7 @@ home_radians = [3.429, -1.371, 2.127, -0.747, 1.867, -1.565]
 ip_address = "192.168.13.42"
 
 [robot.joints]
-vel = 0.1
+vel = 0.35
 max_vel = 0.5
 acc = 0.1
 max_acc = 0.5
