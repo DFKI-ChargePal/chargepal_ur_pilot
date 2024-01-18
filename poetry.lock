@@ -38,7 +38,7 @@ resolved_reference = "00801bac25e11b895faab041a3034003f3e90ff3"
 
 [[package]]
 name = "chargepal-cvpd"
-version = "0.3.2"
+version = "0.3.3"
 description = "Package to detect 3D poses from RGB images using marker and geometric patterns"
 optional = false
 python-versions = "^3.8"
@@ -60,7 +60,7 @@ tqdm = "^4.66.1"
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git"
 reference = "HEAD"
-resolved_reference = "0382b45e916f411a1415c6096dc7f0a70e810777"
+resolved_reference = "ab58ab71566a2735e3f02a8da192b27703731be3"
 
 [[package]]
 name = "charset-normalizer"
