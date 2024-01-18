@@ -26,7 +26,7 @@ def run(opt: Namespace) -> None:
         opt: Script arguments
     """
     # Create camera for user interaction
-    cam = ck.create("realsense_tcp_cam", opt.logging_level)
+    cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
 
     # Connect to arm
     with ur_pilot.connect() as pilot:

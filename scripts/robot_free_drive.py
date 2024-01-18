@@ -9,7 +9,7 @@ LOGGER = logging.getLogger(__name__)
 
 def free_drive() -> None:
     # Use camera for user interaction
-    cam = ck.create("realsense_tcp_cam")
+    cam = ck.camera_factory.create("realsense_tcp_cam")
     # Connect to API
     with ur_pilot.connect() as pilot:
         # Start free drive mode

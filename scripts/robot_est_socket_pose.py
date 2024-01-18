@@ -24,7 +24,7 @@ def run(opt: Namespace) -> None:
         opt: Script arguments
     """
     # Create perception setup
-    cam = ck.create("realsense_tcp_cam", opt.logging_level)
+    cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
     dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.marker_config_file))

@@ -36,7 +36,7 @@ def connect_to_socket(opt: Namespace) -> None:
         opt: Script arguments
     """
     # Perception setup
-    cam = ck.create("realsense_tcp_cam", opt.logging_level)
+    cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
     dtt: pd.Detector

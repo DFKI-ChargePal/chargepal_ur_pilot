@@ -24,7 +24,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
     # Use a display for user interaction
     display = ck.Display('Monitor')
     if not opt.no_camera:
-        cam = ck.create("realsense_tcp_cam")
+        cam = ck.camera_factory.create("realsense_tcp_cam")
         cam.load_coefficients()
     else:
         cam = None

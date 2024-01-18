@@ -42,7 +42,7 @@ def disconnect_from_socket(opt: Namespace) -> None:
         opt: Script arguments
     """
     # Perception setup
-    cam = ck.create('realsense_tcp_cam', logger_level=opt.logger_level)
+    cam = ck.camera_factory.create('realsense_tcp_cam', logger_level=opt.logger_level)
     cam.load_coefficients()
     cam.render()
     dtt: pd.Detector
@@ -50,6 +50,8 @@ def disconnect_from_socket(opt: Namespace) -> None:
         dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     elif opt.detector_config_file.startswith("charuco"):
         dtt = pd.CharucoDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
+    else:
+        raise ValueError(f"Not a valid configuration file name: {opt.detector_config_file}")
     dtt.register_camera(cam)
 
     # Connect to pilot

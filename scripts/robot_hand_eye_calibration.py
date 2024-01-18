@@ -23,7 +23,7 @@ _charuco_cfg = Path(__file__).absolute().parent.parent.joinpath('detector', 'cha
 def record_calibration_imgs(opt: Namespace) -> None:
 
     # Create perception setup
-    cam = ck.create("realsense_tcp_cam", opt.logging_level)
+    cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
     detector = pd.CharucoDetector(_charuco_cfg)
@@ -89,7 +89,7 @@ def record_calibration_imgs(opt: Namespace) -> None:
 
 def run_hand_eye_calibration(opt: Namespace) -> None:
     """ Function to execute the hand eye calibration. Please make sure to run the recording step first. """
-    cam = ck.create("realsense_tcp_cam", opt.logging_level)
+    cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     # Get transformation matrix of camera in the tcp frame
     np_T_tcp2cam = HandEyeCalibration.est_transformation(cam)
