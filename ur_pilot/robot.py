@@ -13,7 +13,7 @@ from ur_pilot.utils import SpatialPDController
 from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
-from ur_pilot.end_effector.hand_eye_calibration import HandEyeCalibration
+from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
 from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 
 # typing
@@ -144,8 +144,8 @@ class Robot:
         self.cam = cam
         if not self.cam.is_calibrated:
             self.cam.load_coefficients()
-        T_tcp2cam = HandEyeCalibration.load_transformation(self.cam, tf_dir)
-        self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_tcp2cam)
+        T_flange2cam = FlangeEyeCalibration.load_transformation(self.cam, tf_dir)
+        self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_flange2cam)
 
     ####################################
     #       CONTROLLER FUNCTIONS       #
