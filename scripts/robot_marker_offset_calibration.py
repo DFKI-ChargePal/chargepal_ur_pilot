@@ -26,7 +26,7 @@ def calibration_procedure(opt: Namespace) -> None:
     cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
-    dtt: pd.Detector
+    dtt: pd.DetectorABC
     if opt.detector_config_file.startswith("aruco_marker"):
         dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     elif opt.detector_config_file.startswith("aruco_pattern"):

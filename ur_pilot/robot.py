@@ -11,13 +11,14 @@ from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 from ur_pilot import config
 from ur_pilot.utils import SpatialPDController
 from ur_pilot.rtde_interface import RTDEInterface
-from ur_pilot.config_mdl import Config, read_toml
+from ur_pilot.config_mdl import Config, read_toml, write_toml
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
 from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 
 # typing
 from typing import Sequence
+from numpy import typing as npt
 from camera_kit import CameraBase
 
 
@@ -35,12 +36,12 @@ class Robot:
     def __init__(self, cfg_path: Path | None = None) -> None:
         
         if cfg_path is None:
-            config_fp = Path(config.__file__).parent.joinpath(config.RUNNING_CONFIG_FILE)
+            self.config_fp = Path(config.__file__).parent.joinpath(config.RUNNING_CONFIG_FILE)
             LOGGER.warning(f"No configuration file given. Using default values.")
         else:
-            config_fp = cfg_path
-        config_dict = read_toml(config_fp)
-        self.cfg = Config(**config_dict)
+            self.config_fp = cfg_path
+        config_raw = read_toml(self.config_fp)
+        self.cfg = Config(**config_raw)
 
         # Constants
         self.error_scale_motion_mode = 1.0
@@ -78,6 +79,12 @@ class Robot:
             return tuple(self.cfg.robot.home_radians)
         else:
             raise ValueError("Home joint configuration was not set.")
+
+    def overwrite_home_joint_config(self, joint_pos: npt.ArrayLike) -> None:
+        jp = np.reshape(joint_pos, 6).tolist()
+        config_raw = read_toml(self.config_fp)
+        config_raw['robot']['home_radians'] = jp
+        write_toml(config_raw, self.config_fp)
 
     @property
     def ft_sensor(self) -> BotaFtSensor:

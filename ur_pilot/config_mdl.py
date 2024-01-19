@@ -4,6 +4,8 @@ from __future__ import annotations
 # global
 import tomli
 from pathlib import Path
+
+import tomli_w
 from pydantic import BaseModel, Field, NoneStr
 
 # typing
@@ -82,6 +84,7 @@ class HybridMode(BaseModel):
     Kp_motion: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     Kd_motion: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
 
+
 class FTSensor(BaseModel):
     """ Force torque sensor configuration
     """
@@ -139,3 +142,15 @@ def read_toml(config_file: Path) -> dict[str, Any]:
             return config_dict
     else:
         raise MissingConfigError(config_file)
+
+
+def write_toml(config: dict[str, Any], file_path: Path) -> None:
+    """ Write robot configuration to TOML file.
+
+    Args:
+        config:    Configuration dictionary
+        file_path: Path to the new TOML configuration file.
+
+    """
+    with file_path.open(mode='wb') as fp:
+        tomli_w.dump(config, fp)
