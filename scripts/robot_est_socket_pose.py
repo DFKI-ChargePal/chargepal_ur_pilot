@@ -27,7 +27,7 @@ def run(opt: Namespace) -> None:
     cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
-    dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.marker_config_file))
+    dtt = pd.factory.create(_dtt_cfg_dir.joinpath(opt.config_file))
     dtt.register_camera(cam)
 
     log_interval = 2.0
@@ -46,7 +46,7 @@ def run(opt: Namespace) -> None:
                     # Get searched transformations
                     T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
                     # Print only every two seconds
-                    if perf_counter() - _t_start > log_interval:    
+                    if perf_counter() - _t_start > log_interval:
                         LOGGER.info(f"Transformation Base - Socket: {T_base2socket.pose.xyz} {T_base2socket.pose.axis_angle}")
                         _t_start = perf_counter()
 
@@ -54,7 +54,7 @@ def run(opt: Namespace) -> None:
 if __name__ == '__main__':
     des = """ Estimate socket pose script """
     parser = argparse.ArgumentParser(description=des)
-    parser.add_argument('marker_config_file', type=str, 
+    parser.add_argument('config_file', type=str, 
                         help='Description and configuration of the used marker as .yaml file')
     parser.add_argument('--debug', action='store_true', help='Option to set global logger level')
     # Parse input arguments
@@ -63,5 +63,5 @@ if __name__ == '__main__':
         args.logging_level = logging.DEBUG
     else:
         args.logging_level = logging.INFO
-    ur_pilot.utils.check_file_extension(Path(args.marker_config_file), '.yaml')
+    ur_pilot.utils.check_file_extension(Path(args.config_file), '.yaml')
     run(args)
