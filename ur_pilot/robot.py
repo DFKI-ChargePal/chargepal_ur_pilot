@@ -175,7 +175,7 @@ class Robot:
                 output_id: Desired output id
         """
         if 0 <= output_id <= 7:
-            success = self.rtde.io.setStandardDigitalOut(output_id, True)
+            success = self.rtde.io.setStandardDigitalOut(output_id, False)
         else:
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
 
@@ -189,6 +189,7 @@ class Robot:
             True if output is HIGH; False if output is LOW
         """
         if 0 <= output_id <= 7:
+            time.sleep(0.1)
             state: bool = self.rtde.r.getDigitalOutState(output_id)
         else:
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
