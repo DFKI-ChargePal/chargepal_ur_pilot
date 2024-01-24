@@ -195,6 +195,8 @@ class Pilot:
         time.sleep(0.5)
         yield
         self.robot.disable_digital_out(0)
+        if self.robot.get_digital_out_state(0):
+            raise ValueError(f"Digital output shout be 'LOW' but is 'HIGH'.")
 
     def move_home(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
