@@ -157,6 +157,43 @@ class Robot:
     ####################################
     #       CONTROLLER FUNCTIONS       #
     ####################################
+    def enable_digital_out(self, output_id: int) -> None:
+        """ Enable a digital UR control box output
+
+        Args:
+            output_id: Desired output id
+        """
+        if 0 <= output_id <= 7:
+            success = self.rtde.io.setStandardDigitalOut(output_id, True)
+        else:
+            raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
+
+    def disable_digital_out(self, output_id: int) -> None:
+        """ Enable a digital UR control box output
+
+            Args:
+                output_id: Desired output id
+        """
+        if 0 <= output_id <= 7:
+            success = self.rtde.io.setStandardDigitalOut(output_id, True)
+        else:
+            raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
+
+    def get_digital_out_state(self, output_id: int) -> bool:
+        """ Get the status of the UR control box digital output
+
+        Args:
+            output_id: Digital output id
+
+        Returns:
+            True if output is HIGH; False if output is LOW
+        """
+        if 0 <= output_id <= 7:
+            state: bool = self.rtde.r.getDigitalOutState(output_id)
+        else:
+            raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
+        return state
+
     def move_home(self) -> None:
         LOGGER.debug("Try to move robot in home configuration")
         success = self.rtde.c.moveJ(self.cfg.robot.home_radians, self.cfg.robot.joints.vel, self.cfg.robot.joints.acc)

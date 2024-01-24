@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # global
 import math
+import time
 import numpy as np
 from pathlib import Path
 from enum import auto, Enum
@@ -187,6 +188,13 @@ class Pilot:
         self.enter_teach_in_control()
         yield
         self.exit_control_context()
+
+    @contextmanager
+    def open_plug_connection(self) -> Iterator[None]:
+        self.robot.enable_digital_out(0)
+        time.sleep(0.5)
+        yield
+        self.robot.disable_digital_out(0)
 
     def move_home(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
