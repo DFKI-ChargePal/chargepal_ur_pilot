@@ -9,7 +9,7 @@ packages = [{include = "ur_pilot"}]
 
 [tool.poetry.dependencies]
 python = "^3.8, <3.12"
-ur-rtde = "^1.5.6"
+# ur-rtde = "^1.5.6"
 pysoem = "^1.0.8"
 pydantic = "^1.10.9"
 pandas = "^2.0.3"
