@@ -24,7 +24,7 @@ def main(opt: Namespace) -> None:
             pilot.move_home()
         
         with pilot.force_control():
-            pilot.twist_tcp_force_mode('Y', 3.0, 6.0)
+            pilot.twist_tcp_force_mode('Y', 3.0, 0.707, 6.0)
             # pilot.twist_tcp_force_mode('Y', 0.0, 20.0)
             
     # Clean up

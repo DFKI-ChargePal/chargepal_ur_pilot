@@ -8,7 +8,8 @@ from pathlib import Path
 from enum import auto, Enum
 from time import perf_counter
 from contextlib import contextmanager
-from rigmopy import Pose, Vector3d, Vector6d, Transformation
+import rigmopy.utils.umath as rp_math
+from rigmopy import Pose, Vector3d, Vector6d, Transformation, Quaternion
 
 # local
 from ur_pilot import utils
@@ -256,11 +257,8 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return dist
 
-    def twist_tcp_force_mode(self, axis: str, torque: float, time_out: float) -> bool:
+    def twist_tcp_force_mode(self, axis: str, torque: float, ang: float, time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
-        # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
         # Check if axis is valid
         if not axis.upper() in ['R', 'P', 'Y']:
             raise ValueError(f"Only linear axes allowed.")
@@ -269,10 +267,28 @@ class Pilot:
         wrench_vec[wrench_idx] = torque
         compliant_axes = [1, 1, 1, 0, 0, 0]
         compliant_axes[wrench_idx] = 1
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        rot_vec = [0.0, 0.0, 0.0]
+        rot_vec[wrench_idx - 3] = ang
+        q_tgt = X_tcp.q * Quaternion().from_axis_angle(rot_vec)
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
         # compliant_axes[wrench_idx - 3] = 1
         # Time observation
         t_start = perf_counter()
         while True:
+            q_now = self.robot.get_tcp_pose().q
+            aa_error = np.array(rp_math.quaternion_difference(q_now, q_tgt).axis_angle)
+
+            # Angles error always within [0,Pi)
+            angle_error = np.max(np.abs(aa_error))
+            if angle_error < 1e7:
+                axis_error = aa_error
+            else:
+                axis_error = aa_error / angle_error
+            angle_error = np.clip(angle_error, 0.0, 1.0)
+            ax_error = angle_error * axis_error
+            wrench_vec[wrench_idx] = float(ax_error[wrench_idx - 3] * torque)
             # Apply wrench
             self.robot.force_mode(
                 task_frame=task_frame,
