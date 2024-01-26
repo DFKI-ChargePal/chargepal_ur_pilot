@@ -256,12 +256,41 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return dist
 
+    def twist_tcp_force_mode(self, axis: str, torque: float, time_out: float) -> bool:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        # Check if axis is valid
+        if not axis.upper() in ['R', 'P', 'Y']:
+            raise ValueError(f"Only linear axes allowed.")
+        wrench_idx = utils.axis2index(axis.upper())
+        wrench_vec = 6 * [0.0]
+        wrench_vec[wrench_idx] = torque
+        compliant_axes = [0, 0, 0, 1, 1, 1]
+        compliant_axes[wrench_idx - 2] = 1
+        # Time observation
+        t_start = perf_counter()
+        while True:
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=compliant_axes,
+                wrench=wrench_vec)
+            t_now = perf_counter()
+            if t_now - t_start > time_out:
+                break
+        return True
+
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        # Check if axis is valid
+        if not axis.lower() in ['x', 'y', 'z']:
+            raise ValueError(f"Only linear axes allowed.")
         wrench_idx = utils.axis2index(axis.lower())
         wrench_vec = 6 * [0.0]
         wrench_vec[wrench_idx] = force
