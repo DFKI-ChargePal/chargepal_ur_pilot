@@ -35,7 +35,7 @@ lkh_time = 0.2
 mode = 2
 gain = 0.99
 damping = 0.075
-tcp_speed_limits = [0.025, 0.025, 0.025, 0.2, 0.2, 0.2]
+tcp_speed_limits = [0.025, 0.025, 0.025, 0.5, 0.5, 0.5]
 
 [robot.motion_mode]
 error_scale = 10000.0

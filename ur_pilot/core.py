@@ -259,6 +259,8 @@ class Pilot:
 
     def twist_tcp_force_mode(self, axis: str, torque: float, ang: float, time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
+        # Limit input
+        torque = np.clip(torque, 0.0, 5.0)
         # Check if axis is valid
         if not axis.upper() in ['R', 'P', 'Y']:
             raise ValueError(f"Only linear axes allowed.")
@@ -276,28 +278,36 @@ class Pilot:
         # compliant_axes[wrench_idx - 3] = 1
         # Time observation
         t_start = perf_counter()
+        prev_error = np.nan
+        int_error = 0.0
+        success = False
         while True:
             q_now = self.robot.get_tcp_pose().q
             aa_error = np.array(rp_math.quaternion_difference(q_now, q_tgt).axis_angle)
 
             # Angles error always within [0,Pi)
             angle_error = np.max(np.abs(aa_error))
-            if angle_error < 1e7:
-                axis_error = aa_error
+            ctrl_error = -1.0 * np.sign(aa_error[wrench_idx-3]) * angle_error
+            p_err = torque * ctrl_error
+            if prev_error is np.NAN:
+                d_err = 0.0
             else:
-                axis_error = aa_error / angle_error
-            angle_error = np.clip(angle_error, 0.0, 1.0)
-            ax_error = angle_error * axis_error
-            wrench_vec[wrench_idx] = float(ax_error[wrench_idx - 3] * torque)
+                d_err = 1.0 * (ctrl_error - prev_error) / self.robot.rtde.dt
+            int_error = int_error + 3.5e-5 * ctrl_error / self.robot.rtde.dt
+            wrench_vec[wrench_idx] = np.clip(p_err + d_err + int_error, -torque, torque)
+            prev_error = ctrl_error
             # Apply wrench
             self.robot.force_mode(
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
             t_now = perf_counter()
+            if angle_error < 5e-3:
+                success = True
+                break
             if t_now - t_start > time_out:
                 break
-        return True
+        return success
 
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
