@@ -267,8 +267,9 @@ class Pilot:
         wrench_idx = utils.axis2index(axis.upper())
         wrench_vec = 6 * [0.0]
         wrench_vec[wrench_idx] = torque
-        compliant_axes = [0, 0, 0, 1, 1, 1]
-        compliant_axes[wrench_idx - 2] = 1
+        compliant_axes = [1, 1, 1, 0, 0, 0]
+        compliant_axes[wrench_idx] = 1
+        # compliant_axes[wrench_idx - 3] = 1
         # Time observation
         t_start = perf_counter()
         while True:

@@ -2,6 +2,7 @@
 import logging
 import ur_pilot
 import argparse
+import numpy as np
 import camera_kit as ck
 
 from argparse import Namespace
@@ -15,18 +16,19 @@ LOGGER = logging.getLogger(__name__)
 def main(opt: Namespace) -> None:
 
     # Use a display for user interaction
-    display = ck.Display('Monitor')
+    # display = ck.Display('Monitor')
 
     # Connect to pilot
     with ur_pilot.connect() as pilot:
         with pilot.position_control():
             pilot.move_home()
-
+        
         with pilot.force_control():
-            pilot.twist_tcp_force_mode('Y', 1.0, 1.0)
-
+            pilot.twist_tcp_force_mode('Y', 3.0, 6.0)
+            # pilot.twist_tcp_force_mode('Y', 0.0, 20.0)
+            
     # Clean up
-    display.destroy()
+    # display.destroy()
 
 
 if __name__ == '__main__':
