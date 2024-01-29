@@ -265,37 +265,35 @@ class Pilot:
         compliant_axes = [1, 1, 1, 0, 0, 1]
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
-        q_tgt = X_tcp.q * Quaternion().from_axis_angle([0.0, 0.0, ang])
         task_frame = X_tcp.xyz + X_tcp.axis_angle
+        # Create target
+        ee_jt_pos = self.robot.get_joint_pos()[-1]
+        ee_jt_pos_tgt = ee_jt_pos + ang
         # Time observation
         success = False
         t_start = perf_counter()
-        # controller state
+        # Controller state
         prev_error = np.nan
         i_err = 0.0
         while True:
-            q_now = self.robot.get_tcp_pose().q
-            q_diff = rp_math.quaternion_difference(q_now, q_tgt)
-            aa_error = np.array(q_diff.axis_angle)
-
-            # Angles error always within [0,Pi)
-            angle_error = np.max(np.abs(aa_error))
-            ctrl_error = -1.0 * np.sign(aa_error[-1]) * angle_error
-            p_err = torque * ctrl_error
+            # Angular error
+            ee_jt_pos_now = self.robot.get_joint_pos()[-1]
+            ang_error = (ee_jt_pos_tgt - ee_jt_pos_now)
+            p_err = torque * ang_error
             if prev_error is np.NAN:
                 d_err = 0.0
             else:
-                d_err = 1.0 * (ctrl_error - prev_error) / self.robot.rtde.dt
-            i_err = i_err + 3.5e-5 * ctrl_error / self.robot.rtde.dt
+                d_err = 1.0 * (ang_error - prev_error) / self.robot.rtde.dt
+            i_err = i_err + 3.5e-5 * ang_error / self.robot.rtde.dt
             wrench_vec[-1] = np.clip(p_err + d_err + i_err, -torque, torque)
-            prev_error = ctrl_error
+            prev_error = ang_error
             # Apply wrench
             self.robot.force_mode(
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
             t_now = perf_counter()
-            if angle_error < 5e-3:
+            if abs(ang_error) < 5e-3:
                 success = True
                 break
             if t_now - t_start > time_out:
