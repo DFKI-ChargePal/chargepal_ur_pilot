@@ -192,11 +192,11 @@ class Pilot:
 
     @contextmanager
     def open_plug_connection(self) -> Iterator[None]:
-        self.robot.enable_digital_out(0)
+        self.robot.enable_digital_out(3)
         time.sleep(0.5)
         yield
-        self.robot.disable_digital_out(0)
-        if self.robot.get_digital_out_state(0):
+        self.robot.disable_digital_out(3)
+        if self.robot.get_digital_out_state(3):
             raise ValueError(f"Digital output shout be 'LOW' but is 'HIGH'.")
 
     def move_home(self) -> list[float]:
