@@ -8,7 +8,8 @@ from pathlib import Path
 from enum import auto, Enum
 from time import perf_counter
 from contextlib import contextmanager
-from rigmopy import Pose, Vector3d, Vector6d, Transformation
+import rigmopy.utils.umath as rp_math
+from rigmopy import Pose, Vector3d, Vector6d, Transformation, Quaternion
 
 # local
 from ur_pilot import utils
@@ -256,12 +257,58 @@ class Pilot:
         self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return dist
 
+    def screw_ee_force_mode(self, torque: float, ang: float, time_out: float) -> bool:
+        self._check_control_context(expected=ControlContext.FORCE)
+        # Limit input
+        torque = np.clip(torque, 0.0, 5.0)
+        wrench_vec = 6 * [0.0]
+        compliant_axes = [1, 1, 1, 0, 0, 1]
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        # Create target
+        ee_jt_pos = self.robot.get_joint_pos()[-1]
+        ee_jt_pos_tgt = ee_jt_pos + ang
+        # Time observation
+        success = False
+        t_start = perf_counter()
+        # Controller state
+        prev_error = np.nan
+        i_err = 0.0
+        while True:
+            # Angular error
+            ee_jt_pos_now = self.robot.get_joint_pos()[-1]
+            ang_error = (ee_jt_pos_tgt - ee_jt_pos_now)
+            p_err = torque * ang_error
+            if prev_error is np.NAN:
+                d_err = 0.0
+            else:
+                d_err = 1.0 * (ang_error - prev_error) / self.robot.rtde.dt
+            i_err = i_err + 3.5e-5 * ang_error / self.robot.rtde.dt
+            wrench_vec[-1] = np.clip(p_err + d_err + i_err, -torque, torque)
+            prev_error = ang_error
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=compliant_axes,
+                wrench=wrench_vec)
+            t_now = perf_counter()
+            if abs(ang_error) < 5e-3:
+                success = True
+                break
+            if t_now - t_start > time_out:
+                break
+        return success
+
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
         self._check_control_context(expected=ControlContext.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        # Check if axis is valid
+        if not axis.lower() in ['x', 'y', 'z']:
+            raise ValueError(f"Only linear axes allowed.")
         wrench_idx = utils.axis2index(axis.lower())
         wrench_vec = 6 * [0.0]
         wrench_vec[wrench_idx] = force
