@@ -20,7 +20,7 @@ max_vel = 0.2
 acc = 0.1
 max_acc = 0.2
 
-[robot.tool]
+[robot.tool_model]
 mass = 0.4
 com = [0.00057, 0.00017, 0.0089]
 tip_frame = [0.0, 0.0, 0.195, 0.0, 0.0, 0.0]

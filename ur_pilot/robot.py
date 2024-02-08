@@ -51,14 +51,9 @@ class Robot(RealURRobot):
         self.error_scale_motion_mode = 1.0
         self.force_limit = 0.0
 
-        # Robot interface
-        self.rtde = RTDEInterface(self.pilot_cfg.robot.ip_address, self.pilot_cfg.robot.rtde_freq, True)
-        self.rtde_controller = self.rtde.c
-        self.rtde_receiver = self.rtde.r
-
         # If there is no configuration for the home_position set to current position
         if self.pilot_cfg.robot.home_radians is None:
-            self.pilot_cfg.robot.home_radians = list(self.rtde.r.getActualQ())
+            self.pilot_cfg.robot.home_radians = list(self.rtde_receiver.getActualQ())
 
         # Set up end-effector
         if self.pilot_cfg.robot.ft_sensor is None:
@@ -74,7 +69,7 @@ class Robot(RealURRobot):
         self._motion_pd: SpatialPDController | None = None
         self._force_pd: SpatialPDController | None = None
 
-        self.tool = ToolModel(**self.pilot_cfg.robot.tool.dict())
+        self.tool = ToolModel(**self.pilot_cfg.robot.tool_model.dict())
         self.set_tcp()
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()

@@ -105,8 +105,8 @@ class Robot(BaseModel):
     home_radians: Optional[List[float]] = None
     joints: Joints = Joints()
     tcp: TCP = TCP()
-    tool: ToolModel = ToolModel()
     servo: Servo = Servo()
+    tool_model: ToolModel = ToolModel()
     ft_sensor: Optional[FTSensor] = None
     force_mode: ForceMode = ForceMode()
     motion_mode: MotionMode = MotionMode()
