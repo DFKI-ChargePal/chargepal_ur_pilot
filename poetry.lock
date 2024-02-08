@@ -1480,7 +1480,7 @@ ui = ["textual[dev]"]
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/ur_control.git"
 reference = "integration/ur_pilot-gjohn"
-resolved_reference = "f5f30ca07c2f6614e5ed6f517e4aa65144745ddd"
+resolved_reference = "187119a8742306897183837cef59bc0dc05d81b0"
 
 [[package]]
 name = "ur-rtde"
