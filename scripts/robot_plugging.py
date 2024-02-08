@@ -15,7 +15,6 @@ from argparse import Namespace
 _pose_base2fpi = Pose().from_xyz((0.935, 0.294, 0.477)).from_axis_angle((0.005, 1.568, -0.010))
 _pose_fpi2save_pre = Pose().from_xyz([0.0, 0.0, -0.034 - 0.02])
 _pose_fpi2junction = Pose().from_xyz(xyz=[0.0, 0.0, -0.034 + 0.01])
-# _pose_socket2fpi = Pose().from_xyz(xyz=[0.0, 0.0, 0.034])
 
 
 def plugging(opt: Namespace) -> None:
