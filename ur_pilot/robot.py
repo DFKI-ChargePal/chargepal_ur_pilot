@@ -38,51 +38,51 @@ class Robot(RealURRobot):
     EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_tip', 'tool_sense', 'camera']
 
     def __init__(self, cfg_path: Path | None = None) -> None:
-        
         if cfg_path is None:
             self.config_fp = Path(config.__file__).parent.joinpath(config.RUNNING_CONFIG_FILE)
             LOGGER.warning(f"No configuration file given. Using default values.")
         else:
             self.config_fp = cfg_path
+        super().__init__(self.config_fp)
         config_raw = read_toml(self.config_fp)
-        self.cfg = Config(**config_raw)
+        self.pilot_cfg = Config(**config_raw)
 
         # Constants
         self.error_scale_motion_mode = 1.0
         self.force_limit = 0.0
 
         # Robot interface
-        self.rtde = RTDEInterface(self.cfg.robot.ip_address, self.cfg.robot.rtde_freq, True)
+        self.rtde = RTDEInterface(self.pilot_cfg.robot.ip_address, self.pilot_cfg.robot.rtde_freq, True)
         self.rtde_controller = self.rtde.c
         self.rtde_receiver = self.rtde.r
 
         # If there is no configuration for the home_position set to current position
-        if self.cfg.robot.home_radians is None:
-            self.cfg.robot.home_radians = list(self.rtde.r.getActualQ())
+        if self.pilot_cfg.robot.home_radians is None:
+            self.pilot_cfg.robot.home_radians = list(self.rtde.r.getActualQ())
 
         # Set up end-effector
-        if self.cfg.robot.ft_sensor is None:
+        if self.pilot_cfg.robot.ft_sensor is None:
             self.extern_sensor = False
             self._ft_sensor = None
             self._ft_sensor_mdl = None
         else:
             self.extern_sensor = True
-            self._ft_sensor = BotaFtSensor(**self.cfg.robot.ft_sensor.dict())
+            self._ft_sensor = BotaFtSensor(**self.pilot_cfg.robot.ft_sensor.dict())
             self._ft_sensor_mdl = BotaSensONEModel()
             self._ft_sensor.start()
 
         self._motion_pd: SpatialPDController | None = None
         self._force_pd: SpatialPDController | None = None
 
-        self.tool = ToolModel(**self.cfg.robot.tool.dict())
+        self.tool = ToolModel(**self.pilot_cfg.robot.tool.dict())
         self.set_tcp()
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
 
     @property
     def home_joint_config(self) -> tuple[float, ...]:
-        if self.cfg.robot.home_radians is not None:
-            return tuple(self.cfg.robot.home_radians)
+        if self.pilot_cfg.robot.home_radians is not None:
+            return tuple(self.pilot_cfg.robot.home_radians)
         else:
             raise ValueError("Home joint configuration was not set.")
 
@@ -201,12 +201,6 @@ class Robot(RealURRobot):
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
         return state
 
-    def move_home(self) -> None:
-        LOGGER.debug("Try to move robot in home configuration")
-        success = self.rtde.c.moveJ(self.cfg.robot.home_radians, self.cfg.robot.joints.vel, self.cfg.robot.joints.acc)
-        if not success:
-            LOGGER.warning("Malfunction during movement to the home configuration!")
-
     def move_l(self, tcp_pose: Pose) -> None:
         quat = tcp_pose.q.wxyz
         pos = tcp_pose.p.xyz
@@ -244,8 +238,8 @@ class Robot(RealURRobot):
         self.rtde.c.servoStop()
 
     def set_up_force_mode(self, gain: float | None = None, damping: float | None = None) -> None:
-        gain_scaling = gain if gain else self.cfg.robot.force_mode.gain
-        damping_fact = damping if damping else self.cfg.robot.force_mode.damping
+        gain_scaling = gain if gain else self.pilot_cfg.robot.force_mode.gain
+        damping_fact = damping if damping else self.pilot_cfg.robot.force_mode.damping
         self.rtde.c.zeroFtSensor()
         self.rtde.c.forceModeSetGainScaling(gain_scaling)
         self.rtde.c.forceModeSetDamping(damping_fact)
@@ -259,9 +253,9 @@ class Robot(RealURRobot):
                    ) -> None:
         """ Function to use the force mode of the ur_rtde API """
         if f_mode_type is None:
-            f_mode_type = self.cfg.robot.force_mode.mode
+            f_mode_type = self.pilot_cfg.robot.force_mode.mode
         if tcp_limits is None:
-            tcp_limits = self.cfg.robot.force_mode.tcp_speed_limits
+            tcp_limits = self.pilot_cfg.robot.force_mode.tcp_speed_limits
         self.rtde.c.forceMode(
             task_frame,
             selection_vector,
@@ -292,10 +286,10 @@ class Robot(RealURRobot):
             ft_gain: Force torque gain parameter
             ft_damping: Force torque damping parameter
         """
-        self.error_scale_motion_mode = error_scale if error_scale else self.cfg.robot.motion_mode.error_scale
-        self.force_limit = force_limit if force_limit else self.cfg.robot.motion_mode.force_limit
-        Kp = Kp_6 if Kp_6 is not None else self.cfg.robot.motion_mode.Kp
-        Kd = Kd_6 if Kd_6 is not None else self.cfg.robot.motion_mode.Kd
+        self.error_scale_motion_mode = error_scale if error_scale else self.pilot_cfg.robot.motion_mode.error_scale
+        self.force_limit = force_limit if force_limit else self.pilot_cfg.robot.motion_mode.force_limit
+        Kp = Kp_6 if Kp_6 is not None else self.pilot_cfg.robot.motion_mode.Kp
+        Kd = Kd_6 if Kd_6 is not None else self.pilot_cfg.robot.motion_mode.Kd
         self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
         self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
 
@@ -366,12 +360,12 @@ class Robot(RealURRobot):
         Returns:
             None
         """
-        self.error_scale_motion_mode = error_scale if error_scale else self.cfg.robot.hybrid_mode.error_scale
-        self.force_limit = force_limit if force_limit else self.cfg.robot.hybrid_mode.force_limit
-        f_Kp = Kp_6_force if Kp_6_force is not None else self.cfg.robot.hybrid_mode.Kp_force
-        f_Kd = Kd_6_force if Kd_6_force is not None else self.cfg.robot.hybrid_mode.Kd_force
-        m_Kp = Kp_6_motion if Kp_6_motion is not None else self.cfg.robot.hybrid_mode.Kp_motion
-        m_Kd = Kd_6_motion if Kd_6_motion is not None else self.cfg.robot.hybrid_mode.Kd_motion
+        self.error_scale_motion_mode = error_scale if error_scale else self.pilot_cfg.robot.hybrid_mode.error_scale
+        self.force_limit = force_limit if force_limit else self.pilot_cfg.robot.hybrid_mode.force_limit
+        f_Kp = Kp_6_force if Kp_6_force is not None else self.pilot_cfg.robot.hybrid_mode.Kp_force
+        f_Kd = Kd_6_force if Kd_6_force is not None else self.pilot_cfg.robot.hybrid_mode.Kd_force
+        m_Kp = Kp_6_motion if Kp_6_motion is not None else self.pilot_cfg.robot.hybrid_mode.Kp_motion
+        m_Kd = Kd_6_motion if Kd_6_motion is not None else self.pilot_cfg.robot.hybrid_mode.Kd_motion
         self._force_pd = SpatialPDController(Kp_6=f_Kp, Kd_6=f_Kd)
         self._motion_pd = SpatialPDController(Kp_6=m_Kp, Kd_6=m_Kd)
         self.set_up_force_mode(gain=ft_gain, damping=ft_damping)

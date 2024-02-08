@@ -8,8 +8,7 @@ from pathlib import Path
 from enum import auto, Enum
 from time import perf_counter
 from contextlib import contextmanager
-import rigmopy.utils.umath as rp_math
-from rigmopy import Pose, Vector3d, Vector6d, Transformation, Quaternion
+from rigmopy import Pose, Vector3d, Vector6d, Transformation
 
 # local
 from ur_pilot import utils
