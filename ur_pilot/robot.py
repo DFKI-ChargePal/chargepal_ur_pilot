@@ -7,6 +7,8 @@ from pathlib import Path
 from rigmopy import utils_math as rp_math
 from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
+import spatialmath as sm
+
 # local
 from ur_pilot import config
 from ur_pilot.utils import SpatialPDController
@@ -15,6 +17,8 @@ from ur_pilot.config_mdl import Config, read_toml, write_toml
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
 from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
+
+from ur_control.robots import RealURRobot
 
 # typing
 from typing import Sequence
@@ -25,7 +29,7 @@ from camera_kit import CameraBase
 LOGGER = logging.getLogger(__name__)
 
 
-class Robot:
+class Robot(RealURRobot):
 
     Q_WORLD2BASE_ = Quaternion().from_euler_angle([np.pi, 0.0, 0.0])
 
@@ -49,6 +53,8 @@ class Robot:
 
         # Robot interface
         self.rtde = RTDEInterface(self.cfg.robot.ip_address, self.cfg.robot.rtde_freq, True)
+        self.rtde_controller = self.rtde.c
+        self.rtde_receiver = self.rtde.r
 
         # If there is no configuration for the home_position set to current position
         if self.cfg.robot.home_radians is None:
@@ -202,46 +208,37 @@ class Robot:
             LOGGER.warning("Malfunction during movement to the home configuration!")
 
     def move_l(self, tcp_pose: Pose) -> None:
-        LOGGER.debug(f"Try to move robot to TCP pose {tcp_pose}")
-        success = self.rtde.c.moveL(
-            pose=tcp_pose.xyz + tcp_pose.axis_angle,
-            speed=self.cfg.robot.tcp.vel,
-            acceleration=self.cfg.robot.tcp.acc
-        )
-        if not success:
-            cur_pose = self.rtde.r.getActualTCPPose()
-            tgt_msg = f"\nTarget pose: {tcp_pose}"
-            cur_msg = f"\nCurrent pose: {cur_pose}"
-            LOGGER.warning(f"Malfunction during movement to new pose.{tgt_msg}{cur_msg}")
+        quat = tcp_pose.q.wxyz
+        pos = tcp_pose.p.xyz
+        pose = sm.SE3.Rt(R=sm.UnitQuaternion(quat).SO3(), t=pos)
+        self.movel(pose)
 
     def move_j(self, q: Sequence[float]) -> None:
-        LOGGER.debug(f"Try to move the robot to new joint configuration {q}")
-        success = self.rtde.c.moveJ(q, self.cfg.robot.joints.vel, self.cfg.robot.joints.acc)
-        if not success:
-            cur_q = self.rtde.r.getActualQ()
-            tgt_msg = f"\nTarget joint positions: {q}"
-            cur_msg = f"\nCurrent joint positions: {cur_q}"
-            LOGGER.warning(f"Malfunction during movement to new joint positions.{tgt_msg}{cur_msg}")
+        self.movej(q)
 
     def servo_l(self, target: Pose) -> None:
-        LOGGER.debug(f"Try to move robot to TCP pose {target}")
-        self.rtde.c.initPeriod()
-        success = self.rtde.c.servoL(
-            target.xyz + target.axis_angle,
-            self.cfg.robot.servo.vel,
-            self.cfg.robot.servo.acc,
-            self.rtde.dt,
-            self.cfg.robot.servo.lkh_time,
-            self.cfg.robot.servo.gain
-        )
-        self.rtde.c.waitPeriod(self.rtde.dt)
-        # Since there is no real time kernel at the moment use python time library
-        time.sleep(self.rtde.dt)  # This is mandatory
-        if not success:
-            cur_pose = self.rtde.r.getActualTCPPose()
-            tgt_msg = f"\nTarget pose: {target}"
-            cur_msg = f"\nCurrent pose: {cur_pose}"
-            LOGGER.warning(f"Malfunction during movement to new pose.{tgt_msg}{cur_msg}")
+        # LOGGER.debug(f"Try to move robot to TCP pose {target}")
+        # self.rtde.c.initPeriod()
+        # success = self.rtde.c.servoL(
+        #     target.xyz + target.axis_angle,
+        #     self.cfg.robot.servo.vel,
+        #     self.cfg.robot.servo.acc,
+        #     self.rtde.dt,
+        #     self.cfg.robot.servo.lkh_time,
+        #     self.cfg.robot.servo.gain
+        # )
+        # self.rtde.c.waitPeriod(self.rtde.dt)
+        # # Since there is no real time kernel at the moment use python time library
+        # time.sleep(self.rtde.dt)  # This is mandatory
+        # if not success:
+        #     cur_pose = self.rtde.r.getActualTCPPose()
+        #     tgt_msg = f"\nTarget pose: {target}"
+        #     cur_msg = f"\nCurrent pose: {cur_pose}"
+        #     LOGGER.warning(f"Malfunction during movement to new pose.{tgt_msg}{cur_msg}")
+        quat = target.q.wxyz
+        pos = target.p.xyz
+        pose = sm.SE3.Rt(R=sm.UnitQuaternion(quat).SO3(), t=pos)
+        self.servol(pose)
 
     def stop_servoing(self) -> None:
         self.rtde.c.servoStop()
