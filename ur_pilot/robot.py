@@ -12,7 +12,6 @@ import spatialmath as sm
 # local
 from ur_pilot import config
 from ur_pilot.utils import SpatialPDController
-from ur_pilot.rtde_interface import RTDEInterface
 from ur_pilot.config_mdl import Config, read_toml, write_toml
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
@@ -46,7 +45,7 @@ class Robot(RealURRobot):
         super().__init__(self.config_fp)
         config_raw = read_toml(self.config_fp)
         self.pilot_cfg = Config(**config_raw)
-
+        self.dt = 1 / self.cfg.robot.rtde_freq
         # Constants
         self.error_scale_motion_mode = 1.0
         self.force_limit = 0.0
@@ -146,7 +145,7 @@ class Robot(RealURRobot):
     def exit(self) -> None:
         if self._ft_sensor is not None:
             self._ft_sensor.stop()
-        self.rtde.exit()
+        self.disconnect()
 
     def register_ee_cam(self, cam: CameraBase, tf_dir: str = "") -> None:
         self.cam = cam
@@ -165,7 +164,7 @@ class Robot(RealURRobot):
             output_id: Desired output id
         """
         if 0 <= output_id <= 7:
-            success = self.rtde.io.setStandardDigitalOut(output_id, True)
+            success = self.rtde_io.setStandardDigitalOut(output_id, True)
         else:
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
 
@@ -176,7 +175,7 @@ class Robot(RealURRobot):
                 output_id: Desired output id
         """
         if 0 <= output_id <= 7:
-            success = self.rtde.io.setStandardDigitalOut(output_id, False)
+            success = self.rtde_io.setStandardDigitalOut(output_id, False)
         else:
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
 
@@ -191,7 +190,7 @@ class Robot(RealURRobot):
         """
         if 0 <= output_id <= 7:
             time.sleep(0.1)
-            state: bool = self.rtde.r.getDigitalOutState(output_id)
+            state: bool = self.rtde_receiver.getDigitalOutState(output_id)
         else:
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
         return state
@@ -227,14 +226,14 @@ class Robot(RealURRobot):
         self.servol(pose)
 
     def stop_servoing(self) -> None:
-        self.rtde.c.servoStop()
+        self.rtde_controller.servoStop()
 
     def set_up_force_mode(self, gain: float | None = None, damping: float | None = None) -> None:
         gain_scaling = gain if gain else self.pilot_cfg.robot.force_mode.gain
         damping_fact = damping if damping else self.pilot_cfg.robot.force_mode.damping
-        self.rtde.c.zeroFtSensor()
-        self.rtde.c.forceModeSetGainScaling(gain_scaling)
-        self.rtde.c.forceModeSetDamping(damping_fact)
+        self.rtde_controller.zeroFtSensor()
+        self.rtde_controller.forceModeSetGainScaling(gain_scaling)
+        self.rtde_controller.forceModeSetDamping(damping_fact)
 
     def force_mode(self,
                    task_frame: Sequence[float],
@@ -248,18 +247,18 @@ class Robot(RealURRobot):
             f_mode_type = self.pilot_cfg.robot.force_mode.mode
         if tcp_limits is None:
             tcp_limits = self.pilot_cfg.robot.force_mode.tcp_speed_limits
-        self.rtde.c.forceMode(
+        self.rtde_controller.forceMode(
             task_frame,
             selection_vector,
             wrench,
             f_mode_type,
             tcp_limits
         )
-        time.sleep(self.rtde.dt)
+        time.sleep(self.dt)
 
     def stop_force_mode(self) -> None:
         """ Function to set robot back in normal position control mode. """
-        self.rtde.c.forceModeStop()
+        self.rtde_controller.forceModeStop()
 
     def set_up_motion_mode(self, 
                            error_scale: float | None = None,
@@ -314,7 +313,7 @@ class Robot(RealURRobot):
         distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
         po_error = distance_error * pos_error
         motion_error = Vector6d().from_Vector3d(po_error, ax_error)
-        f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.rtde.dt)
+        f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.dt)
         # Clip to maximum forces
         f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
         self.force_mode(
@@ -396,7 +395,7 @@ class Robot(RealURRobot):
         motion_error = Vector6d().from_Vector3d(po_error, ax_error)
         force_error = wrench
         f_net = self.error_scale_motion_mode * (
-            self.motion_pd.update(motion_error, self.rtde.dt) + self.force_pd.update(force_error, self.rtde.dt))
+            self.motion_pd.update(motion_error, self.dt) + self.force_pd.update(force_error, self.dt))
         # Clip to maximum forces
         f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
         self.force_mode(task_frame=task_frame, selection_vector=6 * (1, ), wrench=f_net_clip.tolist())
@@ -409,27 +408,27 @@ class Robot(RealURRobot):
 
     def set_up_teach_mode(self) -> None:
         """ Function to enable the free drive mode. """
-        self.rtde.c.teachMode()
+        self.rtde_controller.teachMode()
 
     def stop_teach_mode(self) -> None:
         """ Function to set robot back in normal position control mode. """
-        self.rtde.c.endTeachMode()
+        self.rtde_controller.endTeachMode()
 
     def set_tcp(self, frame: str = 'tool_tip') -> None:
         """ Function to set the tcp relative to the tool flange. """
         offset = self.__frame_to_offset(frame=frame)
-        self.rtde.c.setTcp(offset)
+        self.rtde_controller.setTcp(offset)
         LOGGER.info(f"From now on robot end effector is going to work with respect to frame: {frame}")
 
     ##################################
     #       RECEIVER FUNCTIONS       #
     ##################################
     def get_joint_pos(self) -> list[float]:
-        joint_pos: list[float] = self.rtde.r.getActualQ()
+        joint_pos: list[float] = self.rtde_receiver.getActualQ()
         return joint_pos
 
     def get_joint_vel(self) -> Sequence[float]:
-        joint_vel: Sequence[float] = self.rtde.r.getActualQd()
+        joint_vel: Sequence[float] = self.rtde_receiver.getActualQd()
         return joint_vel
 
     def get_pose(self, frame: str = 'flange') -> Pose:
@@ -441,8 +440,8 @@ class Robot(RealURRobot):
             6D pose
         """
         tcp_offset = self.__frame_to_offset(frame=frame)
-        q: Sequence[float] = self.rtde.r.getActualQ()
-        pose_vec: Sequence[float] = self.rtde.c.getForwardKinematics(q=q, tcp_offset=tcp_offset)
+        q: Sequence[float] = self.rtde_receiver.getActualQ()
+        pose_vec: Sequence[float] = self.rtde_controller.getForwardKinematics(q=q, tcp_offset=tcp_offset)
         return Pose().from_xyz(pose_vec[:3]).from_axis_angle(pose_vec[3:])
 
     def __frame_to_offset(self, frame: str) -> tuple[float, ...]:
@@ -477,15 +476,15 @@ class Robot(RealURRobot):
         return offset
 
     def get_tcp_offset(self) -> Pose:
-        tcp_offset: Sequence[float] = self.rtde.c.getTCPOffset()
+        tcp_offset: Sequence[float] = self.rtde_controller.getTCPOffset()
         return Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[3:])
 
     def get_tcp_pose(self) -> Pose:
-        tcp_pose: Sequence[float] = self.rtde.r.getActualTCPPose()
+        tcp_pose: Sequence[float] = self.rtde_receiver.getActualTCPPose()
         return Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
 
     def get_tcp_vel(self) -> Vector6d:
-        tcp_vel: Sequence[float] = self.rtde.r.getActualTCPSpeed()
+        tcp_vel: Sequence[float] = self.rtde_receiver.getActualTCPSpeed()
         return Vector6d().from_xyzXYZ(tcp_vel)
 
     def get_ft(self, frame: str = 'ft_sensor') -> Vector6d:
@@ -512,7 +511,7 @@ class Robot(RealURRobot):
         if self.extern_sensor:
             tcp_force = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
         else:
-            tcp_force = Vector6d().from_xyzXYZ(self.rtde.r.getActualTCPForce())
+            tcp_force = Vector6d().from_xyzXYZ(self.rtde_receiver.getActualTCPForce())
         # Compensate Tool mass
         f_tool_wrt_world = self.tool.f_inertia
         f_tool_wrt_ft = (self.q_world2arm * self.get_tcp_pose().q).apply(f_tool_wrt_world, inverse=True)
