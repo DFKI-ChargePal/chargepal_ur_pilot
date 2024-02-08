@@ -3,11 +3,13 @@ from __future__ import annotations
 import time
 import logging
 import numpy as np
+import spatialmath as sm
 from pathlib import Path
 from rigmopy import utils_math as rp_math
 from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
-import spatialmath as sm
+from ur_control.utils import clip
+from ur_control.robots import RealURRobot
 
 # local
 from ur_pilot import config
@@ -16,8 +18,6 @@ from ur_pilot.config_mdl import Config, read_toml, write_toml
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
 from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
-
-from ur_control.robots import RealURRobot
 
 # typing
 from typing import Sequence
@@ -119,6 +119,37 @@ class Robot(RealURRobot):
     @property
     def q_world2arm(self) -> Quaternion:
         return self.Q_WORLD2BASE_
+
+    def movej_path(self,
+                   wps: Sequence[npt.ArrayLike],
+                   vel: float | None = None,
+                   acc: float | None = None,
+                   bf: float | None = None) -> None:
+        """
+        Move the robot in joint space along a specified path.
+
+        Args:
+            wps: Waypoints of the path. List of arrays of the target joint angles in radians
+            vel: Joint speed of leading axis \(^{rad}/_{s^2}\). Defaults to None.
+            acc: Joint acceleration of leading axis \(^{rad}/{s^2}\). Defaults to None.
+            bf:  Blend factor to smooth movements.
+        """
+        wps_f32 = [np.array(np.reshape(target, 6), dtype=np.float32) for target in wps]
+        speed = (
+            clip(vel, 0.0, self.cfg.robot.joints.max_vel)
+            if vel
+            else self.cfg.robot.joints.vel
+        )
+        acceleration = (
+            clip(acc, 0.0, self.cfg.robot.joints.max_acc)
+            if acc
+            else self.cfg.robot.joints.acc
+        )
+        bf = clip(bf, 0.0, 0.1) if bf else 0.02
+        path = [[*tg.tolist(), speed, acceleration, bf] for tg in wps_f32]
+        # Set blend factor of the last waypoint to zero to stop smoothly
+        path[-1][-1] = 0.0
+        success = self.rtde_controller.moveJ(path=path)
 
     def average_ft_measurement(self, num_meas: int = 100) -> Vector6d:
         """ Method to get an average force torque measurement over num_meas samples.
@@ -405,10 +436,6 @@ class Robot(RealURRobot):
         self.force_pd.reset()
         self.motion_pd.reset()
         self.stop_force_mode()
-
-    def set_up_teach_mode(self) -> None:
-        """ Function to enable the free drive mode. """
-        self.rtde_controller.teachMode()
 
     def stop_teach_mode(self) -> None:
         """ Function to set robot back in normal position control mode. """
