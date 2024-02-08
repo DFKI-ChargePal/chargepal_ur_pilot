@@ -43,7 +43,7 @@ class Robot(RealURRobot):
             LOGGER.warning(f"No configuration file given. Using default values.")
         else:
             self.config_fp = cfg_path
-        super().__init__(self.config_fp)
+        # super().__init__(self.config_fp)
         config_raw = read_toml(self.config_fp)
         self.pilot_cfg = Config(**config_raw)
 
