@@ -4,6 +4,7 @@ author = "Georg John"
 email = "georg.john@dfki.de"
 
 [robot]
+tool = "None"
 home_radians = [3.429, -1.371, 2.127, -0.747, 1.867, -1.565]
 ip_address = "192.168.13.42"
 
@@ -24,12 +25,6 @@ mass = 0.4
 com = [0.00057, 0.00017, 0.0089]
 tip_frame = [0.0, 0.0, 0.195, 0.0, 0.0, 0.0]
 sense_frame = [-0.025, 0.0, 0.19417, 0.0, -0.2618, 0.0]
-
-[robot.servo]
-vel = 0.0
-acc = 0.0
-gain = 100.0
-lkh_time = 0.2
 
 [robot.force_mode]
 mode = 2

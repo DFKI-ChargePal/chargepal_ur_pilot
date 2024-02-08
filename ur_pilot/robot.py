@@ -43,7 +43,7 @@ class Robot(RealURRobot):
             LOGGER.warning(f"No configuration file given. Using default values.")
         else:
             self.config_fp = cfg_path
-        # super().__init__(self.config_fp)
+        super().__init__(self.config_fp)
         config_raw = read_toml(self.config_fp)
         self.pilot_cfg = Config(**config_raw)
 
@@ -206,9 +206,6 @@ class Robot(RealURRobot):
         pos = tcp_pose.p.xyz
         pose = sm.SE3.Rt(R=sm.UnitQuaternion(quat).SO3(), t=pos)
         self.movel(pose)
-
-    def move_j(self, q: Sequence[float]) -> None:
-        self.movej(q)
 
     def servo_l(self, target: Pose) -> None:
         # LOGGER.debug(f"Try to move robot to TCP pose {target}")

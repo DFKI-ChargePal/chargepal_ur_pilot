@@ -15,6 +15,7 @@ from ur_pilot import utils
 from ur_pilot.robot import Robot
 
 # typing
+from numpy import typing as npt
 from typing import Iterator, Sequence
 
 
@@ -38,6 +39,25 @@ class ControlContext(Enum):
     TEACH_IN = auto()
 
 
+class ArmState(Enum):
+    NA = auto()  # not applicable
+    HOME = auto()
+    DRIVE = auto()
+    CCS_SIDE = auto()
+    TYPE2_SIDE = auto()
+
+    @staticmethod
+    def from_str(name: str) -> ArmState:
+        enum_state = None
+        for es in ArmState:
+            if name.upper() == es.name:
+                enum_state = es
+        if enum_state is None:
+            raise KeyError(f"Can't match state name '{name.upper()}' with any enum name. "
+                           f"Possible values are: {[e.name for e in ArmState]}")
+        return enum_state
+
+
 class Pilot:
 
     def __init__(self, config: Path | None = None) -> None:
@@ -53,6 +73,7 @@ class Pilot:
             raise FileNotFoundError(f"Configuration with file path {config} not found.")
         self.robot = Robot(config)
         self.control_context = ControlContext.DISABLED
+        self.arm_state = ArmState.NA
 
     def _check_control_context(self, expected: ControlContext | list[ControlContext]) -> None:
         if self.control_context is ControlContext.DISABLED:
@@ -204,10 +225,26 @@ class Pilot:
         new_j_pos = self.robot.get_joint_pos()
         return new_j_pos
 
+    def move_to(self, goal_state: str) -> npt.NDArray[np.float_]:
+        goal_ = ArmState.from_str(goal_state)
+        if goal_ == ArmState.HOME:
+            self.move_home()
+            self.arm_state = ArmState.HOME
+        elif goal_ == ArmState.DRIVE:
+            self.robot.movej([])
+            self.arm_state = ArmState.DRIVE
+        elif goal_ == ArmState.CCS_SIDE:
+            self.robot.movej([])
+            self.arm_state = ArmState.CCS_SIDE
+        elif goal_ == ArmState.TYPE2_SIDE:
+            self.robot.movej([])
+            self.arm_state = ArmState.TYPE2_SIDE
+        return self.robot.joint_pos
+
     def move_to_joint_pos(self, q: Sequence[float]) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
         # Move to requested joint position
-        self.robot.move_j(q)
+        self.robot.movej(q)
         new_joint_pos = self.robot.get_joint_pos()
         return new_joint_pos
 
@@ -655,14 +692,14 @@ class Pilot:
                 break
         return fin, self.robot.get_tcp_pose()
 
-    def move_joints_random(self) -> list[float]:
+    def move_joints_random(self) -> npt.NDArray[np.float_]:
         self._check_control_context(expected=ControlContext.POSITION)
         # Move to home joint position
         self.robot.move_home()
         # Move to random joint positions near to the home configuration
         home_q = np.array(self.robot.home_joint_config, dtype=np.float32)
-        tgt_joint_q: list[float] = (home_q + (np.random.rand(6) * 2.0 - 1.0) * 0.075).tolist()
-        self.robot.move_j(tgt_joint_q)
+        tgt_joint_q = home_q + (np.random.rand(6) * 2.0 - 1.0) * 0.075
+        self.robot.movej(tgt_joint_q)
         # Move back to home joint positions
         self.robot.move_home()
         return tgt_joint_q
