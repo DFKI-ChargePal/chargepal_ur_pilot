@@ -17,7 +17,7 @@ def move_to_square(ctrl_type: str, length: float) -> None:
     # Connect to pilot/robot
     with ur_pilot.connect() as pilot:
         # Move home
-        with pilot.position_control():
+        with pilot.position_control(cartesian=False):
             pilot.move_home()
 
         # Use motion mode to moving to the corners
