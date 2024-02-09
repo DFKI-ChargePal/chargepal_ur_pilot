@@ -19,6 +19,7 @@ from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
 from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 
 from ur_control.robots import RealURRobot
+from ur_control.utils import tr2ur_format, ur_format2tr
 
 # typing
 from typing import Sequence
@@ -163,11 +164,11 @@ class Robot(RealURRobot):
     ####################################
     #       CONTROLLER FUNCTIONS       #
     ####################################
-    def move_home(self) -> None:
-        LOGGER.debug("Try to move robot in home configuration")
-        success = self.rtde.c.moveJ(self.cfg.robot.home_radians, self.cfg.robot.joints.vel, self.cfg.robot.joints.acc)
-        if not success:
-            LOGGER.warning("Malfunction during movement to the home configuration!")
+    # def move_home(self) -> None:
+    #     LOGGER.debug("Try to move robot in home configuration")
+    #     success = self.rtde.c.moveJ(self.cfg.robot.home_radians, self.cfg.robot.joints.vel, self.cfg.robot.joints.acc)
+    #     if not success:
+    #         LOGGER.warning("Malfunction during movement to the home configuration!")
 
     def move_l(self, tcp_pose: Pose) -> None:
         quat = tcp_pose.q.wxyz
@@ -179,130 +180,119 @@ class Robot(RealURRobot):
         self.movej(q)
 
     def servo_l(self, target: Pose) -> None:
-        # LOGGER.debug(f"Try to move robot to TCP pose {target}")
-        # self.rtde.c.initPeriod()
-        # success = self.rtde.c.servoL(
-        #     target.xyz + target.axis_angle,
-        #     self.cfg.robot.servo.vel,
-        #     self.cfg.robot.servo.acc,
-        #     self.rtde.dt,
-        #     self.cfg.robot.servo.lkh_time,
-        #     self.cfg.robot.servo.gain
-        # )
-        # self.rtde.c.waitPeriod(self.rtde.dt)
-        # # Since there is no real time kernel at the moment use python time library
-        # time.sleep(self.rtde.dt)  # This is mandatory
-        # if not success:
-        #     cur_pose = self.rtde.r.getActualTCPPose()
-        #     tgt_msg = f"\nTarget pose: {target}"
-        #     cur_msg = f"\nCurrent pose: {cur_pose}"
-        #     LOGGER.warning(f"Malfunction during movement to new pose.{tgt_msg}{cur_msg}")
         quat = target.q.wxyz
         pos = target.p.xyz
         pose = sm.SE3.Rt(R=sm.UnitQuaternion(quat).SO3(), t=pos)
         self.servol(pose)
 
     def stop_servoing(self) -> None:
-        self.rtde.c.servoStop()
+        self.servo_stop()
 
-    def set_up_force_mode(self, gain: float | None = None, damping: float | None = None) -> None:
-        gain_scaling = gain if gain else self.cfg.robot.force_mode.gain
-        damping_fact = damping if damping else self.cfg.robot.force_mode.damping
-        self.rtde.c.zeroFtSensor()
-        self.rtde.c.forceModeSetGainScaling(gain_scaling)
-        self.rtde.c.forceModeSetDamping(damping_fact)
+    # def set_up_force_mode(self, gain: float | None = None, damping: float | None = None) -> None:
+    #     gain_scaling = gain if gain else self.cfg.robot.force_mode.gain
+    #     damping_fact = damping if damping else self.cfg.robot.force_mode.damping
+    #     self.rtde.c.zeroFtSensor()
+    #     self.rtde.c.forceModeSetGainScaling(gain_scaling)
+    #     self.rtde.c.forceModeSetDamping(damping_fact)
 
-    def force_mode(self,
-                   task_frame: Sequence[float],
-                   selection_vector: Sequence[int],
-                   wrench: Sequence[float],
-                   f_mode_type: int | None = None,
-                   tcp_limits: Sequence[float] | None = None
-                   ) -> None:
-        """ Function to use the force mode of the ur_rtde API """
-        if f_mode_type is None:
-            f_mode_type = self.cfg.robot.force_mode.mode
-        if tcp_limits is None:
-            tcp_limits = self.cfg.robot.force_mode.tcp_speed_limits
-        self.rtde.c.forceMode(
-            task_frame,
-            selection_vector,
-            wrench,
-            f_mode_type,
-            tcp_limits
-        )
-        time.sleep(self.rtde.dt)
+    #NOTE - use spatialmath.SE3 for the task frame?
+    # def force_mode(self,
+    #                task_frame: Sequence[float],
+    #                selection_vector: Sequence[int],
+    #                wrench: Sequence[float],
+    #                f_mode_type: int | None = None,
+    #                tcp_limits: Sequence[float] | None = None
+    #                ) -> None:
+    #     """ Function to use the force mode of the ur_rtde API """
+    #     if f_mode_type is None:
+    #         f_mode_type = self.cfg.robot.force_mode.mode
+    #     if tcp_limits is None:
+    #         tcp_limits = self.cfg.robot.force_mode.tcp_speed_limits
+    #     self.rtde.c.forceMode(
+    #         task_frame,
+    #         selection_vector,
+    #         wrench,
+    #         f_mode_type,
+    #         tcp_limits
+    #     )
+    #     time.sleep(self.rtde.dt)
 
-    def stop_force_mode(self) -> None:
-        """ Function to set robot back in normal position control mode. """
-        self.rtde.c.forceModeStop()
+    # def stop_force_mode(self) -> None:
+    #     """ Function to set robot back in normal position control mode. """
+    #     self.rtde.c.forceModeStop()
 
-    def set_up_motion_mode(self, 
-                           error_scale: float | None = None,
-                           force_limit: float | None = None,
-                           Kp_6: Sequence[float] | None = None,
-                           Kd_6: Sequence[float] | None = None, 
-                           ft_gain: float | None = None, 
-                           ft_damping: float | None = None) -> None:
-        """ Function to set up force based motion controller
+    #NOTE - could be implemented like this in ur_control. In addition, the SpatialPDController 
+    # would have to be implemented for this. Also the datatypes have to be changed.
+    # It has to be checked how to implement the robot movement via a context.
+    # def set_up_motion_mode(self, 
+    #                        error_scale: float | None = None,
+    #                        force_limit: float | None = None,
+    #                        Kp_6: Sequence[float] | None = None,
+    #                        Kd_6: Sequence[float] | None = None, 
+    #                        ft_gain: float | None = None, 
+    #                        ft_damping: float | None = None) -> None:
+    #     """ Function to set up force based motion controller
 
-        Args:
-            error_scale: Overall scaling parameter
-            force_limit: The absolute value of the applied forces in tool space
-            Kp_6: 6 dimensional motion controller proportional gain
-            Kd_6: 6 dimensional motion controller derivative gain
-            ft_gain: Force torque gain parameter
-            ft_damping: Force torque damping parameter
-        """
-        self.error_scale_motion_mode = error_scale if error_scale else self.cfg.robot.motion_mode.error_scale
-        self.force_limit = force_limit if force_limit else self.cfg.robot.motion_mode.force_limit
-        Kp = Kp_6 if Kp_6 is not None else self.cfg.robot.motion_mode.Kp
-        Kd = Kd_6 if Kd_6 is not None else self.cfg.robot.motion_mode.Kd
-        self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
-        self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
+    #     Args:
+    #         error_scale: Overall scaling parameter
+    #         force_limit: The absolute value of the applied forces in tool space
+    #         Kp_6: 6 dimensional motion controller proportional gain
+    #         Kd_6: 6 dimensional motion controller derivative gain
+    #         ft_gain: Force torque gain parameter
+    #         ft_damping: Force torque damping parameter
+    #     """
+    #     self.error_scale_motion_mode = error_scale if error_scale else self.cfg.robot.motion_mode.error_scale
+    #     self.force_limit = force_limit if force_limit else self.cfg.robot.motion_mode.force_limit
+    #     Kp = Kp_6 if Kp_6 is not None else self.cfg.robot.motion_mode.Kp
+    #     Kd = Kd_6 if Kd_6 is not None else self.cfg.robot.motion_mode.Kd
+    #     self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
+    #     self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
 
-    def motion_mode(self, target: Pose) -> None:
-        """ Function to update motion target and let the motion controller keep running
+    # def motion_mode(self, target: Pose) -> None:
+    #     """ Function to update motion target and let the motion controller keep running
 
-        Args:
-            target: Target pose of the TCP
-        """
-        task_frame = 6 * (0.0, )  # Move w.r.t. robot base
-        # Get current Pose
-        actual = self.get_tcp_pose()
-        # Compute spatial error
-        pos_error = target.p - actual.p
-        aa_error = np.array(rp_math.quaternion_difference(actual.q, target.q).axis_angle)
+    #     Args:
+    #         target: Target pose of the TCP
+    #     """
+    #     task_frame = 6 * (0.0, )  # Move w.r.t. robot base
+    #     # Get current Pose
+    #     actual = self.get_tcp_pose()
+    #     # Compute spatial error
+    #     pos_error = target.p - actual.p
+    #     aa_error = np.array(rp_math.quaternion_difference(actual.q, target.q).axis_angle)
 
-        # Angles error always within [0,Pi)
-        angle_error = np.max(np.abs(aa_error))
-        if angle_error < 1e7:
-            axis_error = aa_error
-        else:
-            axis_error = aa_error/angle_error
-        # Clamp maximal tolerated error.
-        # The remaining error will be handled in the next control cycle.
-        # Note that this is also the maximal offset that the
-        # cartesian_compliance_controller can use to build up a restoring stiffness
-        # wrench.
-        angle_error = np.clip(angle_error, 0.0, 1.0)
-        ax_error = Vector3d().from_xyz(angle_error * axis_error)
-        distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
-        po_error = distance_error * pos_error
-        motion_error = Vector6d().from_Vector3d(po_error, ax_error)
-        f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.rtde.dt)
-        # Clip to maximum forces
-        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
-        self.force_mode(
-            task_frame=task_frame,
-            selection_vector=6 * (1,),
-            wrench=f_net_clip.tolist(),
-            )
+    #     # Angles error always within [0,Pi)
+    #     angle_error = np.max(np.abs(aa_error))
+    #     if angle_error < 1e7:
+    #         axis_error = aa_error
+    #     else:
+    #         axis_error = aa_error/angle_error
+    #     # Clamp maximal tolerated error.
+    #     # The remaining error will be handled in the next control cycle.
+    #     # Note that this is also the maximal offset that the
+    #     # cartesian_compliance_controller can use to build up a restoring stiffness
+    #     # wrench.
+    #     angle_error = np.clip(angle_error, 0.0, 1.0)
+    #     ax_error = Vector3d().from_xyz(angle_error * axis_error)
+    #     distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
+    #     po_error = distance_error * pos_error
+    #     motion_error = Vector6d().from_Vector3d(po_error, ax_error)
+    #     f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.rtde.dt)
+    #     # Clip to maximum forces
+    #     f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
+    #     self.force_mode(
+    #         task_frame=task_frame,
+    #         selection_vector=6 * (1,),
+    #         wrench=f_net_clip.tolist(),
+    #         )
+        
+        # pose = sm.SE3.Rt(R=sm.UnitQuaternion(target.q.wxyz).SO3(), t=target.p.xyz)
+        # self.motion_mode_ur(pose)
 
-    def stop_motion_mode(self) -> None:
-        """ Function to set robot back in normal position control mode. """
-        self.motion_pd.reset()
-        self.stop_force_mode()
+    # def stop_motion_mode(self) -> None:
+    #     """ Function to set robot back in normal position control mode. """
+    #     self.motion_pd.reset()
+    #     self.stop_force_mode()
 
     def set_up_hybrid_mode(self,
                            error_scale: float | None = None,
@@ -383,13 +373,13 @@ class Robot(RealURRobot):
         self.motion_pd.reset()
         self.stop_force_mode()
 
-    def set_up_teach_mode(self) -> None:
-        """ Function to enable the free drive mode. """
-        self.rtde.c.teachMode()
+    # def set_up_teach_mode(self) -> None:
+    #     """ Function to enable the free drive mode. """
+    #     self.rtde.c.teachMode()
 
-    def stop_teach_mode(self) -> None:
-        """ Function to set robot back in normal position control mode. """
-        self.rtde.c.endTeachMode()
+    # def stop_teach_mode(self) -> None:
+    #     """ Function to set robot back in normal position control mode. """
+    #     self.rtde.c.endTeachMode()
 
     def set_tcp(self, frame: str = 'tool_tip') -> None:
         """ Function to set the tcp relative to the tool flange. """
@@ -401,12 +391,14 @@ class Robot(RealURRobot):
     #       RECEIVER FUNCTIONS       #
     ##################################
     def get_joint_pos(self) -> list[float]:
-        joint_pos: list[float] = self.rtde.r.getActualQ()
-        return joint_pos
+    #     joint_pos: list[float] = self.rtde.r.getActualQ()
+    #     return joint_pos
+        return self.joint_pos
 
     def get_joint_vel(self) -> Sequence[float]:
-        joint_vel: Sequence[float] = self.rtde.r.getActualQd()
-        return joint_vel
+        # joint_vel: Sequence[float] = self.rtde.r.getActualQd()
+        # return joint_vel
+        return self.joint_vel
 
     def get_pose(self, frame: str = 'flange') -> Pose:
         """ Get pose of the desired frame w.r.t the robot base. This function is independent of the TCP offset defined
@@ -453,15 +445,20 @@ class Robot(RealURRobot):
         return offset
 
     def get_tcp_offset(self) -> Pose:
-        tcp_offset: Sequence[float] = self.rtde.c.getTCPOffset()
+        # tcp_offset: Sequence[float] = self.rtde.c.getTCPOffset()
+        tcp_offset_tr = self.tcp_offset
+        tcp_offset = tr2ur_format(tcp_offset_tr)
         return Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[3:])
 
     def get_tcp_pose(self) -> Pose:
-        tcp_pose: Sequence[float] = self.rtde.r.getActualTCPPose()
+        # tcp_pose: Sequence[float] = self.rtde.r.getActualTCPPose()
+        tcp_pose_tr = self.tcp_pose
+        tcp_pose = tr2ur_format(tcp_pose_tr)
         return Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
 
     def get_tcp_vel(self) -> Vector6d:
-        tcp_vel: Sequence[float] = self.rtde.r.getActualTCPSpeed()
+        # tcp_vel: Sequence[float] = self.rtde.r.getActualTCPSpeed()
+        tcp_vel = self.tcp_twist.A
         return Vector6d().from_xyzXYZ(tcp_vel)
 
     def get_ft(self, frame: str = 'ft_sensor') -> Vector6d:
