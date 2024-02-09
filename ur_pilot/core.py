@@ -13,6 +13,9 @@ from rigmopy import Pose, Vector3d, Vector6d, Transformation
 from ur_pilot import utils
 from ur_pilot.robot import Robot
 
+from ur_control.controller.controller_mode import MotionMode, ForceMode, PositionMode
+import spatialmath as sm
+
 # typing
 from typing import Iterator, Sequence
 
@@ -52,36 +55,59 @@ class Pilot:
             raise FileNotFoundError(f"Configuration with file path {config} not found.")
         self.robot = Robot(config)
         self.control_context = ControlContext.DISABLED
+        self.motion_mode = MotionMode(self.robot)
+        self.force_mode = ForceMode(self.robot)
+        self.position_mode = PositionMode(self.robot)
 
-    def _check_control_context(self, expected: ControlContext | list[ControlContext]) -> None:
+    def _check_control_context(
+        self, expected: ControlContext | list[ControlContext]
+    ) -> None:
         if self.control_context is ControlContext.DISABLED:
-            raise RuntimeError(f"Pilot is not in any control context. Running actions is not possible.")
+            raise RuntimeError(
+                f"Pilot is not in any control context. Running actions is not possible."
+            )
         if isinstance(expected, list) and self.control_context not in expected:
-            raise RuntimeError(f"This action is not able to use one of the control context '{self.control_context}'")
-        if isinstance(expected, ControlContext) and self.control_context is not expected:
-            raise RuntimeError(f"This action is not able to use the control context '{self.control_context}'")
+            raise RuntimeError(
+                f"This action is not able to use one of the control context '{self.control_context}'"
+            )
+        if (
+            isinstance(expected, ControlContext)
+            and self.control_context is not expected
+        ):
+            raise RuntimeError(
+                f"This action is not able to use the control context '{self.control_context}'"
+            )
 
     def exit_control_context(self) -> None:
         if self.control_context == ControlContext.POSITION:
-            pass
+            # pass
+            self.position_mode.stop()
         elif self.control_context == ControlContext.SERVO:
             self.robot.stop_servoing()
         elif self.control_context == ControlContext.FORCE:
-            self.robot.stop_force_mode()
+            # self.robot.stop_force_mode()
+            self.force_mode.stop()
         elif self.control_context == ControlContext.MOTION:
-            self.robot.stop_motion_mode()
+            # self.robot.stop_motion_mode()
+            self.motion_mode.stop()
         elif self.control_context == ControlContext.HYBRID:
             self.robot.stop_hybrid_mode()
         elif self.control_context == ControlContext.TEACH_IN:
             self.robot.stop_teach_mode()
         self.control_context = ControlContext.DISABLED
 
-    def enter_position_control(self) -> None:
+    def enter_position_control(self, vel, acc, cartesian) -> None:
         self.control_context = ControlContext.POSITION
+        self.position_mode.setup(vel, acc, cartesian)
 
     @contextmanager
-    def position_control(self) -> Iterator[None]:
-        self.enter_position_control()
+    def position_control(
+        self,
+        vel: float | None = None,
+        acc: float | None = None,
+        cartesian: bool | None = None,
+    ) -> Iterator[None]:
+        self.enter_position_control(vel=vel, acc=acc, cartesian=cartesian)
         yield
         self.exit_control_context()
 
@@ -94,57 +120,80 @@ class Pilot:
         yield
         self.exit_control_context()
 
-    def enter_force_control(self, gain: float | None = None, damping: float | None = None) -> None:
-        self.robot.set_up_force_mode(gain=gain, damping=damping)
+    def enter_force_control(
+        self, gain: float | None = None, damping: float | None = None
+    ) -> None:
+        # self.robot.set_up_force_mode(gain=gain, damping=damping)
+        self.force_mode.setup(gain=gain, damping=damping)
         self.control_context = ControlContext.FORCE
 
     @contextmanager
-    def force_control(self, gain: float | None = None, damping: float | None = None) -> Iterator[None]:
+    def force_control(
+        self, gain: float | None = None, damping: float | None = None
+    ) -> Iterator[None]:
         self.enter_force_control(gain=gain, damping=damping)
         yield
         self.exit_control_context()
 
-    def enter_motion_control(self,
-                             error_scale: float | None = None,
-                             force_limit: float | None = None,
-                             Kp_6: Sequence[float] | None = None,
-                             Kd_6: Sequence[float] | None = None,
-                             ft_gain: float | None = None,
-                             ft_damping: float | None = None) -> None:
-        self.robot.set_up_motion_mode(
+    def enter_motion_control(
+        self,
+        error_scale: float | None = None,
+        force_limit: float | None = None,
+        Kp_6: Sequence[float] | None = None,
+        Kd_6: Sequence[float] | None = None,
+        ft_gain: float | None = None,
+        ft_damping: float | None = None,
+    ) -> None:
+        # self.robot.set_up_motion_mode(
+        #     error_scale=error_scale,
+        #     force_limit=force_limit,
+        #     Kp_6=Kp_6,
+        #     Kd_6=Kd_6,
+        #     ft_gain=ft_gain,
+        #     ft_damping=ft_damping,
+        # )
+        self.motion_mode.setup(
             error_scale=error_scale,
             force_limit=force_limit,
-            Kp_6=Kp_6, Kd_6=Kd_6,
+            Kp_6=Kp_6,
+            Kd_6=Kd_6,
             ft_gain=ft_gain,
-            ft_damping=ft_damping)
+            ft_damping=ft_damping,
+        )
         self.control_context = ControlContext.MOTION
 
     @contextmanager
-    def motion_control(self,
-                       error_scale: float | None = None,
-                       force_limit: float | None = None,
-                       Kp_6: Sequence[float] | None = None,
-                       Kd_6: Sequence[float] | None = None,
-                       ft_gain: float | None = None,
-                       ft_damping: float | None = None) -> Iterator[None]:
+    def motion_control(
+        self,
+        error_scale: float | None = None,
+        force_limit: float | None = None,
+        Kp_6: Sequence[float] | None = None,
+        Kd_6: Sequence[float] | None = None,
+        ft_gain: float | None = None,
+        ft_damping: float | None = None,
+    ) -> Iterator[None]:
         self.enter_motion_control(
             error_scale=error_scale,
             force_limit=force_limit,
-            Kp_6=Kp_6, Kd_6=Kd_6,
+            Kp_6=Kp_6,
+            Kd_6=Kd_6,
             ft_gain=ft_gain,
-            ft_damping=ft_damping)
+            ft_damping=ft_damping,
+        )
         yield
         self.exit_control_context()
 
-    def enter_hybrid_control(self,
-                             error_scale: float | None = None,
-                             force_limit: float | None = None,
-                             Kp_6_force: Sequence[float] | None = None,
-                             Kd_6_force: Sequence[float] | None = None,
-                             Kp_6_motion: Sequence[float] | None = None,
-                             Kd_6_motion: Sequence[float] | None = None,
-                             ft_gain: float | None = None,
-                             ft_damping: float | None = None) -> None:
+    def enter_hybrid_control(
+        self,
+        error_scale: float | None = None,
+        force_limit: float | None = None,
+        Kp_6_force: Sequence[float] | None = None,
+        Kd_6_force: Sequence[float] | None = None,
+        Kp_6_motion: Sequence[float] | None = None,
+        Kd_6_motion: Sequence[float] | None = None,
+        ft_gain: float | None = None,
+        ft_damping: float | None = None,
+    ) -> None:
         self.robot.set_up_hybrid_mode(
             error_scale=error_scale,
             force_limit=force_limit,
@@ -153,19 +202,22 @@ class Pilot:
             Kp_6_motion=Kp_6_motion,
             Kd_6_motion=Kd_6_motion,
             ft_gain=ft_gain,
-            ft_damping=ft_damping)
+            ft_damping=ft_damping,
+        )
         self.control_context = ControlContext.MOTION
 
     @contextmanager
-    def hybrid_control(self,
-                       error_scale: float | None = None,
-                       force_limit: float | None = None,
-                       Kp_6_force: Sequence[float] | None = None,
-                       Kd_6_force: Sequence[float] | None = None,
-                       Kp_6_motion: Sequence[float] | None = None,
-                       Kd_6_motion: Sequence[float] | None = None,
-                       ft_gain: float | None = None,
-                       ft_damping: float | None = None) -> Iterator[None]:
+    def hybrid_control(
+        self,
+        error_scale: float | None = None,
+        force_limit: float | None = None,
+        Kp_6_force: Sequence[float] | None = None,
+        Kd_6_force: Sequence[float] | None = None,
+        Kp_6_motion: Sequence[float] | None = None,
+        Kd_6_motion: Sequence[float] | None = None,
+        ft_gain: float | None = None,
+        ft_damping: float | None = None,
+    ) -> Iterator[None]:
         self.enter_hybrid_control(
             error_scale=error_scale,
             force_limit=force_limit,
@@ -174,7 +226,8 @@ class Pilot:
             Kp_6_motion=Kp_6_motion,
             Kd_6_motion=Kd_6_motion,
             ft_gain=ft_gain,
-            ft_damping=ft_damping)
+            ft_damping=ft_damping,
+        )
         yield
         self.exit_control_context()
 
@@ -190,29 +243,39 @@ class Pilot:
 
     def move_home(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
-        self.robot.move_home()
+        self.position_mode.update(self.robot.cfg.robot.home_radians)
+        # self.robot.move_home()
         new_j_pos = self.robot.get_joint_pos()
         return new_j_pos
 
     def move_to_joint_pos(self, q: Sequence[float]) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
         # Move to requested joint position
-        self.robot.move_j(q)
+        # self.robot.move_j(q)
+        self.position_mode.update(q)
         new_joint_pos = self.robot.get_joint_pos()
         return new_joint_pos
 
-    def move_to_tcp_pose(self, target: Pose, time_out: float = 3.0) -> tuple[bool, Pose]:
-        self._check_control_context(expected=[ControlContext.POSITION, ControlContext.MOTION])
+    def move_to_tcp_pose(
+        self, target: Pose, time_out: float = 3.0
+    ) -> tuple[bool, Pose]:
+        self._check_control_context(
+            expected=[ControlContext.POSITION, ControlContext.MOTION]
+        )
         fin = False
+        r = sm.UnitQuaternion(target.q.wxyz).SO3()
+        target_se3 = sm.SE3.Rt(R=r, t=target.p.xyz)
         # Move to requested TCP pose
         if self.control_context == ControlContext.POSITION:
-            self.robot.move_l(target)
+            # self.robot.move_l(target)
+            self.position_mode.update(target_se3)
             fin = True
         if self.control_context == ControlContext.MOTION:
             t_start = perf_counter()
             tgt_3pts = target.to_3pt_set()
             while True:
-                self.robot.motion_mode(target)
+                self.motion_mode.update(target_se3)
+                # self.robot.motion_mode(target)
                 cur_3pts = self.robot.get_tcp_pose().to_3pt_set()
                 error = np.mean(np.abs(tgt_3pts, cur_3pts))
                 if error <= 0.005:  # 5 mm
