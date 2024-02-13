@@ -42,8 +42,10 @@ class ControlContext(Enum):
 
 class Pilot:
 
+    EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_tip', 'tool_sense', 'camera']
+
     def __init__(self, config: Path | None = None) -> None:
-        """ Core class to interact with the robot
+        """Core class to interact with the robot
 
         Args:
             config: Path to a configuration toml file
@@ -55,9 +57,6 @@ class Pilot:
             raise FileNotFoundError(f"Configuration with file path {config} not found.")
         self.robot = Robot(config)
         self.control_context = ControlContext.DISABLED
-        self.motion_mode = MotionMode(self.robot)
-        self.force_mode = ForceMode(self.robot)
-        self.position_mode = PositionMode(self.robot)
 
     def _check_control_context(
         self, expected: ControlContext | list[ControlContext]
@@ -81,24 +80,22 @@ class Pilot:
     def exit_control_context(self) -> None:
         if self.control_context == ControlContext.POSITION:
             # pass
-            self.position_mode.stop()
+            self.robot.position_controller.stop()
         elif self.control_context == ControlContext.SERVO:
             self.robot.stop_servoing()
         elif self.control_context == ControlContext.FORCE:
-            # self.robot.stop_force_mode()
-            self.force_mode.stop()
+            self.robot.force_controller.stop()
         elif self.control_context == ControlContext.MOTION:
-            # self.robot.stop_motion_mode()
-            self.motion_mode.stop()
+            self.robot.motion_controller.stop()
         elif self.control_context == ControlContext.HYBRID:
-            self.robot.stop_hybrid_mode()
+            self.robot.hybrid_controller.stop()
         elif self.control_context == ControlContext.TEACH_IN:
             self.robot.stop_teach_mode()
         self.control_context = ControlContext.DISABLED
 
     def enter_position_control(self, vel, acc, cartesian) -> None:
         self.control_context = ControlContext.POSITION
-        self.position_mode.setup(vel, acc, cartesian)
+        self.robot.position_controller.setup(vel, acc, cartesian)
 
     @contextmanager
     def position_control(
@@ -124,7 +121,7 @@ class Pilot:
         self, gain: float | None = None, damping: float | None = None
     ) -> None:
         # self.robot.set_up_force_mode(gain=gain, damping=damping)
-        self.force_mode.setup(gain=gain, damping=damping)
+        self.robot.force_controller.setup(gain=gain, damping=damping)
         self.control_context = ControlContext.FORCE
 
     @contextmanager
@@ -152,7 +149,7 @@ class Pilot:
         #     ft_gain=ft_gain,
         #     ft_damping=ft_damping,
         # )
-        self.motion_mode.setup(
+        self.robot.motion_controller.setup(
             error_scale=error_scale,
             force_limit=force_limit,
             Kp_6=Kp_6,
@@ -194,7 +191,7 @@ class Pilot:
         ft_gain: float | None = None,
         ft_damping: float | None = None,
     ) -> None:
-        self.robot.set_up_hybrid_mode(
+        self.robot.hybrid_controller.setup(
             error_scale=error_scale,
             force_limit=force_limit,
             Kp_6_force=Kp_6_force,
@@ -204,7 +201,7 @@ class Pilot:
             ft_gain=ft_gain,
             ft_damping=ft_damping,
         )
-        self.control_context = ControlContext.MOTION
+        self.control_context = ControlContext.HYBRID
 
     @contextmanager
     def hybrid_control(
@@ -241,9 +238,59 @@ class Pilot:
         yield
         self.exit_control_context()
 
+
+    def __frame_to_offset(self, frame: str) -> tuple[float, ...]:
+        if frame not in self.EE_FRAMES_:
+            raise ValueError(f"Given frame is not available. Please select one of '{self.EE_FRAMES_}'")
+        if frame == 'flange':
+            offset = 6 * (0.0,)
+        elif frame == 'ft_sensor':
+            if self.robot.extern_sensor:
+                offset = self.robot.ft_sensor_mdl.p_mounting2wrench.xyz + self.robot.ft_sensor_mdl.q_mounting2wrench.axis_angle
+            else:
+                # Tread internal force torque sensor as mounted in flange frame
+                offset = 6 * (0.0,)
+                # LOGGER.warning(f"External ft_sensor is not configured. Return pose of the flange frame.")
+        elif frame == 'tool_tip':
+            if self.robot.extern_sensor:
+                pq_flange2tool = (self.robot.ft_sensor_mdl.T_mounting2wrench @ self.robot.tool.T_mounting2tip).pose
+                offset = pq_flange2tool.xyz + pq_flange2tool.axis_angle
+            else:
+                offset = self.robot.tool.tip_frame.xyz + self.robot.tool.tip_frame.axis_angle
+        elif frame == 'tool_sense':
+            if self.robot.extern_sensor:
+                pq_flange2sense = (self.robot.ft_sensor_mdl.T_mounting2wrench @ self.robot.tool.T_mounting2sense).pose
+                offset = pq_flange2sense.xyz + pq_flange2sense.axis_angle
+            else:
+                offset = self.robot.tool.sense_frame.xyz + self.robot.tool.sense_frame.axis_angle
+        elif frame == 'camera':
+            pq_flange2cam = self.robot.cam_mdl.T_flange2camera.pose
+            offset = pq_flange2cam.xyz + pq_flange2cam.axis_angle
+        else:
+            raise RuntimeError("This code should not be reached. Please check the frame definitions.")
+        return offset
+    
+    def get_pose(self, frame: str = 'flange') -> Pose:
+        """ Get pose of the desired frame w.r.t the robot base. This function is independent of the TCP offset defined
+            on the robot side.
+        Args:
+            frame: One of the frame name defined in the class member variable 'EE_FRAMES_'
+        Returns:
+            6D pose
+        """
+        tcp_offset = self.__frame_to_offset(frame=frame)
+        q: Sequence[float] = self.robot.joint_pos
+        pose_vec: Sequence[float] = self.robot.rtde_controller.getForwardKinematics(q=q, tcp_offset=tcp_offset)
+        return Pose().from_xyz(pose_vec[:3]).from_axis_angle(pose_vec[3:])
+
+    def set_tcp(self, frame: str = 'tool_tip') -> None:
+        """ Function to set the tcp relative to the tool flange. """
+        offset = self.__frame_to_offset(frame=frame)
+        self.robot.set_tcp(offset)
+
     def move_home(self) -> list[float]:
         self._check_control_context(expected=ControlContext.POSITION)
-        self.position_mode.update(self.robot.cfg.robot.home_radians)
+        self.robot.position_controller.update(self.robot.cfg.robot.home_radians)
         # self.robot.move_home()
         new_j_pos = self.robot.get_joint_pos()
         return new_j_pos
@@ -252,7 +299,7 @@ class Pilot:
         self._check_control_context(expected=ControlContext.POSITION)
         # Move to requested joint position
         # self.robot.move_j(q)
-        self.position_mode.update(q)
+        self.robot.position_controller.update(q)
         new_joint_pos = self.robot.get_joint_pos()
         return new_joint_pos
 
@@ -268,13 +315,13 @@ class Pilot:
         # Move to requested TCP pose
         if self.control_context == ControlContext.POSITION:
             # self.robot.move_l(target)
-            self.position_mode.update(target_se3)
+            self.robot.position_controller.update(target_se3)
             fin = True
         if self.control_context == ControlContext.MOTION:
             t_start = perf_counter()
             tgt_3pts = target.to_3pt_set()
             while True:
-                self.motion_mode.update(target_se3)
+                self.robot.motion_controller.update(target_se3)
                 # self.robot.motion_mode(target)
                 cur_3pts = self.robot.get_tcp_pose().to_3pt_set()
                 error = np.mean(np.abs(tgt_3pts, cur_3pts))
