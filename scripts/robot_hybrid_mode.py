@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 from time import perf_counter
 from rigmopy import Vector6d
+import spatialmath as sm
 
 # local
 import ur_pilot
@@ -26,13 +27,17 @@ def hybrid_mode_ctrl() -> None:
 
             # Shift pose randomly relative to the reference pose
             new_pose = ref_pose.random((0.025, 0.025, 0.025), (np.deg2rad(3), np.deg2rad(3), np.deg2rad(3))) 
-            
+            r = sm.UnitQuaternion(new_pose.q.wxyz).SO3()
+            target_se3 = sm.SE3.Rt(R=r, t=new_pose.p.xyz)
+
             for i in range(50):
                 t_start_ = perf_counter()
                 wrench = np.random.randn(1)[-1] * Vector6d().from_random()
+
+                wrench = sm.SpatialForce(wrench.xyzXYZ)
                 # wrench = Vector6d().from_xyzXYZ([0, 0, 1, 0, 0, 0])
                 while perf_counter() - t_start_ < 1/5:  # run for xx seconds
-                    pilot.robot.hybrid_mode(new_pose, wrench)
+                    pilot.robot.hybrid_controller.update(target_se3, wrench)
 
 
 if __name__ == '__main__':
