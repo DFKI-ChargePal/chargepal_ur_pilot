@@ -46,7 +46,7 @@ class Robot(RealURRobot):
         else:
             self.config_fp = cfg_path
         config_raw = read_toml(self.config_fp)
-        self.cfg = Config(**config_raw)
+        self.pilot_cfg = Config(**config_raw)
 
         # Constants
         self.error_scale_motion_mode = 1.0
@@ -58,32 +58,32 @@ class Robot(RealURRobot):
         self.rtde_receiver = self.rtde.r
 
         # If there is no configuration for the home_position set to current position
-        if self.cfg.robot.home_radians is None:
-            self.cfg.robot.home_radians = list(self.rtde.r.getActualQ())
+        if self.pilot_cfg.robot.home_radians is None:
+            self.pilot_cfg.robot.home_radians = list(self.rtde_receiver.getActualQ())
 
         # Set up end-effector
-        if self.cfg.robot.ft_sensor is None:
+        if self.pilot_cfg.robot.ft_sensor is None:
             self.extern_sensor = False
             self._ft_sensor = None
             self._ft_sensor_mdl = None
         else:
             self.extern_sensor = True
-            self._ft_sensor = BotaFtSensor(**self.cfg.robot.ft_sensor.dict())
+            self._ft_sensor = BotaFtSensor(**self.pilot_cfg.robot.ft_sensor.dict())
             self._ft_sensor_mdl = BotaSensONEModel()
             self._ft_sensor.start()
 
         self._motion_pd: SpatialPDController | None = None
         self._force_pd: SpatialPDController | None = None
 
-        self.tool = ToolModel(**self.cfg.robot.tool.dict())
+        self.tool = ToolModel(**self.pilot_cfg.robot.tool.dict())
         self.set_tcp()
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
 
     @property
     def home_joint_config(self) -> tuple[float, ...]:
-        if self.cfg.robot.home_radians is not None:
-            return tuple(self.cfg.robot.home_radians)
+        if self.pilot_cfg.robot.home_radians is not None:
+            return tuple(self.pilot_cfg.robot.home_radians)
         else:
             raise ValueError("Home joint configuration was not set.")
 
