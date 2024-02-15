@@ -2,242 +2,292 @@ from __future__ import annotations
 
 # global
 import math
+import time
 import numpy as np
 from pathlib import Path
 from enum import auto, Enum
 from time import perf_counter
 from contextlib import contextmanager
-from rigmopy import Pose, Vector3d, Vector6d, Transformation
+
+from ur_control.utils import ur_format2tr
+
+from rigmopy import utils_math as rp_math
+from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
 # local
 from ur_pilot import utils
+from ur_pilot import config
 from ur_pilot.robot import Robot
+from ur_pilot.control_mode import ControlContextManager
+from ur_pilot.config_mdl import Config, read_toml
+from ur_pilot.utils import SpatialPDController
+from ur_pilot.end_effector.bota_sensor import BotaFtSensor
+from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
+from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 
-from ur_control.controller.controller_mode import MotionMode, ForceMode, PositionMode
 import spatialmath as sm
 
 # typing
-from typing import Iterator, Sequence
+from numpy import typing as npt
+from camera_kit import CameraBase
+from typing import Any, Iterator, Sequence
 
 
 @contextmanager
-def connect(config: Path | None = None) -> Iterator[Pilot]:
-    pilot = Pilot(config)
+def connect(config_dir: Path | None = None) -> Iterator[Pilot]:
+    pilot = Pilot(config_dir)
     try:
         yield pilot
     finally:
         pilot.disconnect()
 
 
-class ControlContext(Enum):
-    DISABLED = auto()
-    FORCE = auto()
-    SERVO = auto()
-    MOTION = auto()
-    HYBRID = auto()
-    POSITION = auto()
-    VELOCITY = auto()
-    TEACH_IN = auto()
+class ArmState(Enum):
+    NA = auto()  # not applicable
+    HOME = auto()
+    DRIVE = auto()
+    CCS_SIDE = auto()
+    TYPE2_SIDE = auto()
+
+    @staticmethod
+    def from_str(name: str) -> ArmState:
+        enum_state = None
+        for es in ArmState:
+            if name.upper() == es.name:
+                enum_state = es
+        if enum_state is None:
+            raise KeyError(f"Can't match state name '{name.upper()}' with any enum name. "
+                           f"Possible values are: {[e.name for e in ArmState]}")
+        return enum_state
+
+
+class JointState:
+
+    available_states = {
+        'na': np.zeros(6, dtype=np.float32),
+        'home': np.ones(6, dtype=np.float32),
+    }
+
+    def __init__(self, robot: Robot):
+        self.state = 'na'
+        self.value = np.zeros(6, np.float32)
+        self.robot = robot
+        self.check_state()
+
+    def check_state(self) -> None:
+        if self.state not in self.available_states.keys():
+            raise ValueError(f"Trying to bring arm in an unknown state: {self.state}. "
+                             f"Known states are: {self.available_states}")
+        if self.state != 'na':
+            # TODO: Check against real arm values
+            print(f"Check if arm is close to state values for state {self.state}!")
+
+    def check_existence(self, name: str) -> bool:
+        exs = False
+        # Only work with lowercase strings
+        name = name.lower()
+        if name in self.available_states.keys():
+            exs = True
+        return exs
+
+    def add(self, name: str, value: npt.ArrayLike) -> None:
+        # Only work with lowercase strings
+        name = name.lower()
+        if name in self.available_states.keys():
+            raise RuntimeError(f"State with name '{name}' already exists.")
+        val = np.array(np.reshape(value, 6), dtype=np.float32)
+        self.available_states[name] = val
+
+    def get_state(self) -> tuple[str, npt.NDArray[np.float32]]:
+        self.check_state()
+        return self.state, self.value
+
+    def set_state(self, name: str) -> None:
+        # Only work with lowercase strings
+        name = name.lower()
+        if name not in self.available_states.keys():
+            raise RuntimeError(f"Can't find a state with name '{name}'")
+        else:
+            self.state = name
+            self.value = self.available_states[name]
+        self.check_state()
+
+
+class Maneuvers:
+
+    def __init__(self, robot: Robot, joint_state: JointState):
+        self.maneuvers: dict[str, dict[str, Any]] = {}
+        self.joint_state = joint_state
+        self.robot = robot
+
+    def add(self, name: str, start: str, stop: str, waypoints: list[npt.ArrayLike] | None = None) -> None:
+        # Only work with lowercase strings
+        name = name.lower()
+        if name in self.maneuvers.keys():
+            raise RuntimeError(f"Maneuver with name '{name}' already exist.")
+        if not self.joint_state.check_existence(start):
+            raise ValueError(f"Start state with name '{start}' doesn't exist!")
+        if not self.joint_state.check_existence(stop):
+            raise ValueError(f"Stop state with name '{stop}' doesn't exist!")
+        self.maneuvers[name] = {
+            'start': start,
+            'stop': stop,
+            'waypoints': waypoints
+        }
+
+    def execute(self, name: str) -> None:
+        # Only work with lowercase strings
+        name = name.lower()
+        maneuver = self.maneuvers[name]
+        if self.joint_state != maneuver['start']:
+            raise RuntimeError(f"Arm not in start state. Can't execute maneuver.")
+        if maneuver['waypoints'] is None:
+            pass
+        else:
+            pass
 
 
 class Pilot:
 
+    Q_WORLD2BASE_ = Quaternion().from_euler_angle([np.pi, 0.0, 0.0])
+    FT_SENSOR_FRAMES_ = ['world', 'arm_base', 'ft_sensor']
     EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_tip', 'tool_sense', 'camera']
 
-    def __init__(self, config: Path | None = None) -> None:
-        """Core class to interact with the robot
+    def __init__(self, config_dir: Path | None = None) -> None:
+        """ Core class to interact with the robot
 
         Args:
-            config: Path to a configuration toml file
+            config_dir: Path to a configuration folder
 
         Raises:
             FileNotFoundError: Check if configuration file exists
         """
-        if config is not None and not config.exists():
-            raise FileNotFoundError(f"Configuration with file path {config} not found.")
-        self.robot = Robot(config)
-        self.control_context = ControlContext.DISABLED
+        if config_dir is not None and not config_dir.is_dir():
+            raise NotADirectoryError(f"Can't find directory with path: {config_dir}")
+        if config_dir is None:
+            self.config_dir = Path(config.__file__).parent
+        else:
+            self.config_dir = config_dir
+        # Set up ur_control
+        self.robot = Robot(self.config_dir.joinpath('ur_control.toml'))
 
-    def _check_control_context(
-        self, expected: ControlContext | list[ControlContext]
-    ) -> None:
-        if self.control_context is ControlContext.DISABLED:
+        config_raw = read_toml(self.config_dir.joinpath('ur_pilot.toml'))
+        self.cfg = Config(**config_raw)
+        self.context = ControlContextManager(self.robot, self.cfg)
+
+        # Set up end-effector
+        if self.cfg.pilot.ft_sensor is None:
+            self.extern_sensor = False
+            self._ft_sensor = None
+            self._ft_sensor_mdl = None
+        else:
+            self.extern_sensor = True
+            self._ft_sensor = BotaFtSensor(**self.cfg.pilot.ft_sensor.dict())
+            self._ft_sensor_mdl = BotaSensONEModel()
+            self._ft_sensor.start()
+
+        self._motion_pd: SpatialPDController | None = None
+        self._force_pd: SpatialPDController | None = None
+
+        self.tool = ToolModel(**self.cfg.pilot.tool_model.dict())
+        self.set_tcp()
+        self.cam: CameraBase | None = None
+        self.cam_mdl = CameraModel()
+
+        # Constants
+        self.dt = 1 / self.robot.cfg.robot.rtde_freq
+        self.error_scale_motion_mode = 1.0
+        self.force_limit = 0.0
+
+    # @property
+    # def home_joint_config(self) -> tuple[float, ...]:
+    #     if self.cfg.pilot.home_radians is not None:
+    #         return tuple(self.cfg.pilot.home_radians)
+    #     else:
+    #         raise ValueError("Home joint configuration was not set.")
+    #
+    # def overwrite_home_joint_config(self, joint_pos: npt.ArrayLike) -> None:
+    #     jp = np.reshape(joint_pos, 6).tolist()
+    #     config_raw = read_toml(self.config_fp)
+    #     config_raw['robot']['home_radians'] = jp
+    #     write_toml(config_raw, self.config_fp)
+
+    @property
+    def ft_sensor(self) -> BotaFtSensor:
+        if self._ft_sensor is not None:
+            return self._ft_sensor
+        else:
+            raise RuntimeError("External sensor is not initialized. Please check the configuration.")
+
+    @property
+    def ft_sensor_mdl(self) -> BotaSensONEModel:
+        if self._ft_sensor_mdl is not None:
+            return self._ft_sensor_mdl
+        else:
+            raise RuntimeError("External sensor is not initialized. Please check the configuration.")
+
+    @property
+    def motion_pd(self) -> SpatialPDController:
+        if self._motion_pd is not None:
+            return self._motion_pd
+        else:
             raise RuntimeError(
-                f"Pilot is not in any control context. Running actions is not possible."
-            )
-        if isinstance(expected, list) and self.control_context not in expected:
+                "Motion PD controller is not initialized. Please run URPilot.set_up_motion_mode(...) first")
+
+    @property
+    def force_pd(self) -> SpatialPDController:
+        if self._force_pd is None:
             raise RuntimeError(
-                f"This action is not able to use one of the control context '{self.control_context}'"
-            )
-        if (
-            isinstance(expected, ControlContext)
-            and self.control_context is not expected
-        ):
-            raise RuntimeError(
-                f"This action is not able to use the control context '{self.control_context}'"
-            )
+                "Hybrid PD controller is not initialized. Please run URPilot.set_up_motion_mode(...) first")
+        else:
+            return self._force_pd
 
-    def exit_control_context(self) -> None:
-        if self.control_context == ControlContext.POSITION:
-            # pass
-            self.robot.position_controller.stop()
-        elif self.control_context == ControlContext.SERVO:
-            self.robot.stop_servoing()
-        elif self.control_context == ControlContext.FORCE:
-            self.robot.force_controller.stop()
-        elif self.control_context == ControlContext.MOTION:
-            self.robot.motion_controller.stop()
-        elif self.control_context == ControlContext.HYBRID:
-            self.robot.hybrid_controller.stop()
-        elif self.control_context == ControlContext.TEACH_IN:
-            self.robot.stop_teach_mode()
-        self.control_context = ControlContext.DISABLED
+    @property
+    def q_world2arm(self) -> Quaternion:
+        return self.Q_WORLD2BASE_
 
-    def enter_position_control(self, vel, acc, cartesian) -> None:
-        self.control_context = ControlContext.POSITION
-        self.robot.position_controller.setup(vel, acc, cartesian)
+    def average_ft_measurement(self, num_meas: int = 100) -> Vector6d:
+        """ Method to get an average force torque measurement over num_meas samples.
 
-    @contextmanager
-    def position_control(
-        self,
-        vel: float | None = None,
-        acc: float | None = None,
-        cartesian: bool | None = None,
-    ) -> Iterator[None]:
-        self.enter_position_control(vel=vel, acc=acc, cartesian=cartesian)
-        yield
-        self.exit_control_context()
+        Args:
+            num_meas: Number of samples
 
-    def enter_servo_control(self) -> None:
-        self.control_context = ControlContext.SERVO
+        Returns:
+            The mean of n ft measurements
+        """
+        if num_meas < 1:
+            raise ValueError("Number of measurements must be at least 1")
+        avg_ft = None
+        for _ in range(num_meas):
+            ft_next = np.reshape(self.ft_sensor.FT_raw, [6, 1])
+            if avg_ft is None:
+                avg_ft = ft_next
+            else:
+                avg_ft = np.hstack([avg_ft, ft_next])
+            time.sleep(self.ft_sensor.time_step)
+        assert avg_ft is not None  # for type check
+        return Vector6d().from_xyzXYZ(np.mean(avg_ft, axis=-1))
+
+    def exit(self) -> None:
+        if self._ft_sensor is not None:
+            self._ft_sensor.stop()
+        self.disconnect()
+
+    def register_ee_cam(self, cam: CameraBase, tf_dir: str = "") -> None:
+        self.cam = cam
+        if not self.cam.is_calibrated:
+            self.cam.load_coefficients()
+        T_flange2cam = FlangeEyeCalibration.load_transformation(self.cam, tf_dir)
+        self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_flange2cam)
 
     @contextmanager
-    def servo_control(self) -> Iterator[None]:
-        self.enter_servo_control()
+    def open_plug_connection(self) -> Iterator[None]:
+        self.robot.enable_digital_out(0)
+        time.sleep(0.5)
         yield
-        self.exit_control_context()
-
-    def enter_force_control(
-        self, gain: float | None = None, damping: float | None = None
-    ) -> None:
-        # self.robot.set_up_force_mode(gain=gain, damping=damping)
-        self.robot.force_controller.setup(gain=gain, damping=damping)
-        self.control_context = ControlContext.FORCE
-
-    @contextmanager
-    def force_control(
-        self, gain: float | None = None, damping: float | None = None
-    ) -> Iterator[None]:
-        self.enter_force_control(gain=gain, damping=damping)
-        yield
-        self.exit_control_context()
-
-    def enter_motion_control(
-        self,
-        error_scale: float | None = None,
-        force_limit: float | None = None,
-        Kp_6: Sequence[float] | None = None,
-        Kd_6: Sequence[float] | None = None,
-        ft_gain: float | None = None,
-        ft_damping: float | None = None,
-    ) -> None:
-        # self.robot.set_up_motion_mode(
-        #     error_scale=error_scale,
-        #     force_limit=force_limit,
-        #     Kp_6=Kp_6,
-        #     Kd_6=Kd_6,
-        #     ft_gain=ft_gain,
-        #     ft_damping=ft_damping,
-        # )
-        self.robot.motion_controller.setup(
-            error_scale=error_scale,
-            force_limit=force_limit,
-            Kp_6=Kp_6,
-            Kd_6=Kd_6,
-            ft_gain=ft_gain,
-            ft_damping=ft_damping,
-        )
-        self.control_context = ControlContext.MOTION
-
-    @contextmanager
-    def motion_control(
-        self,
-        error_scale: float | None = None,
-        force_limit: float | None = None,
-        Kp_6: Sequence[float] | None = None,
-        Kd_6: Sequence[float] | None = None,
-        ft_gain: float | None = None,
-        ft_damping: float | None = None,
-    ) -> Iterator[None]:
-        self.enter_motion_control(
-            error_scale=error_scale,
-            force_limit=force_limit,
-            Kp_6=Kp_6,
-            Kd_6=Kd_6,
-            ft_gain=ft_gain,
-            ft_damping=ft_damping,
-        )
-        yield
-        self.exit_control_context()
-
-    def enter_hybrid_control(
-        self,
-        error_scale: float | None = None,
-        force_limit: float | None = None,
-        Kp_6_force: Sequence[float] | None = None,
-        Kd_6_force: Sequence[float] | None = None,
-        Kp_6_motion: Sequence[float] | None = None,
-        Kd_6_motion: Sequence[float] | None = None,
-        ft_gain: float | None = None,
-        ft_damping: float | None = None,
-    ) -> None:
-        self.robot.hybrid_controller.setup(
-            error_scale=error_scale,
-            force_limit=force_limit,
-            Kp_6_force=Kp_6_force,
-            Kd_6_force=Kd_6_force,
-            Kp_6_motion=Kp_6_motion,
-            Kd_6_motion=Kd_6_motion,
-            ft_gain=ft_gain,
-            ft_damping=ft_damping,
-        )
-        self.control_context = ControlContext.HYBRID
-
-    @contextmanager
-    def hybrid_control(
-        self,
-        error_scale: float | None = None,
-        force_limit: float | None = None,
-        Kp_6_force: Sequence[float] | None = None,
-        Kd_6_force: Sequence[float] | None = None,
-        Kp_6_motion: Sequence[float] | None = None,
-        Kd_6_motion: Sequence[float] | None = None,
-        ft_gain: float | None = None,
-        ft_damping: float | None = None,
-    ) -> Iterator[None]:
-        self.enter_hybrid_control(
-            error_scale=error_scale,
-            force_limit=force_limit,
-            Kp_6_force=Kp_6_force,
-            Kd_6_force=Kd_6_force,
-            Kp_6_motion=Kp_6_motion,
-            Kd_6_motion=Kd_6_motion,
-            ft_gain=ft_gain,
-            ft_damping=ft_damping,
-        )
-        yield
-        self.exit_control_context()
-
-    def enter_teach_in_control(self) -> None:
-        self.robot.set_up_teach_mode()
-        self.control_context = ControlContext.TEACH_IN
-
-    @contextmanager
-    def teach_in_control(self) -> Iterator[None]:
-        self.enter_teach_in_control()
-        yield
-        self.exit_control_context()
-
+        self.robot.disable_digital_out(0)
+        if self.robot.get_digital_out_state(0):
+            raise ValueError(f"Digital output shout be 'LOW' but is 'HIGH'.")
 
     def __frame_to_offset(self, frame: str) -> tuple[float, ...]:
         if frame not in self.EE_FRAMES_:
@@ -245,31 +295,31 @@ class Pilot:
         if frame == 'flange':
             offset = 6 * (0.0,)
         elif frame == 'ft_sensor':
-            if self.robot.extern_sensor:
-                offset = self.robot.ft_sensor_mdl.p_mounting2wrench.xyz + self.robot.ft_sensor_mdl.q_mounting2wrench.axis_angle
+            if self.extern_sensor:
+                offset = self.ft_sensor_mdl.p_mounting2wrench.xyz + self.ft_sensor_mdl.q_mounting2wrench.axis_angle
             else:
                 # Tread internal force torque sensor as mounted in flange frame
                 offset = 6 * (0.0,)
                 # LOGGER.warning(f"External ft_sensor is not configured. Return pose of the flange frame.")
         elif frame == 'tool_tip':
-            if self.robot.extern_sensor:
-                pq_flange2tool = (self.robot.ft_sensor_mdl.T_mounting2wrench @ self.robot.tool.T_mounting2tip).pose
+            if self.extern_sensor:
+                pq_flange2tool = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2tip).pose
                 offset = pq_flange2tool.xyz + pq_flange2tool.axis_angle
             else:
-                offset = self.robot.tool.tip_frame.xyz + self.robot.tool.tip_frame.axis_angle
+                offset = self.tool.tip_frame.xyz + self.tool.tip_frame.axis_angle
         elif frame == 'tool_sense':
-            if self.robot.extern_sensor:
-                pq_flange2sense = (self.robot.ft_sensor_mdl.T_mounting2wrench @ self.robot.tool.T_mounting2sense).pose
+            if self.extern_sensor:
+                pq_flange2sense = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2sense).pose
                 offset = pq_flange2sense.xyz + pq_flange2sense.axis_angle
             else:
-                offset = self.robot.tool.sense_frame.xyz + self.robot.tool.sense_frame.axis_angle
+                offset = self.tool.sense_frame.xyz + self.tool.sense_frame.axis_angle
         elif frame == 'camera':
-            pq_flange2cam = self.robot.cam_mdl.T_flange2camera.pose
+            pq_flange2cam = self.cam_mdl.T_flange2camera.pose
             offset = pq_flange2cam.xyz + pq_flange2cam.axis_angle
         else:
             raise RuntimeError("This code should not be reached. Please check the frame definitions.")
         return offset
-    
+
     def get_pose(self, frame: str = 'flange') -> Pose:
         """ Get pose of the desired frame w.r.t the robot base. This function is independent of the TCP offset defined
             on the robot side.
@@ -279,50 +329,253 @@ class Pilot:
             6D pose
         """
         tcp_offset = self.__frame_to_offset(frame=frame)
-        q: Sequence[float] = self.robot.joint_pos
+        q = self.robot.joint_pos
         pose_vec: Sequence[float] = self.robot.rtde_controller.getForwardKinematics(q=q, tcp_offset=tcp_offset)
         return Pose().from_xyz(pose_vec[:3]).from_axis_angle(pose_vec[3:])
 
+    def get_ft(self, frame: str = 'ft_sensor') -> Vector6d:
+        """ Get force-torque readings w.r.t the desired frame.
+
+        Args:
+            frame: One of the frame name defined in the class member variable 'FT_SENSOR_FRAMES_'
+
+        Returns:
+            A 6d vector with the sensor readings
+        """
+        if frame not in self.FT_SENSOR_FRAMES_:
+            raise ValueError(f"Given frame is not available. Please select one of '{self.FT_SENSOR_FRAMES_}'")
+        # The default build in sensor readings are w.r.t the arm base frame
+        ft = Vector6d()
+        if self.extern_sensor:
+            # The default sensor readings are w.r.t the sensor frame
+            ft_raw = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
+            if frame == 'ft_sensor':
+                ft = ft_raw
+        return ft
+
+    def get_tcp_force(self) -> Vector6d:
+        if self.extern_sensor:
+            tcp_force = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
+        else:
+            tcp_force = Vector6d().from_xyzXYZ(self.robot.tcp_force)
+        # Compensate Tool mass
+        f_tool_wrt_world = self.tool.f_inertia
+        f_tool_wrt_ft = (self.q_world2arm * Quaternion().from_matrix(
+            self.robot.tcp_pose.R)).apply(f_tool_wrt_world, inverse=True)
+        t_tool_wrt_ft = Vector3d().from_xyz(np.cross(self.tool.com.xyz, f_tool_wrt_ft.xyz))
+        ft_comp = Vector6d().from_Vector3d(f_tool_wrt_ft, t_tool_wrt_ft)
+        return tcp_force + ft_comp
+
     def set_tcp(self, frame: str = 'tool_tip') -> None:
         """ Function to set the tcp relative to the tool flange. """
-        offset = self.__frame_to_offset(frame=frame)
+        offset = ur_format2tr(self.__frame_to_offset(frame=frame))
         self.robot.set_tcp(offset)
 
+    def set_up_force_mode(self, gain: float | None = None, damping: float | None = None) -> None:
+        gain_scaling = gain if gain else self.cfg.pilot.force_mode.gain
+        damping_fact = damping if damping else self.cfg.pilot.force_mode.damping
+        self.robot.rtde_controller.zeroFtSensor()
+        self.robot.rtde_controller.forceModeSetGainScaling(gain_scaling)
+        self.robot.rtde_controller.forceModeSetDamping(damping_fact)
+
+    # NOTE - could be implemented like this in ur_control. In addition, the SpatialPDController
+    # would have to be implemented for this. Also, the datatypes have to be changed.
+    # It has to be checked how to implement the robot movement via a context.
+    def set_up_motion_mode(self,
+                           error_scale: float | None = None,
+                           force_limit: float | None = None,
+                           Kp_6: Sequence[float] | None = None,
+                           Kd_6: Sequence[float] | None = None,
+                           ft_gain: float | None = None,
+                           ft_damping: float | None = None) -> None:
+        """ Function to set up force based motion controller
+
+        Args:
+            error_scale: Overall scaling parameter
+            force_limit: The absolute value of the applied forces in tool space
+            Kp_6: 6 dimensional motion controller proportional gain
+            Kd_6: 6 dimensional motion controller derivative gain
+            ft_gain: Force torque gain parameter
+            ft_damping: Force torque damping parameter
+        """
+        self.error_scale_motion_mode = error_scale if error_scale else self.cfg.pilot.motion_mode.error_scale
+        self.force_limit = force_limit if force_limit else self.cfg.pilot.motion_mode.force_limit
+        Kp = Kp_6 if Kp_6 is not None else self.cfg.pilot.motion_mode.Kp
+        Kd = Kd_6 if Kd_6 is not None else self.cfg.pilot.motion_mode.Kd
+        self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
+        self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
+
+    def motion_mode(self, target: Pose) -> None:
+        """ Function to update motion target and let the motion controller keep running
+
+        Args:
+            target: Target pose of the TCP
+        """
+        task_frame = 6 * (0.0, )  # Move w.r.t. robot base
+        # Get current Pose
+        actual = self.robot.get_tcp_pose()
+        # Compute spatial error
+        pos_error = target.p - actual.p
+        aa_error = np.array(rp_math.quaternion_difference(actual.q, target.q).axis_angle)
+
+        # Angles error always within [0,Pi)
+        angle_error = np.max(np.abs(aa_error))
+        if angle_error < 1e7:
+            axis_error = aa_error
+        else:
+            axis_error = aa_error/angle_error
+        # Clamp maximal tolerated error.
+        # The remaining error will be handled in the next control cycle.
+        # Note that this is also the maximal offset that the
+        # cartesian_compliance_controller can use to build up a restoring stiffness
+        # wrench.
+        angle_error = np.clip(angle_error, 0.0, 1.0)
+        ax_error = Vector3d().from_xyz(angle_error * axis_error)
+        distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
+        po_error = distance_error * pos_error
+        motion_error = Vector6d().from_Vector3d(po_error, ax_error)
+        f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.dt)
+        # Clip to maximum forces
+        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
+        self.robot.force_mode(
+            task_frame=ur_format2tr(task_frame),
+            selection_vector=6 * (1,),
+            wrench=f_net_clip.tolist(),
+            )
+        # pose = sm.SE3.Rt(R=sm.UnitQuaternion(target.q.wxyz).SO3(), t=target.p.xyz)
+        # self.motion_mode_ur(pose)
+
+    def stop_motion_mode(self) -> None:
+        """ Function to set robot back in normal position control mode. """
+        self.motion_pd.reset()
+        self.robot.stop_force_mode()
+
+    def set_up_hybrid_mode(self,
+                           error_scale: float | None = None,
+                           force_limit: float | None = None,
+                           Kp_6_force: Sequence[float] | None = None,
+                           Kd_6_force: Sequence[float] | None = None,
+                           Kp_6_motion: Sequence[float] | None = None,
+                           Kd_6_motion: Sequence[float] | None = None,
+                           ft_gain: float | None = None,
+                           ft_damping: float | None = None) -> None:
+        """ Function to set up the hybrid controller. Error signal is a combination of a pose and wrench error
+
+        Args:
+            error_scale: Overall error scaling parameter
+            force_limit: The absolute value of the applied forces in tool space
+            Kp_6_force: 6 dimensional controller proportional gain (force part)
+            Kd_6_force: 6 dimensional controller derivative gain (force part)
+            Kp_6_motion: 6 dimensional controller proportional gain (motion part)
+            Kd_6_motion: 6 dimensional controller derivative gain (motion part)
+            ft_gain: Force torque gain parameter (low level controller)
+            ft_damping: Force torque damping parameter (low level controller)
+
+        Returns:
+            None
+        """
+        self.error_scale_motion_mode = error_scale if error_scale else self.cfg.pilot.hybrid_mode.error_scale
+        self.force_limit = force_limit if force_limit else self.cfg.pilot.hybrid_mode.force_limit
+        f_Kp = Kp_6_force if Kp_6_force is not None else self.cfg.pilot.hybrid_mode.Kp_force
+        f_Kd = Kd_6_force if Kd_6_force is not None else self.cfg.pilot.hybrid_mode.Kd_force
+        m_Kp = Kp_6_motion if Kp_6_motion is not None else self.cfg.pilot.hybrid_mode.Kp_motion
+        m_Kd = Kd_6_motion if Kd_6_motion is not None else self.cfg.pilot.hybrid_mode.Kd_motion
+        self._force_pd = SpatialPDController(Kp_6=f_Kp, Kd_6=f_Kd)
+        self._motion_pd = SpatialPDController(Kp_6=m_Kp, Kd_6=m_Kd)
+        self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
+
+    # TODO - Add description
+    def hybrid_mode(self, pose: Pose, wrench: Vector6d) -> None:
+        """
+
+        Args:
+            pose: Target pose of the TCP
+            wrench: Target wrench w.r.t. the TCP
+
+        Returns:
+            None
+        """
+        task_frame = 6 * (0.0, )  # Move w.r.t. robot bose
+        # Get current pose
+        cur_pose = self.robot.get_tcp_pose()
+        # Compute spatial error
+        pos_error = pose.p - cur_pose.p
+        aa_error = np.array(rp_math.quaternion_difference(cur_pose.q, pose.q).axis_angle)
+        # Angles error always within [0,Pi)
+        angle_error = np.max(np.abs(aa_error))
+        if angle_error < 1e7:
+            axis_error = aa_error
+        else:
+            axis_error = aa_error/angle_error
+        # Clamp maximal tolerated error.
+        # The remaining error will be handled in the next control cycle.
+        # Note that this is also the maximal offset that the
+        # cartesian_compliance_controller can use to build up a restoring stiffness
+        # wrench.
+        angle_error = np.clip(angle_error, 0.0, 1.0)
+        ax_error = Vector3d().from_xyz(angle_error * axis_error)
+        distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
+        po_error = distance_error * pos_error
+        motion_error = Vector6d().from_Vector3d(po_error, ax_error)
+        force_error = wrench
+        f_net = self.error_scale_motion_mode * (
+            self.motion_pd.update(motion_error, self.dt) + self.force_pd.update(force_error, self.dt))
+        # Clip to maximum forces
+        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
+        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * (1,), wrench=f_net_clip.tolist())
+
+    def stop_hybrid_mode(self) -> None:
+        """ Function to set robot back in default control mode """
+        self.force_pd.reset()
+        self.motion_pd.reset()
+        self.robot.stop_force_mode()
+
     def move_home(self) -> list[float]:
-        self._check_control_context(expected=ControlContext.POSITION)
-        self.robot.position_controller.update(self.robot.cfg.robot.home_radians)
+        self.context.check_mode(expected=self.context.mode_types.POSITION)
+        self.robot.move_home()
         # self.robot.move_home()
         new_j_pos = self.robot.get_joint_pos()
         return new_j_pos
 
+    def move_to(self, goal_state: str) -> npt.NDArray[np.float_]:
+        goal_ = ArmState.from_str(goal_state)
+        if goal_ == ArmState.HOME:
+            self.move_home()
+            self.arm_state = ArmState.HOME
+        elif goal_ == ArmState.DRIVE:
+            self.robot.movej([])
+            self.arm_state = ArmState.DRIVE
+        elif goal_ == ArmState.CCS_SIDE:
+            self.robot.movej([])
+            self.arm_state = ArmState.CCS_SIDE
+        elif goal_ == ArmState.TYPE2_SIDE:
+            self.robot.movej([])
+            self.arm_state = ArmState.TYPE2_SIDE
+        return self.robot.joint_pos
+
     def move_to_joint_pos(self, q: Sequence[float]) -> list[float]:
-        self._check_control_context(expected=ControlContext.POSITION)
+        self.context.check_mode(expected=self.context.mode_types.POSITION)
         # Move to requested joint position
-        # self.robot.move_j(q)
-        self.robot.position_controller.update(q)
+        self.robot.movej(q)
         new_joint_pos = self.robot.get_joint_pos()
         return new_joint_pos
 
-    def move_to_tcp_pose(
-        self, target: Pose, time_out: float = 3.0
-    ) -> tuple[bool, Pose]:
-        self._check_control_context(
-            expected=[ControlContext.POSITION, ControlContext.MOTION]
-        )
+    def move_to_tcp_pose(self, target: Pose, time_out: float = 3.0) -> tuple[bool, Pose]:
+        self.context.check_mode(expected=[self.context.mode_types.POSITION, self.context.mode_types.MOTION])
         fin = False
         r = sm.UnitQuaternion(target.q.wxyz).SO3()
         target_se3 = sm.SE3.Rt(R=r, t=target.p.xyz)
         # Move to requested TCP pose
-        if self.control_context == ControlContext.POSITION:
+        if self.context.mode == self.context.mode_types.POSITION:
             # self.robot.move_l(target)
-            self.robot.position_controller.update(target_se3)
+            self.robot.movel(target_se3)
             fin = True
-        if self.control_context == ControlContext.MOTION:
+        elif self.context.mode == self.context.mode_types.MOTION:
             t_start = perf_counter()
             tgt_3pts = target.to_3pt_set()
             while True:
-                self.robot.motion_controller.update(target_se3)
-                # self.robot.motion_mode(target)
+                # self.robot.motion_controller.update(target_se3)
+                self.motion_mode(target)
                 cur_3pts = self.robot.get_tcp_pose().to_3pt_set()
                 error = np.mean(np.abs(tgt_3pts, cur_3pts))
                 if error <= 0.005:  # 5 mm
@@ -335,7 +588,7 @@ class Pilot:
         return fin, new_pose
 
     def push_linear(self, force: Vector3d, compliant_axes: list[int], duration: float) -> float:
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
@@ -345,7 +598,7 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=compliant_axes,
                 wrench=wrench)
             if (perf_counter() - t_start) > duration:
@@ -353,15 +606,61 @@ class Pilot:
         x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
         dist: float = np.sum(np.abs(x_now - x_ref))  # L1 norm
         # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
+        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
         return dist
 
+    def screw_ee_force_mode(self, torque: float, ang: float, time_out: float) -> bool:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        # Limit input
+        torque = np.clip(torque, 0.0, 5.0)
+        wrench_vec = 6 * [0.0]
+        compliant_axes = [1, 1, 1, 0, 0, 1]
+        # Wrench will be applied with respect to the current TCP pose
+        X_tcp = self.robot.get_tcp_pose()
+        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        # Create target
+        ee_jt_pos = self.robot.get_joint_pos()[-1]
+        ee_jt_pos_tgt = ee_jt_pos + ang
+        # Time observation
+        success = False
+        t_start = perf_counter()
+        # Controller state
+        prev_error = np.nan
+        i_err = 0.0
+        while True:
+            # Angular error
+            ee_jt_pos_now = self.robot.get_joint_pos()[-1]
+            ang_error = (ee_jt_pos_tgt - ee_jt_pos_now)
+            p_err = torque * ang_error
+            if prev_error is np.NAN:
+                d_err = 0.0
+            else:
+                d_err = 1.0 * (ang_error - prev_error) / self.dt
+            i_err = i_err + 3.5e-5 * ang_error / self.dt
+            wrench_vec[-1] = np.clip(p_err + d_err + i_err, -torque, torque)
+            prev_error = ang_error
+            # Apply wrench
+            self.robot.force_mode(
+                task_frame=ur_format2tr(task_frame),
+                selection_vector=compliant_axes,
+                wrench=wrench_vec)
+            t_now = perf_counter()
+            if abs(ang_error) < 5e-3:
+                success = True
+                break
+            if t_now - t_start > time_out:
+                break
+        return success
+
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        # Check if axis is valid
+        if not axis.lower() in ['x', 'y', 'z']:
+            raise ValueError(f"Only linear axes allowed.")
         wrench_idx = utils.axis2index(axis.lower())
         wrench_vec = 6 * [0.0]
         wrench_vec[wrench_idx] = force
@@ -373,7 +672,7 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
             t_now = perf_counter()
@@ -387,7 +686,7 @@ class Pilot:
             if t_now - t_start > time_out:
                 break
         # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
 
     def plug_in_force_ramp(
@@ -403,7 +702,7 @@ class Pilot:
         Returns:
             True when there is no more movement; False otherwise
         """
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         fin = False
         wrench_idx = utils.axis2index(f_axis.lower())
@@ -433,7 +732,7 @@ class Pilot:
         Returns:
             Success
         """
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
@@ -446,12 +745,12 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=select_vec,
                 wrench=wrench_vec
             )
             # Get current transformation from base to end-effector
-            T_Base2Tip = Transformation().from_pose(self.robot.get_pose('tool_tip'))
+            T_Base2Tip = Transformation().from_pose(self.get_pose('tool_tip'))
             T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
             if T_Tip2Socket.tau[wrench_idx] <= -0.032:
                 fin = True
@@ -473,7 +772,7 @@ class Pilot:
         Returns:
             Success flag
         """
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
@@ -484,12 +783,12 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=select_vec,
                 wrench=wrench
             )
             # Get current transformation from base to end-effector
-            T_Base2Tip = Transformation().from_pose(self.robot.get_pose('tool_tip'))
+            T_Base2Tip = Transformation().from_pose(self.get_pose('tool_tip'))
             T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
             if T_Tip2Socket.tau[2] <= -0.015:
                 fin = True
@@ -499,7 +798,7 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
     
     def jog_in_plug(self,
@@ -516,7 +815,7 @@ class Pilot:
         Returns:
             Success flag
         """
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # wrench parameter
         freq = 10.0
         f = abs(force)
@@ -532,12 +831,12 @@ class Pilot:
             wrench = [0.0, 0.0, f, 0.0, m * math.sin(freq * dt), 0.0]
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=select_vec,
                 wrench=wrench
             )
             # Get current transformation from base to end-effector
-            T_Base2Tip = Transformation().from_pose(self.robot.get_pose('tool_tip'))
+            T_Base2Tip = Transformation().from_pose(self.get_pose('tool_tip'))
             T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
             if T_Tip2Socket.tau[2] <= -0.032:
                 fin = True
@@ -547,7 +846,7 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
 
     def tcp_force_mode(self,
@@ -555,7 +854,7 @@ class Pilot:
                        compliant_axes: list[int],
                        distance: float,
                        time_out: float) -> bool:
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
@@ -564,7 +863,7 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=compliant_axes,
                 wrench=wrench.xyzXYZ)
             x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
@@ -577,11 +876,11 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
 
     def find_contact_point(self, direction: Sequence[int], time_out: float) -> tuple[bool, Pose]:
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Map direction to wrench
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
         selection_vector = [1 if d != 0 else 0 for d in direction]
@@ -591,7 +890,7 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=selection_vector,
                 wrench=wrench
                 )
@@ -606,10 +905,10 @@ class Pilot:
             elif t_now - t_start > time_out:
                 fin = False
                 break
-        return fin, self.robot.get_pose(frame='flange')
+        return fin, self.get_pose(frame='flange')
 
     def sensing_depth(self, T_Base2Target: Transformation, time_out: float) -> tuple[bool, Transformation]:
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Parameter set. Sensing is in tool direction
         selection_vector = [0, 0, 1, 0, 0, 0]
         wrench = [0.0, 0.0, 10.0, 0.0, 0.0, 0.0]
@@ -621,7 +920,7 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=selection_vector,
                 wrench=wrench
                 )
@@ -645,11 +944,11 @@ class Pilot:
             return fin, Transformation().from_rot_tau(rot_mat=rot, tau=tau)
 
     def plug_in_motion_mode(self, target: Pose, time_out: float) -> tuple[bool, Pose]:
-        self._check_control_context(expected=ControlContext.MOTION)
+        self.context.check_mode(expected=self.context.mode_types.MOTION)
         t_start = perf_counter()
         while True:
             # Move linear to target
-            self.robot.motion_mode(target)
+            self.motion_mode(target)
             # Check error in plugging direction
             act_pose = self.robot.get_tcp_pose()
             error_p = target.p - act_pose.p
@@ -662,11 +961,13 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(6*[0.0], 6*[0], 6*[0.0])
+        self.robot.force_mode(ur_format2tr(6 * [0.0]), 6 * [0], 6 * [0.0])
         return fin, self.robot.get_tcp_pose()
 
     def relax(self, time_duration: float) -> Pose:
-        self._check_control_context(expected=[ControlContext.FORCE, ControlContext.MOTION, ControlContext.HYBRID])
+        self.context.check_mode(expected=[
+            self.context.mode_types.FORCE, self.context.mode_types.MOTION, self.context.mode_types.HYBRID
+            ])
         X_tcp = self.robot.get_tcp_pose()
         task_frame = X_tcp.xyz + X_tcp.axis_angle
         t_start = perf_counter()
@@ -675,17 +976,17 @@ class Pilot:
         compliant_axes = 6 * [1]
         while perf_counter() - t_start < time_duration:
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=compliant_axes,
                 wrench=wrench)
         # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6*[0], wrench=6*[0.0])
+        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
         return self.robot.get_tcp_pose()
 
     def retreat(self,
                 task_frame: Sequence[float], direction: Sequence[int],
                 distance: float = 0.02, time_out: float = 3.0) -> tuple[bool, Pose]:
-        self._check_control_context(expected=ControlContext.FORCE)
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Map direction to wrench
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
         selection_vector = [1 if d != 0 else 0 for d in direction]
@@ -694,7 +995,7 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=task_frame,
+                task_frame=ur_format2tr(task_frame),
                 selection_vector=selection_vector,
                 wrench=wrench
                 )
@@ -709,19 +1010,19 @@ class Pilot:
                 break
         return fin, self.robot.get_tcp_pose()
 
-    def move_joints_random(self) -> list[float]:
-        self._check_control_context(expected=ControlContext.POSITION)
+    def move_joints_random(self) -> npt.NDArray[np.float32]:
+        self.context.check_mode(expected=self.context.mode_types.POSITION)
         # Move to home joint position
         self.robot.move_home()
         # Move to random joint positions near to the home configuration
-        home_q = np.array(self.robot.home_joint_config, dtype=np.float32)
-        tgt_joint_q: list[float] = (home_q + (np.random.rand(6) * 2.0 - 1.0) * 0.075).tolist()
-        self.robot.move_j(tgt_joint_q)
+        home_q = np.array(self.robot.cfg.robot.home_radians, dtype=np.float32)
+        tgt_joint_q = np.array(home_q + (np.random.rand(6) * 2.0 - 1.0) * 0.075, dtype=np.float32)
+        self.robot.movej(tgt_joint_q)
         # Move back to home joint positions
         self.robot.move_home()
         return tgt_joint_q
 
     def disconnect(self) -> None:
         """ Exit function which will be called from the context manager at the end """
-        self.exit_control_context()
-        self.robot.exit()
+        self.context.exit()
+        self.robot.disconnect()

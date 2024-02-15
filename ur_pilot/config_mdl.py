@@ -20,24 +20,6 @@ class MissingConfigError(Exception):
         super().__init__(self.message)
 
 
-class Joints(BaseModel):
-    """ Data model for robot joint values.
-    """
-    vel: float = 0.2
-    max_vel: float = 1.0
-    acc: float = 0.5
-    max_acc: float = 1.0
-
-
-class TCP(BaseModel):
-    """ Data model for robot TCP values.
-    """
-    vel: float = 0.2
-    max_vel: float = 1.0
-    acc: float = 0.5
-    max_acc: float = 1.0
-
-
 class ToolModel(BaseModel):
     """ Data model for the end-effector
     """
@@ -45,15 +27,6 @@ class ToolModel(BaseModel):
     com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
     tip_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
     sense_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
-
-
-class Servo(BaseModel):
-    """ Data model for robot servo values. 
-    """
-    vel: float = 0.5
-    acc: float = 0.5
-    gain: float = 200.0
-    lkh_time: float = 0.2
 
 
 class ForceMode(BaseModel):
@@ -97,30 +70,24 @@ class FTSensor(BaseModel):
     ft_bias: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 
-class Robot(BaseModel):
+class Pilot(BaseModel):
     """ Base data model for robot configuration.
     """
-    ip_address: str = "192.168.13.42"
-    rtde_freq: float = 500.0
-    home_radians: Optional[List[float]] = None
-    joints: Joints = Joints()
-    tcp: TCP = TCP()
-    tool: ToolModel = ToolModel()
-    servo: Servo = Servo()
+    tool_model: ToolModel = ToolModel()
     ft_sensor: Optional[FTSensor] = None
     force_mode: ForceMode = ForceMode()
     motion_mode: MotionMode = MotionMode()
     hybrid_mode: HybridMode = HybridMode()
 
 
-class Config(Robot):
+class Config(Pilot):
     """ Data model for robot configuration.
     """
     name: NoneStr = None
     description: NoneStr = None
     author: NoneStr = None
     email: NoneStr = None
-    robot: Robot
+    pilot: Pilot
 
 
 def read_toml(config_file: Path) -> dict[str, Any]:

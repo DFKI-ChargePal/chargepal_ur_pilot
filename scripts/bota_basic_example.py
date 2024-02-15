@@ -26,8 +26,8 @@ def main() -> None:
     config_fp = Path(config.__file__).parent.joinpath(config.RUNNING_CONFIG_FILE)
     config_dict = read_toml(config_fp)
     cfg = Config(**config_dict)
-    assert cfg.robot.ft_sensor
-    sensor_cfg = cfg.robot.ft_sensor.dict()
+    assert cfg.pilot.ft_sensor
+    sensor_cfg = cfg.pilot.ft_sensor.dict()
 
     ax_labels = ['Fx [N]', 'Fy [N]', 'Fz [N]', 'Tx [Nm]', 'Ty [Nm]', 'Tz [Nm]']
 
