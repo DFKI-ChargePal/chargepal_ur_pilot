@@ -33,14 +33,14 @@ def run(opt: Namespace) -> None:
     log_interval = 2.0
     # Connect to arm
     with ur_pilot.connect() as pilot:
-        pilot.robot.register_ee_cam(cam)
-        with pilot.teach_in_control():
+        pilot.register_ee_cam(cam)
+        with pilot.context.teach_in_control():
             _t_start = perf_counter()
             while not ck.user.stop():
                 found, pose_cam2socket = dtt.find_pose(render=True)
                 if found:
                     # Get transformation matrices
-                    T_plug2cam = pilot.robot.cam_mdl.T_flange2camera
+                    T_plug2cam = pilot.cam_mdl.T_flange2camera
                     T_base2plug = pilot.robot.get_tcp_pose().transformation
                     T_cam2socket = Pose().from_xyz_xyzw(*pose_cam2socket).transformation
                     # Get searched transformations

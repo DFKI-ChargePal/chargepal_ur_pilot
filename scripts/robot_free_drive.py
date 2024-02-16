@@ -14,16 +14,20 @@ def free_drive() -> None:
     with ur_pilot.connect() as pilot:
         # Start free drive mode
         LOGGER.info("Hit key 'S' to print out the current state")
-        with pilot.teach_in_control():
+        with pilot.context.teach_in_control():
             while not ck.user.stop():
                 if ck.user.save():
                     # Read joint and pose information
-                    joint_pos = pilot.robot.get_joint_pos()
-                    tcp_pose = pilot.robot.get_tcp_pose()
+                    joint_pos = pilot.robot.joint_pos
+                    tcp_pose = pilot.robot.tcp_pose
                     # Print out
-                    LOGGER.info("\n      Joint positions: " + " ".join(f"{q:.3f}" for q in joint_pos))
-                    LOGGER.info("TCP pose w. axis ang.: " + " ".join(f"{p:.3f}" for p in tcp_pose.xyz + tcp_pose.axis_angle))
-
+                    LOGGER.info(
+                        "      Joint positions: " + " ".join(f"{q:.3f}" for q in joint_pos)
+                    )
+                    LOGGER.info(
+                        "TCP pose w. axis ang.: " + " ".join(
+                            f"{p:.3f}" for p in tcp_pose.t.tolist() + tcp_pose.eulervec().tolist())
+                    )
                 cam.render()
     cam.end()
 
