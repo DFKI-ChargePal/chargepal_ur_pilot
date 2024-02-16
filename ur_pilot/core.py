@@ -5,6 +5,7 @@ import math
 import time
 import numpy as np
 from pathlib import Path
+import spatialmath as sm
 from enum import auto, Enum
 from time import perf_counter
 from contextlib import contextmanager
@@ -25,7 +26,6 @@ from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
 from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
 
-import spatialmath as sm
 
 # typing
 from numpy import typing as npt
