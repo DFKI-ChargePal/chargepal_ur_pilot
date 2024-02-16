@@ -30,7 +30,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
         cam = None
     # Connect to pilot
     with ur_pilot.connect() as pilot:
-        with pilot.position_control():
+        with pilot.context.position_control():
             pilot.move_home()
 
         # Prepare recording
@@ -38,7 +38,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
         file_path.parent.mkdir(exist_ok=True)
 
         # Enable free drive mode
-        with pilot.teach_in_control():
+        with pilot.context.teach_in_control():
             LOGGER.info('Start teach in mode:')
             LOGGER.info("You can now move the arm and record joint positions pressing 's' or 'S' ...")
             while True:

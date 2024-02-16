@@ -23,14 +23,14 @@ def main() -> None:
     with ur_pilot.connect() as pilot:
 
         # Move to home position
-        with pilot.position_control():
+        with pilot.context.position_control():
             # Move to home position
             pilot.move_home()
             # Move to tiled position
             pilot.move_to_tcp_pose(START_POSE_TILTED)
 
         # Measure the surface with tilted tool
-        with pilot.force_control():
+        with pilot.context.force_control():
             success, contact_flange_pose_tilted = pilot.find_contact_point(direction=[0, 0, -1, 0, 0, 0], time_out=5.0)
             time.sleep(1.0)
             if success:
@@ -40,12 +40,12 @@ def main() -> None:
         if not success_retreat:
             raise RuntimeError("Moving to retreat pose was not successful. Stop moving.")
 
-        with pilot.position_control():
+        with pilot.context.position_control():
             # Move to straight position
             pilot.move_to_tcp_pose(START_POSE_STRAIGHT)
 
         # Measure the surface with straight tool
-        with pilot.force_control():
+        with pilot.context.force_control():
             success, contact_flange_pose_straight = pilot.find_contact_point(direction=[0, 0, -1, 0, 0, 0], time_out=5.0)
             time.sleep(1.0)
             if success:
@@ -55,7 +55,7 @@ def main() -> None:
         if not success_retreat:
             raise RuntimeError("Moving to retreat pose was not successful. Stop moving.")
 
-        with pilot.position_control():
+        with pilot.context.position_control():
             # Move back to home position()
             pilot.move_home()
 

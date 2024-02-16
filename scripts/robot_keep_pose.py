@@ -8,11 +8,11 @@ def keep_pose(soft: bool, time_out: float) -> None:
     with ur_pilot.connect() as pilot:
 
         if soft:
-            Kp = [1.0, 1.0, 1.0, 0.01, 0.01, 0.01]
+            pilot.cfg.robot.motion_mode.Kp = [1.0, 1.0, 1.0, 0.01, 0.01, 0.01]
         else:
-            Kp = [25.0, 25.0, 25.0, 1.0, 1.0, 1.0]
+            pilot.cfg.robot.motion_mode.Kp = [25.0, 25.0, 25.0, 1.0, 1.0, 1.0]
         
-        with pilot.motion_control(Kp_6=Kp):
+        with pilot.context.motion_control():
             init_pose = pilot.robot.get_tcp_pose()
             pilot.move_to_tcp_pose(init_pose, time_out=time_out)
 

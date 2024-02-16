@@ -30,7 +30,7 @@ def run(opt: Namespace) -> None:
 
     # Connect to arm
     with ur_pilot.connect() as pilot:
-        with pilot.teach_in_control():
+        with pilot.context.teach_in_control():
             LOGGER.info('Start teach in mode')
             LOGGER.info("  You can now move the arm to the target pose")
             LOGGER.info("  Press key 'r' or 'R' to go to the next step")
@@ -55,7 +55,7 @@ def run(opt: Namespace) -> None:
         dump_fp = _tgt_cfg_dir.joinpath(f"pose_base2{opt.target_frame}.yaml")
         ur_pilot.yaml_helpers.dump_yaml(pose_base2socket_dict, dump_fp)
 
-        with pilot.force_control():
+        with pilot.context.force_control():
             # Try to plug out
             success = pilot.tcp_force_mode(
                 wrench=Vector6d().from_xyzXYZ([0.0, 0.0, -150.0, 0.0, 0.0, 0.0]),
@@ -65,7 +65,7 @@ def run(opt: Namespace) -> None:
             time.sleep(1.0)
             if success:
                 # Move back to home
-                with pilot.position_control():
+                with pilot.context.position_control():
                     pilot.move_home()
             else:
                 LOGGER.error(f"Error while trying to disconnect. Plug might still be in the socket.\n"

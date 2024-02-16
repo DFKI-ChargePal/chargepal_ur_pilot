@@ -35,7 +35,7 @@ def plugging(opt: Namespace) -> None:
         T_base2save_pre = T_base2fpi @ T_fpi2save_pre
         T_base2junction = T_base2fpi @ T_fpi2junction
         # Free space movements
-        with pilot.position_control():
+        with pilot.context.position_control():
             # Start at home position
             pilot.move_home()
             # Move to pre-connect pose
@@ -43,7 +43,7 @@ def plugging(opt: Namespace) -> None:
         time.sleep(2.0)
 
         # Getting in junction between plug and socket
-        with pilot.motion_control():
+        with pilot.context.motion_control():
             pilot.move_to_tcp_pose(T_base2junction.pose, time_out=3.0)
         # Check if robot is in target area
         xyz_base2jct_base_est = np.reshape(T_base2junction.tau, 3)
@@ -54,7 +54,7 @@ def plugging(opt: Namespace) -> None:
                                 f"Robot is probably in an undefined condition.")
         # Start to apply some force
         time.sleep(2.0)
-        with pilot.force_control():
+        with pilot.context.force_control():
             # Try to fully plug in
             pilot.plug_in_force_ramp(f_axis='z', f_start=50.0, f_end=90, duration=3.0)
             # Check if robot is in target area
@@ -76,7 +76,7 @@ def plugging(opt: Namespace) -> None:
 
         # End at home position
         time.sleep(2.0)
-        with pilot.position_control():
+        with pilot.context.position_control():
             pilot.move_home()
 
 

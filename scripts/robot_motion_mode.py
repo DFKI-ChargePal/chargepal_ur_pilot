@@ -17,10 +17,10 @@ def motion_mode_ctrl(episode_len: float) -> None:
     # Connect to pilot/robot arm
     with ur_pilot.connect() as pilot:
         # Move home
-        with pilot.position_control():
+        with pilot.context.position_control():
             pilot.move_home()
 
-        with pilot.motion_control():
+        with pilot.context.motion_control():
             ref_pose = pilot.robot.get_tcp_pose()
             ref_p, ref_q = ref_pose.p, ref_pose.q
             t_start_ = time.time()

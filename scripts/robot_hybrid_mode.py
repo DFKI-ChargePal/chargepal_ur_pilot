@@ -18,12 +18,12 @@ def hybrid_mode_ctrl() -> None:
     # Connect to pilot/robot arm
     with ur_pilot.connect() as pilot:
         # Move home
-        with pilot.position_control():
+        with pilot.context.position_control():
             pilot.move_home()
 
         # Get current pose as reference
         ref_pose = pilot.robot.get_tcp_pose()
-        with pilot.hybrid_control():
+        with pilot.context.hybrid_control():
 
             # Shift pose randomly relative to the reference pose
             new_pose = ref_pose.random((0.025, 0.025, 0.025), (np.deg2rad(3), np.deg2rad(3), np.deg2rad(3))) 
@@ -37,7 +37,7 @@ def hybrid_mode_ctrl() -> None:
                 wrench = sm.SpatialForce(wrench.xyzXYZ)
                 # wrench = Vector6d().from_xyzXYZ([0, 0, 1, 0, 0, 0])
                 while perf_counter() - t_start_ < 1/5:  # run for xx seconds
-                    pilot.robot.hybrid_controller.update(target_se3, wrench)
+                    pilot.robot.hybrid_mode(target_se3, wrench)
 
 
 if __name__ == '__main__':

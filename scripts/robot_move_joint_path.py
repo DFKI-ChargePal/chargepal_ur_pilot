@@ -13,7 +13,7 @@ def move_joint_path() -> None:
     # Connect to pilot/robot arm
     with ur_pilot.connect() as pilot:
         # Move home
-        with pilot.position_control():
+        with pilot.context.position_control():
             pilot.move_home()
             # Move along the path waypoints
             velocity = 0.1
