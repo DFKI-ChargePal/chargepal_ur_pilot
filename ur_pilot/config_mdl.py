@@ -71,10 +71,13 @@ class FTSensor(BaseModel):
 
 
 class Pilot(BaseModel):
-    """ Base data model for robot configuration.
-    """
+
     tool_model: ToolModel = ToolModel()
     ft_sensor: Optional[FTSensor] = None
+
+
+class Robot(BaseModel):
+    """ Base data model for robot configuration. """
     force_mode: ForceMode = ForceMode()
     motion_mode: MotionMode = MotionMode()
     hybrid_mode: HybridMode = HybridMode()
@@ -87,6 +90,7 @@ class Config(Pilot):
     description: NoneStr = None
     author: NoneStr = None
     email: NoneStr = None
+    robot: Robot
     pilot: Pilot
 
 

@@ -4,7 +4,7 @@ import abc
 from enum import auto, Enum
 from contextlib import contextmanager
 
-from ur_pilot.robot import Robot
+from ur_pilot.ur_robot import URRobot
 
 from typing import Iterator
 
@@ -26,12 +26,12 @@ class ControlMode(metaclass=abc.ABCMeta):
 
     @staticmethod
     @abc.abstractmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
         """ Set up control mode """
         raise NotImplementedError("Must be implemented in subclass.")
 
     @staticmethod
-    def exit(robot: Robot, cfg: Config) -> ModeTypes:
+    def exit(robot: URRobot, cfg: Config) -> ModeTypes:
         """ Exit control mode """
         return ModeTypes.DISABLED
 
@@ -39,25 +39,25 @@ class ControlMode(metaclass=abc.ABCMeta):
 class PositionMode(ControlMode):
 
     @staticmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
         return ModeTypes.POSITION
 
 
 class VelocityMode(ControlMode):
 
     @staticmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
         return ModeTypes.VELOCITY
 
 
 class ServoMode(ControlMode):
 
     @staticmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
         return ModeTypes.SERVO
 
     @staticmethod
-    def exit(robot: Robot, cfg: Config) -> ModeTypes:
+    def exit(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.servo_stop()
         return ControlMode.exit(robot, cfg)
 
@@ -65,12 +65,12 @@ class ServoMode(ControlMode):
 class ForceMode(ControlMode):
 
     @staticmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
-        robot.set_up_force_mode(cfg.pilot.force_mode.gain)
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
+        robot.set_up_force_mode(cfg.robot.force_mode.gain)
         return ModeTypes.FORCE
 
     @staticmethod
-    def exit(robot: Robot, cfg: Config) -> ModeTypes:
+    def exit(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.stop_force_mode()
         return ControlMode.exit(robot, cfg)
 
@@ -78,12 +78,12 @@ class ForceMode(ControlMode):
 class TeachMode(ControlMode):
 
     @staticmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.set_up_teach_mode()
         return ModeTypes.TEACH_IN
 
     @staticmethod
-    def exit(robot: Robot, cfg: Config) -> ModeTypes:
+    def exit(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.stop_teach_mode()
         return ControlMode.exit(robot, cfg)
 
@@ -91,21 +91,21 @@ class TeachMode(ControlMode):
 class HybridMode(ControlMode):
 
     @staticmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.set_up_hybrid_mode(
-            error_scale=cfg.pilot.hybrid_mode.error_scale,
-            force_limit=cfg.pilot.hybrid_mode.force_limit,
-            Kp_6_force=cfg.pilot.hybrid_mode.Kp_force,
-            Kd_6_force=cfg.pilot.hybrid_mode.Kd_force,
-            Kp_6_motion=cfg.pilot.hybrid_mode.Kp_motion,
-            Kd_6_motion=cfg.pilot.hybrid_mode.Kd_motion,
-            ft_gain=cfg.pilot.force_mode.gain,
-            ft_damping=cfg.pilot.force_mode.damping
+            error_scale=cfg.robot.hybrid_mode.error_scale,
+            force_limit=cfg.robot.hybrid_mode.force_limit,
+            Kp_6_force=cfg.robot.hybrid_mode.Kp_force,
+            Kd_6_force=cfg.robot.hybrid_mode.Kd_force,
+            Kp_6_motion=cfg.robot.hybrid_mode.Kp_motion,
+            Kd_6_motion=cfg.robot.hybrid_mode.Kd_motion,
+            ft_gain=cfg.robot.force_mode.gain,
+            ft_damping=cfg.robot.force_mode.damping
         )
         return ModeTypes.HYBRID
 
     @staticmethod
-    def exit(robot: Robot, cfg: Config) -> ModeTypes:
+    def exit(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.stop_hybrid_mode()
         return ControlMode.exit(robot, cfg)
 
@@ -113,19 +113,19 @@ class HybridMode(ControlMode):
 class MotionMode(ControlMode):
 
     @staticmethod
-    def enter(robot: Robot, cfg: Config) -> ModeTypes:
+    def enter(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.set_up_motion_mode(
-            error_scale=cfg.pilot.motion_mode.error_scale,
-            force_limit=cfg.pilot.motion_mode.force_limit,
-            Kp_6=cfg.pilot.motion_mode.Kp,
-            Kd_6=cfg.pilot.motion_mode.Kd,
-            ft_gain=cfg.pilot.force_mode.gain,
-            ft_damping=cfg.pilot.force_mode.damping
+            error_scale=cfg.robot.motion_mode.error_scale,
+            force_limit=cfg.robot.motion_mode.force_limit,
+            Kp_6=cfg.robot.motion_mode.Kp,
+            Kd_6=cfg.robot.motion_mode.Kd,
+            ft_gain=cfg.robot.force_mode.gain,
+            ft_damping=cfg.robot.force_mode.damping
         )
         return ModeTypes.MOTION
 
     @staticmethod
-    def exit(robot: Robot, cfg: Config) -> ModeTypes:
+    def exit(robot: URRobot, cfg: Config) -> ModeTypes:
         robot.stop_motion_mode()
         return ControlMode.exit(robot, cfg)
 
@@ -134,7 +134,7 @@ class ControlContextManager:
 
     mode_types = ModeTypes
 
-    def __init__(self, robot: Robot, cfg: Config):
+    def __init__(self, robot: URRobot, cfg: Config):
         self.cfg = cfg
         self.robot = robot
         self.mode = self.mode_types.DISABLED
