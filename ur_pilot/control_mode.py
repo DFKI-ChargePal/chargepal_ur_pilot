@@ -148,7 +148,9 @@ class ControlContextManager:
             raise RuntimeError(f"This action is not able to use the control mode '{expected}'")
 
     def exit(self) -> None:
-        if self.mode == ModeTypes.POSITION:
+        if self.mode == ModeTypes.DISABLED:
+            pass
+        elif self.mode == ModeTypes.POSITION:
             self.mode = PositionMode.exit(self.robot, self.cfg)
         elif self.mode == ModeTypes.SERVO:
             self.mode = ServoMode.exit(self.robot, self.cfg)
@@ -163,7 +165,7 @@ class ControlContextManager:
         elif self.mode == ModeTypes.TEACH_IN:
             self.mode = TeachMode.exit(self.robot, self.cfg)
         else:
-            raise ValueError(f"Invalid mode: {self.mode}")
+            raise ValueError(f"Invalid mode: {self.mode.name}")
 
     @contextmanager
     def position_control(self) -> Iterator[None]:

@@ -9,18 +9,18 @@ com = [0.00057, 0.00017, 0.0089]
 tip_frame = [0.0, 0.0, 0.195, 0.0, 0.0, 0.0]
 sense_frame = [-0.025, 0.0, 0.19417, 0.0, -0.2618, 0.0]
 
-[pilot.force_mode]
+[robot.force_mode]
 mode = 2
 gain = 0.99
 damping = 0.075
 tcp_speed_limits = [0.025, 0.025, 0.025, 0.5, 0.5, 0.5]
 
-[pilot.motion_mode]
+[robot.motion_mode]
 error_scale = 10000.0
 Kp = [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
 Kd = [0.01, 0.01, 0.01, 1e-5, 1e-5, 1e-5]
 
-[pilot.hybrid_mode]
+[robot.hybrid_mode]
 error_scale = 150.0
 force_limit = 20.0
 Kp_force = [0.02, 0.02, 0.02, 0.02, 0.02, 0.02]
