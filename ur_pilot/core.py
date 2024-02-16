@@ -8,11 +8,11 @@ from ur_pilot.ur_pilot import Pilot
 
 
 # typing
-from typing import Iterator
+from typing import Generator
 
 
 @contextmanager
-def connect(config_dir: Path | None = None) -> Iterator[Pilot]:
+def connect(config_dir: Path | None = None) -> Generator[Pilot, None, None]:
     pilot = Pilot(config_dir)
     try:
         yield pilot
