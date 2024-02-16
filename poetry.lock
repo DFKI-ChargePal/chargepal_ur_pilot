@@ -1479,8 +1479,8 @@ ui = ["textual[dev]"]
 [package.source]
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/ur_control.git"
-reference = "integration/ur_pilot"
-resolved_reference = "bd61a527da323906460e4de88efac5a168d9ab54"
+reference = "integration/ur_pilot_py3_8"
+resolved_reference = "4556f0a087efa016e5f5e367ddf20d4f0eb54a1c"
 
 [[package]]
 name = "ur-rtde"
@@ -1670,4 +1670,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8, <3.12"
-content-hash = "8adac00bbbd667b4affb776dff665ac0bb02bd1cbe9aef126923ce3254edc26b"
+content-hash = "2045c013b4f10afd8c08b337dbb250758b4ad96987b206b868875278e63ef211"

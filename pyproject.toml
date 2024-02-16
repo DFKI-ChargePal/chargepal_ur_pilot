@@ -18,7 +18,7 @@ pyrealsense2 = "^2.54.2.5684"
 spatialmath-python = "^1.1.9"
 # Internal dependencies
 rigmopy = {git="git@git.ni.dfki.de:gjohn/rigmopy.git"}
-ur_control = {git="git@git.ni.dfki.de:chargepal/ur_control.git", rev="integration/ur_pilot"}
+ur_control = {git="git@git.ni.dfki.de:chargepal/ur_control.git", rev="integration/ur_pilot_py3_8"}
 chargepal_cvpd = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git"}
 chargepal_camera_kit = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_camera_kit.git"}
 
