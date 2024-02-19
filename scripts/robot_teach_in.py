@@ -50,7 +50,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
                 if ck.user.save():
                     # Save current joint position configuration
                     joint_pos = pilot.robot.get_joint_pos()
-                    info_str = f"Save joint pos: " + " ".join(f"{q:.3f}" for q in joint_pos)
+                    info_str = f"Save joint pos: {ur_pilot.utils.vec_to_str(joint_pos, 3)}"
                     LOGGER.info(info_str)
                     state_seq.append(joint_pos)
                 elif ck.user.stop():

@@ -1,11 +1,10 @@
 """ Configuration class definitions. """
 from __future__ import annotations
 
-# global
+# libs
 import tomli
-from pathlib import Path
-
 import tomli_w
+from pathlib import Path
 from pydantic import BaseModel, Field, NoneStr
 
 # typing

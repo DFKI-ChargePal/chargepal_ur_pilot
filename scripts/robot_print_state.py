@@ -17,5 +17,5 @@ if __name__ == '__main__':
         joint_pos = pilot.robot.joint_pos
         tcp_pose = pilot.robot.tcp_pose
         # Print out
-        LOGGER.info(f"          Joint positions: " + " ".join(f"{q:.3f}" for q in joint_pos))
-        LOGGER.info(f"Transformation Base - TCP: {ur_pilot.utils.se3_to_ur_str(tcp_pose)}")
+        LOGGER.info(f"        Joint positions: {ur_pilot.utils.vec_to_str(joint_pos)}")
+        LOGGER.info(f"Transformation Base-TCP: {ur_pilot.utils.se3_to_str(tcp_pose)}")

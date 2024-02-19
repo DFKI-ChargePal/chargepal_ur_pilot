@@ -4,13 +4,16 @@ from __future__ import annotations
 # global
 import abc
 import sys
+
+import numpy as np
 import pysoem
 import spatialmath as sm
-from rigmopy import Vector6d
 from pathlib import Path
+from rigmopy import Vector6d
 
 # typing
 from typing import Sequence
+from numpy import typing as npt
 
 
 def get_pkg_path() -> Path:
@@ -78,7 +81,7 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
 
 
-def se3_to_ur_str(mat: sm.SE3, digits: int = 4) -> str:
+def se3_to_str(mat: sm.SE3, digits: int = 4) -> str:
     """ Convert SE(3) object to UR style string
     Args:
         mat:    SE(3) transformation matrix
@@ -89,7 +92,20 @@ def se3_to_ur_str(mat: sm.SE3, digits: int = 4) -> str:
     """
     xyz = ", ".join("{0:.{1}f}".format(v, digits) for v in mat.t.tolist())
     aa = ", ".join("{0:.{1}f}".format(v, digits) for v in mat.eulervec().tolist())
-    return f"pos=[{xyz}] -- axis ang=[{aa}]"
+    return f"trans=[{xyz}] -- axis ang=[{aa}]"
+
+
+def vec_to_str(vec: Sequence[float] | npt.NDArray[np.float32 | np.float64 | np.float_], digits: int = 4) -> str:
+    """ Convert a vector to a formatted string
+    Args:
+        vec:    The vector object
+        digits: Print precision
+
+    Returns:
+        representation string
+    """
+    vec_str = ", ".join("{0:.{1}f}".format(v, digits) for v in np.array(vec).flatten().tolist())
+    return f"[{vec_str}]"
 
 
 def ramp(start: float, end: float, duration: float) -> list[float]:

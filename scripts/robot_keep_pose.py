@@ -6,7 +6,6 @@ def keep_pose(soft: bool, time_out: float) -> None:
 
     # Connect to pilot/robot arm
     with ur_pilot.connect() as pilot:
-
         if soft:
             pilot.cfg.robot.motion_mode.Kp = [1.0, 1.0, 1.0, 0.01, 0.01, 0.01]
         else:

@@ -45,7 +45,7 @@ def run(opt: Namespace) -> None:
                     T_base2socket = T_base2plug * T_plug2cam * T_cam2socket
                     # Print only every two seconds
                     if perf_counter() - _t_start > log_interval:
-                        LOGGER.info(f"Transformation Base - Socket: {ur_pilot.utils.se3_to_ur_str(T_base2socket)}")
+                        LOGGER.info(f"Transformation Base - Socket: {ur_pilot.utils.se3_to_str(T_base2socket)}")
                         _t_start = perf_counter()
 
 

@@ -4,9 +4,9 @@
 import logging
 import argparse
 import numpy as np
+import spatialmath as sm
 from time import perf_counter
 from rigmopy import Vector6d
-import spatialmath as sm
 
 # local
 import ur_pilot

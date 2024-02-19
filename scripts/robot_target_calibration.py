@@ -4,6 +4,7 @@ import logging
 import argparse
 import ur_pilot
 import camera_kit as ck
+import spatialmath as sm
 from pathlib import Path
 from dataclasses import asdict
 from rigmopy import Pose, Vector6d
@@ -15,6 +16,8 @@ from argparse import Namespace
 
 LOGGER = logging.getLogger(__name__)
 _tgt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('target')
+
+_T_fpi2socket = sm.SE3().Tz(-0.034)
 
 X_FPI_2_SOCKET = Pose().from_xyz(xyz=[0.0, 0.0, -0.034])
 

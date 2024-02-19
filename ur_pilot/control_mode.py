@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+# libs
 import abc
 from enum import auto, Enum
 from contextlib import contextmanager
-
 from ur_pilot.ur_robot import URRobot
-
-from typing import Iterator
-
 from ur_pilot.config_mdl import Config
+
+# typing
+from typing import Iterator
 
 
 class ModeTypes(Enum):

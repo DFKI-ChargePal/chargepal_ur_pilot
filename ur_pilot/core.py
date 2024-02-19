@@ -6,7 +6,6 @@ from contextlib import contextmanager
 
 from ur_pilot.ur_pilot import Pilot
 
-
 # typing
 from typing import Generator
 
