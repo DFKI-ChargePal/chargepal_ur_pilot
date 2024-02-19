@@ -227,15 +227,12 @@ class Pilot:
         new_joint_pos = self.robot.get_joint_pos()
         return new_joint_pos
 
-    def move_to_tcp_pose(self, target: Pose, time_out: float = 3.0) -> tuple[bool, Pose]:
+    def move_to_tcp_pose(self, target: sm.SE3, time_out: float = 3.0) -> tuple[bool, sm.SE3]:
         self.context.check_mode(expected=[self.context.mode_types.POSITION, self.context.mode_types.MOTION])
         fin = False
-        r = sm.UnitQuaternion(target.q.wxyz).SO3()
-        target_se3 = sm.SE3.Rt(R=r, t=target.p.xyz)
         # Move to requested TCP pose
         if self.context.mode == self.context.mode_types.POSITION:
-            # self.robot.move_l(target)
-            self.robot.movel(target_se3)
+            self.robot.movel(target)
             fin = True
         elif self.context.mode == self.context.mode_types.MOTION:
             t_start = perf_counter()
@@ -251,8 +248,7 @@ class Pilot:
                 elif perf_counter() - t_start > time_out:
                     fin = False
                     break
-        new_pose = self.robot.get_tcp_pose()
-        return fin, new_pose
+        return fin, self.robot.tcp_pose
 
     def push_linear(self, force: Vector3d, compliant_axes: list[int], duration: float) -> float:
         self.context.check_mode(expected=self.context.mode_types.FORCE)

@@ -1,5 +1,8 @@
 """ Short demo to demonstrate motion mode. Goal is to keep the current pose """
+import logging
 import ur_pilot
+
+LOGGER = logging.getLogger(__name__)
 
 
 def keep_pose(soft: bool, time_out: float) -> None:
@@ -13,8 +16,11 @@ def keep_pose(soft: bool, time_out: float) -> None:
         
         with pilot.context.motion_control():
             init_pose = pilot.robot.get_tcp_pose()
+            LOGGER.info(f"You can now start moving the end-effector")
             pilot.move_to_tcp_pose(init_pose, time_out=time_out)
+            LOGGER.info(f"Shutting down the demo")
 
 
 if __name__ == '__main__':
-    keep_pose(True, 30.0)
+    ur_pilot.logger.set_logging_level(logging.INFO)
+    keep_pose(False, 30.0)

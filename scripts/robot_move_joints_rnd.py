@@ -11,4 +11,4 @@ if __name__ == '__main__':
         with pilot.context.position_control():
             rnd_joint_pos = pilot.move_joints_random()
             # Print result
-            LOGGER.info("Target joint positions: " + " ".join(f"{q:.3f}" for q in rnd_joint_pos))
+            LOGGER.info(f"Target joint positions: {ur_pilot.utils.vec_to_str(rnd_joint_pos, 3)}")
