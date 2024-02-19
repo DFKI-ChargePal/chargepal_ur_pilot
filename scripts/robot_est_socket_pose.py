@@ -5,7 +5,7 @@ import ur_pilot
 import cvpd as pd
 import camera_kit as ck
 from pathlib import Path
-from rigmopy import Pose, Transformation
+import spatialmath as sm
 from time import perf_counter
 
 
@@ -39,16 +39,16 @@ def run(opt: Namespace) -> None:
             while not ck.user.stop():
                 found, pose_cam2socket = dtt.find_pose(render=True)
                 if found:
+                    xyz, xyzw = pose_cam2socket
                     # Get transformation matrices
+                    T_base2plug = pilot.robot.tcp_pose
                     T_plug2cam = pilot.cam_mdl.T_flange2camera
-                    T_plug2cam_ = Transformation().from_trans_matrix(T_plug2cam.A)
-                    T_base2plug = pilot.robot.get_tcp_pose().transformation
-                    T_cam2socket = Pose().from_xyz_xyzw(*pose_cam2socket).transformation
+                    T_cam2socket = sm.SE3.Trans(xyz) * sm.UnitQuaternion(xyzw[-1], xyzw[0:3]).SE3()
                     # Get searched transformations
-                    T_base2socket = T_base2plug @ T_plug2cam_ @ T_cam2socket
+                    T_base2socket = T_base2plug * T_plug2cam * T_cam2socket
                     # Print only every two seconds
                     if perf_counter() - _t_start > log_interval:
-                        LOGGER.info(f"Transformation Base - Socket: {T_base2socket.pose.xyz} {T_base2socket.pose.axis_angle}")
+                        LOGGER.info(f"Transformation Base - Socket: {T_base2socket.t.tolist()} {T_base2socket.eulervec().tolist()}")
                         _t_start = perf_counter()
 
 
