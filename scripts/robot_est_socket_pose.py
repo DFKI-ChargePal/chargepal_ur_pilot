@@ -37,13 +37,11 @@ def run(opt: Namespace) -> None:
         with pilot.context.teach_in_control():
             _t_start = perf_counter()
             while not ck.user.stop():
-                found, pose_cam2socket = dtt.find_pose(render=True)
+                found, T_cam2socket = dtt.find_pose(render=True)
                 if found:
-                    xyz, xyzw = pose_cam2socket
                     # Get transformation matrices
                     T_base2plug = pilot.robot.tcp_pose
                     T_plug2cam = pilot.cam_mdl.T_flange2camera
-                    T_cam2socket = sm.SE3.Trans(xyz) * sm.UnitQuaternion(xyzw[-1], xyzw[0:3]).SE3()
                     # Get searched transformations
                     T_base2socket = T_base2plug * T_plug2cam * T_cam2socket
                     # Print only every two seconds
