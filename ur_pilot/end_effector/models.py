@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # global
+import spatialmath as sm
 from rigmopy import Pose, Vector3d, Quaternion, Transformation
 
 # typing
@@ -47,7 +48,8 @@ class ToolModel:
 class CameraModel:
 
     def __init__(self) -> None:
-        self.T_flange2camera = Transformation()
+        self.T_flange2camera = sm.SE3
+        # self.T_flange2camera = Transformation()
 
 
 class BotaSensONEModel:

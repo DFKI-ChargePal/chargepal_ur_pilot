@@ -5,7 +5,7 @@ import ur_pilot
 import cvpd as pd
 import camera_kit as ck
 from pathlib import Path
-from rigmopy import Pose
+from rigmopy import Pose, Transformation
 from time import perf_counter
 
 
@@ -41,10 +41,11 @@ def run(opt: Namespace) -> None:
                 if found:
                     # Get transformation matrices
                     T_plug2cam = pilot.cam_mdl.T_flange2camera
+                    T_plug2cam_ = Transformation().from_trans_matrix(T_plug2cam.A)
                     T_base2plug = pilot.robot.get_tcp_pose().transformation
                     T_cam2socket = Pose().from_xyz_xyzw(*pose_cam2socket).transformation
                     # Get searched transformations
-                    T_base2socket = T_base2plug @ T_plug2cam @ T_cam2socket
+                    T_base2socket = T_base2plug @ T_plug2cam_ @ T_cam2socket
                     # Print only every two seconds
                     if perf_counter() - _t_start > log_interval:
                         LOGGER.info(f"Transformation Base - Socket: {T_base2socket.pose.xyz} {T_base2socket.pose.axis_angle}")

@@ -120,7 +120,8 @@ class Pilot:
         if not self.cam.is_calibrated:
             self.cam.load_coefficients()
         T_flange2cam = FlangeEyeCalibration.load_transformation(self.cam, tf_dir)
-        self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_flange2cam)
+        self.cam_mdl.T_flange2camera = sm.SE3.CopyFrom(T_flange2cam)
+        # self.cam_mdl.T_flange2camera = Transformation().from_trans_matrix(T_flange2cam)
 
     @contextmanager
     def open_plug_connection(self) -> Iterator[None]:
