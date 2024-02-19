@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import numpy as np
 # global
 import spatialmath as sm
+from spatialmath.base import q2r
 from rigmopy import Pose, Vector3d, Quaternion, Transformation
 
 # typing
@@ -66,6 +68,10 @@ class BotaSensONEModel:
         self.sensor_mounting_mass = sensor_mounting_mass
         self.sensor_imu_mass = sensor_imu_mass
         self.sensor_mass = self.sensor_mounting_mass + self.sensor_wrench_mass + self.sensor_imu_mass
-        self.p_mounting2wrench = Vector3d().from_xyz(p_mounting2wrench)
-        self.q_mounting2wrench = Quaternion().from_wxyz(q_mounting2wrench)
-        self.T_mounting2wrench = Transformation().from_pose(Pose().from_pq(self.p_mounting2wrench, self.q_mounting2wrench))
+        self.T_mounting2wrench = sm.SE3.Rt(
+            R=q2r(np.array(q_mounting2wrench), order='sxyz'),
+            t=np.array(p_mounting2wrench)
+        )
+        # self.p_mounting2wrench = Vector3d().from_xyz(p_mounting2wrench)
+        # self.q_mounting2wrench = Quaternion().from_wxyz(q_mounting2wrench)
+        # self.T_mounting2wrench = Transformation().from_pose(Pose().from_pq(self.p_mounting2wrench, self.q_mounting2wrench))

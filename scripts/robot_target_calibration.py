@@ -43,6 +43,7 @@ def run(opt: Namespace) -> None:
 
         # Measure target pose:
         time.sleep(1.0)
+        T_base2fpi = pilot.robot.tcp_pose()
         pose_base2fpi = pilot.robot.get_tcp_pose()
         LOGGER.debug(f"Base - Fully-plugged-in: {pose_base2fpi}")
         T_base2fpi = pose_base2fpi.transformation
