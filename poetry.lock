@@ -38,7 +38,7 @@ files = [
 
 [[package]]
 name = "chargepal-camera-kit"
-version = "1.3.0"
+version = "1.3.1"
 description = "A tool kit for working with serial cameras."
 optional = false
 python-versions = "^3.8, <3.12"
@@ -60,7 +60,7 @@ tqdm = "^4.66.1"
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/manipulation/chargepal_camera_kit.git"
 reference = "feat/spatialmath"
-resolved_reference = "d42ff26245e717339f59fd6768ad000688e4da7f"
+resolved_reference = "24e128973e405dfb9803045e0d873ea638e13d1b"
 
 [[package]]
 name = "chargepal-cvpd"
