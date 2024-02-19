@@ -5,7 +5,6 @@ import ur_pilot
 import cvpd as pd
 import camera_kit as ck
 from pathlib import Path
-import spatialmath as sm
 from time import perf_counter
 
 
@@ -46,7 +45,7 @@ def run(opt: Namespace) -> None:
                     T_base2socket = T_base2plug * T_plug2cam * T_cam2socket
                     # Print only every two seconds
                     if perf_counter() - _t_start > log_interval:
-                        LOGGER.info(f"Transformation Base - Socket: {T_base2socket.t.tolist()} {T_base2socket.eulervec().tolist()}")
+                        LOGGER.info(f"Transformation Base - Socket: {ur_pilot.utils.se3_to_ur_str(T_base2socket)}")
                         _t_start = perf_counter()
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import sys
 import pysoem
+import spatialmath as sm
 from rigmopy import Vector6d
 from pathlib import Path
 
@@ -75,6 +76,20 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             return valid[choice]
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
+
+
+def se3_to_ur_str(mat: sm.SE3, digits: int = 4) -> str:
+    """ Convert SE(3) object to UR style string
+    Args:
+        mat:    SE(3) transformation matrix
+        digits: Print precision
+    
+    Returns:
+        representation string
+    """
+    xyz = ", ".join("{0:.{1}f}".format(v, digits) for v in mat.t.tolist())
+    aa = ", ".join("{0:.{1}f}".format(v, digits) for v in mat.eulervec().tolist())
+    return f"pos=[{xyz}] -- axis ang=[{aa}]"
 
 
 def ramp(start: float, end: float, duration: float) -> list[float]:
