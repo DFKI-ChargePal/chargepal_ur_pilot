@@ -1,15 +1,14 @@
 from __future__ import annotations
+
 # libs
 import time
 import logging
 import numpy as np
+import spatialmath as sm
 from pathlib import Path
-from rigmopy import utils_math as rp_math
-from rigmopy import Pose, Vector3d, Vector6d
 
-from ur_control.utils import clip
+from ur_control.utils import clip, tr2ur_format, ur_format2tr
 from ur_control.robots import RealURRobot
-from ur_control.utils import tr2ur_format, ur_format2tr
 
 from ur_pilot.config_mdl import Config
 from ur_pilot.utils import SpatialPDController
@@ -50,16 +49,6 @@ class URRobot(RealURRobot):
             raise RuntimeError(
                 "Motion PD controller is not initialized. Please run URPilot.set_up_motion_mode(...) first")
 
-    def set_up_force_mode(self, gain: float | None = None, damping: float | None = None) -> None:
-        gain_scaling = gain if gain else self.ctrl_cfg.robot.force_mode.gain
-        damping_fact = damping if damping else self.ctrl_cfg.robot.force_mode.damping
-        self.rtde_controller.zeroFtSensor()
-        self.rtde_controller.forceModeSetGainScaling(gain_scaling)
-        self.rtde_controller.forceModeSetDamping(damping_fact)
-
-    # NOTE - could be implemented like this in ur_control. In addition, the SpatialPDController
-    # would have to be implemented for this. Also, the datatypes have to be changed.
-    # It has to be checked how to implement the robot movement via a context.
     def set_up_motion_mode(self,
                            error_scale: float | None = None,
                            force_limit: float | None = None,
@@ -84,18 +73,17 @@ class URRobot(RealURRobot):
         self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
         self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
 
-    def motion_mode(self, target: Pose) -> None:
+    def motion_mode(self, target: sm.SE3) -> None:
         """ Function to update motion target and let the motion controller keep running
 
         Args:
             target: Target pose of the TCP
         """
-        task_frame = 6 * (0.0, )  # Move w.r.t. robot base
-        # Get current Pose
-        actual = self.get_tcp_pose()
+        task_frame = sm.SE3()  # Move w.r.t. robot base
         # Compute spatial error
-        pos_error = target.p - actual.p
-        aa_error = np.array(rp_math.quaternion_difference(actual.q, target.q).axis_angle)
+        delta_vec = self.tcp_pose.delta(target)
+        pos_error = delta_vec[0:3]
+        aa_error = delta_vec[3:6]
 
         # Angles error always within [0,Pi)
         angle_error = np.max(np.abs(aa_error))
@@ -109,20 +97,14 @@ class URRobot(RealURRobot):
         # cartesian_compliance_controller can use to build up a restoring stiffness
         # wrench.
         angle_error = np.clip(angle_error, 0.0, 1.0)
-        ax_error = Vector3d().from_xyz(angle_error * axis_error)
+        ax_error = angle_error * axis_error
         distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
         po_error = distance_error * pos_error
-        motion_error = Vector6d().from_Vector3d(po_error, ax_error)
+        motion_error = np.append(po_error, ax_error)
         f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.dt)
         # Clip to maximum forces
-        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
-        self.force_mode(
-            task_frame=ur_format2tr(task_frame),
-            selection_vector=6 * (1,),
-            wrench=f_net_clip.tolist(),
-            )
-        # pose = sm.SE3.Rt(R=sm.UnitQuaternion(target.q.wxyz).SO3(), t=target.p.xyz)
-        # self.motion_mode_ur(pose)
+        f_net_clip = np.clip(f_net, a_min=-self.force_limit, a_max=self.force_limit)
+        self.force_mode(task_frame=task_frame, selection_vector=6 * (1,), wrench=f_net_clip.tolist())
 
     def stop_motion_mode(self) -> None:
         """ Function to set robot back in normal position control mode. """
@@ -163,23 +145,23 @@ class URRobot(RealURRobot):
         self._motion_pd = SpatialPDController(Kp_6=m_Kp, Kd_6=m_Kd)
         self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
 
-    # TODO - Add description
-    def hybrid_mode(self, pose: Pose, wrench: Vector6d) -> None:
-        """
+    def hybrid_mode(self, pose: sm.SE3, wrench: npt.ArrayLike) -> None:
+        """ Update hybrid mode control error
 
         Args:
-            pose: Target pose of the TCP
+            pose:   Target pose of the TCP
             wrench: Target wrench w.r.t. the TCP
 
-        Returns:
-            None
         """
-        task_frame = 6 * (0.0, )  # Move w.r.t. robot bose
-        # Get current pose
-        cur_pose = self.get_tcp_pose()
+        task_frame = sm.SE3()  # Move w.r.t. robot bose
+        # Get current Pose
+        actual = self.tcp_pose
         # Compute spatial error
-        pos_error = pose.p - cur_pose.p
-        aa_error = np.array(rp_math.quaternion_difference(cur_pose.q, pose.q).axis_angle)
+        T_13 = pose
+        T_21 = actual.inv()
+        T_23 = T_21 * T_13
+        pos_error = T_23.t
+        aa_error = T_23.eulervec()
         # Angles error always within [0,Pi)
         angle_error = np.max(np.abs(aa_error))
         if angle_error < 1e7:
@@ -192,16 +174,16 @@ class URRobot(RealURRobot):
         # cartesian_compliance_controller can use to build up a restoring stiffness
         # wrench.
         angle_error = np.clip(angle_error, 0.0, 1.0)
-        ax_error = Vector3d().from_xyz(angle_error * axis_error)
+        ax_error = angle_error * axis_error
         distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
         po_error = distance_error * pos_error
-        motion_error = Vector6d().from_Vector3d(po_error, ax_error)
-        force_error = wrench
+        motion_error = np.append(po_error, ax_error)
+        force_error = np.reshape(wrench, 6)
         f_net = self.error_scale_motion_mode * (
             self.motion_pd.update(motion_error, self.dt) + self.force_pd.update(force_error, self.dt))
         # Clip to maximum forces
-        f_net_clip = np.clip(f_net.xyzXYZ, a_min=-self.force_limit, a_max=self.force_limit)
-        self.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * (1,), wrench=f_net_clip.tolist())
+        f_net_clip = np.clip(f_net, a_min=-self.force_limit, a_max=self.force_limit)
+        self.force_mode(task_frame=task_frame, selection_vector=6 * (1,), wrench=f_net_clip.tolist())
 
     def stop_hybrid_mode(self) -> None:
         """ Function to set robot back in default control mode """
@@ -209,13 +191,12 @@ class URRobot(RealURRobot):
         self.motion_pd.reset()
         self.stop_force_mode()
 
-    def movej_path(self,
-                   wps: Sequence[npt.ArrayLike],
-                   vel: float | None = None,
-                   acc: float | None = None,
-                   bf: float | None = None) -> None:
-        """
-        Move the robot in joint space along a specified path.
+    def move_path_j(self,
+                    wps: Sequence[npt.ArrayLike],
+                    vel: float | None = None,
+                    acc: float | None = None,
+                    bf: float | None = None) -> bool:
+        """ Move the robot in joint space along a specified path.
 
         Args:
             wps: Waypoints of the path. List of arrays of the target joint angles in radians
@@ -238,32 +219,35 @@ class URRobot(RealURRobot):
         path = [[*tg.tolist(), speed, acceleration, bf] for tg in wps_f32]
         # Set blend factor of the last waypoint to zero to stop smoothly
         path[-1][-1] = 0.0
-        success = self.rtde_controller.moveJ(path=path)
+        success: bool = self.rtde_controller.moveJ(path=path)
+        return success
 
     ####################################
-    #       CONTROLLER FUNCTIONS       #
+    # --- #   HELPER FUNCTIONS   # --- #
     ####################################
-    def enable_digital_out(self, output_id: int) -> None:
+    def enable_digital_out(self, output_id: int) -> bool:
         """ Enable a digital UR control box output
 
         Args:
             output_id: Desired output id
         """
         if 0 <= output_id <= 7:
-            success = self.rtde_io.setStandardDigitalOut(output_id, True)
+            success: bool = self.rtde_io.setStandardDigitalOut(output_id, True)
         else:
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
+        return success
 
-    def disable_digital_out(self, output_id: int) -> None:
+    def disable_digital_out(self, output_id: int) -> bool:
         """ Enable a digital UR control box output
 
-            Args:
-                output_id: Desired output id
+        Args:
+            output_id: Desired output id
         """
         if 0 <= output_id <= 7:
-            success = self.rtde_io.setStandardDigitalOut(output_id, False)
+            success: bool = self.rtde_io.setStandardDigitalOut(output_id, False)
         else:
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
+        return success
 
     def get_digital_out_state(self, output_id: int) -> bool:
         """ Get the status of the UR control box digital output
@@ -281,19 +265,13 @@ class URRobot(RealURRobot):
             raise ValueError(f"Desired output id {output_id} not allowed. The digital IO range is between 0 and 7.")
         return state
 
-    ##################################
-    #       RECEIVER FUNCTIONS       #
-    ##################################
-    def get_joint_pos(self) -> list[float]:
-        joint_pos: list[float] = self.joint_pos.tolist()
-        return joint_pos
+    def get_pose(self, offset: sm.SE3) -> sm.SE3:
+        """ Get robot end-effector pose modified by offset
+        Args:
+            offset: The offset transformation w.r.t. robot flange
 
-    def get_tcp_offset(self) -> Pose:
-        tcp_offset_tr = self.tcp_offset
-        tcp_offset = tr2ur_format(tcp_offset_tr)
-        return Pose().from_xyz(tcp_offset[:3]).from_axis_angle(tcp_offset[3:])
-
-    def get_tcp_pose(self) -> Pose:
-        tcp_pose_tr = self.tcp_pose
-        tcp_pose = tr2ur_format(tcp_pose_tr)
-        return Pose().from_xyz(tcp_pose[:3]).from_axis_angle(tcp_pose[3:])
+        Returns:
+            End-effector pose with offset as SE(3) transformation matrix
+        """
+        ur_pose_vec = self.rtde_controller.getForwardKinematics(q=self.joint_pos, tcp_offset=tr2ur_format(offset))
+        return ur_format2tr(ur_pose_vec)

@@ -19,7 +19,7 @@ def move_joint_path() -> None:
             velocity = 0.1
             acceleration = 0.1
             wps = [_jp1, _jp2, _jp3, _jp4]
-            pilot.robot.movej_path(wps, velocity, acceleration)
+            pilot.robot.move_path_j(wps, velocity, acceleration)
 
 
 if __name__ == "__main__":

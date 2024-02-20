@@ -60,7 +60,7 @@ def main() -> None:
             pilot.move_home()
 
         # Calculate tilted tool offset.
-        tcp_offset_straight = pilot.robot.get_tcp_offset()
+        tcp_offset_straight = pilot.robot.tcp_offset
         # We are only interested in Z - direction
         z_flange_tilted = contact_flange_pose_tilted.xyz[-1]
         z_flange_straight = contact_flange_pose_straight.xyz[-1]

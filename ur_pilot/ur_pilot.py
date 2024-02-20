@@ -8,8 +8,6 @@ from pathlib import Path
 import spatialmath as sm
 from time import perf_counter
 from contextlib import contextmanager
-from ur_control.utils import ur_format2tr
-from rigmopy import Pose, Quaternion, Transformation, Vector3d, Vector6d
 
 # local
 from ur_pilot import utils
@@ -28,7 +26,7 @@ from typing import Iterator, Sequence
 
 
 class Pilot:
-    Q_WORLD2BASE_ = Quaternion().from_euler_angle([np.pi, 0.0, 0.0])
+    R_WORLD2BASE_ = sm.SO3.Rx(np.pi)
     FT_SENSOR_FRAMES_ = ['world', 'arm_base', 'ft_sensor']
     EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_tip', 'tool_sense', 'camera']
 
@@ -85,10 +83,10 @@ class Pilot:
             raise RuntimeError("External sensor is not initialized. Please check the configuration.")
 
     @property
-    def q_world2arm(self) -> Quaternion:
-        return self.Q_WORLD2BASE_
+    def rot_world2arm(self) -> sm.SO3:
+        return self.R_WORLD2BASE_
 
-    def average_ft_measurement(self, num_meas: int = 100) -> Vector6d:
+    def average_ft_measurement(self, num_meas: int = 100) -> npt.NDArray[np.float_]:
         """ Method to get an average force torque measurement over num_meas samples.
 
         Args:
@@ -108,7 +106,7 @@ class Pilot:
                 avg_ft = np.hstack([avg_ft, ft_next])
             time.sleep(self.ft_sensor.time_step)
         assert avg_ft is not None  # for type check
-        return Vector6d().from_xyzXYZ(np.mean(avg_ft, axis=-1))
+        return np.array(np.mean(avg_ft, axis=-1))
 
     def exit(self) -> None:
         if self._ft_sensor is not None:
@@ -131,51 +129,45 @@ class Pilot:
         if self.robot.get_digital_out_state(0):
             raise ValueError(f"Digital output shout be 'LOW' but is 'HIGH'.")
 
-    def __frame_to_offset(self, frame: str) -> tuple[float, ...]:
+    def __frame_to_offset(self, frame: str) -> sm.SE3:
         if frame not in self.EE_FRAMES_:
             raise ValueError(f"Given frame is not available. Please select one of '{self.EE_FRAMES_}'")
         if frame == 'flange':
-            offset = 6 * (0.0,)
+            offset = sm.SE3()
         elif frame == 'ft_sensor':
             if self.extern_sensor:
-                offset = self.ft_sensor_mdl.p_mounting2wrench.xyz + self.ft_sensor_mdl.q_mounting2wrench.axis_angle
+                offset = self.ft_sensor_mdl.T_mounting2wrench
             else:
                 # Tread internal force torque sensor as mounted in flange frame
-                offset = 6 * (0.0,)
-                # LOGGER.warning(f"External ft_sensor is not configured. Return pose of the flange frame.")
+                offset = sm.SE3()
         elif frame == 'tool_tip':
             if self.extern_sensor:
-                pq_flange2tool = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2tip).pose
-                offset = pq_flange2tool.xyz + pq_flange2tool.axis_angle
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.tool.T_mounting2tip
             else:
-                offset = self.tool.tip_frame.xyz + self.tool.tip_frame.axis_angle
+                offset = self.tool.T_mounting2tip
         elif frame == 'tool_sense':
             if self.extern_sensor:
-                pq_flange2sense = (self.ft_sensor_mdl.T_mounting2wrench @ self.tool.T_mounting2sense).pose
-                offset = pq_flange2sense.xyz + pq_flange2sense.axis_angle
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.tool.T_mounting2sense
             else:
-                offset = self.tool.sense_frame.xyz + self.tool.sense_frame.axis_angle
+                offset = self.tool.T_mounting2sense
         elif frame == 'camera':
-            pq_flange2cam = self.cam_mdl.T_flange2camera.pose
-            offset = pq_flange2cam.xyz + pq_flange2cam.axis_angle
+            offset = self.cam_mdl.T_flange2camera
         else:
             raise RuntimeError("This code should not be reached. Please check the frame definitions.")
         return offset
 
-    def get_pose(self, frame: str = 'flange') -> Pose:
+    def get_pose(self, frame: str = 'flange') -> sm.SE3:
         """ Get pose of the desired frame w.r.t the robot base. This function is independent of the TCP offset defined
             on the robot side.
         Args:
             frame: One of the frame name defined in the class member variable 'EE_FRAMES_'
         Returns:
-            6D pose
+            6D pose as SE(3) transformation matrix
         """
         tcp_offset = self.__frame_to_offset(frame=frame)
-        q = self.robot.joint_pos
-        pose_vec: Sequence[float] = self.robot.rtde_controller.getForwardKinematics(q=q, tcp_offset=tcp_offset)
-        return Pose().from_xyz(pose_vec[:3]).from_axis_angle(pose_vec[3:])
+        return self.robot.get_pose(tcp_offset)
 
-    def get_ft(self, frame: str = 'ft_sensor') -> Vector6d:
+    def get_wrench(self, frame: str = 'ft_sensor') -> sm.SpatialForce:
         """ Get force-torque readings w.r.t the desired frame.
 
         Args:
@@ -187,44 +179,35 @@ class Pilot:
         if frame not in self.FT_SENSOR_FRAMES_:
             raise ValueError(f"Given frame is not available. Please select one of '{self.FT_SENSOR_FRAMES_}'")
         # The default build in sensor readings are w.r.t the arm base frame
-        ft = Vector6d()
         if self.extern_sensor:
-            # The default sensor readings are w.r.t the sensor frame
-            ft_raw = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
-            if frame == 'ft_sensor':
-                ft = ft_raw
-        return ft
-
-    def get_tcp_force(self) -> Vector6d:
-        if self.extern_sensor:
-            tcp_force = Vector6d().from_xyzXYZ(self.ft_sensor.FT)
+            ft_raw = self.ft_sensor.FT
         else:
-            tcp_force = Vector6d().from_xyzXYZ(self.robot.tcp_force)
+            ft_raw = self.robot.tcp_wrench
+        # TODO: Check frame
         # Compensate Tool mass
         f_tool_wrt_world = self.tool.f_inertia
-        f_tool_wrt_ft = (self.q_world2arm * Quaternion().from_matrix(
-            self.robot.tcp_pose.R)).apply(f_tool_wrt_world, inverse=True)
-        t_tool_wrt_ft = Vector3d().from_xyz(np.cross(self.tool.com.xyz, f_tool_wrt_ft.xyz))
-        ft_comp = Vector6d().from_Vector3d(f_tool_wrt_ft, t_tool_wrt_ft)
-        return tcp_force + ft_comp
+        f_tool_wrt_ft: npt.NDArray[np.float_] = self.rot_world2arm * f_tool_wrt_world
+
+        def cross(a: npt.ArrayLike, b: npt.ArrayLike) -> npt.NDArray[np.float32]:
+            # Overwrite numpy cross function to avoid errors by IDE
+            a_ = np.array(a, dtype=np.float32)
+            b_ = np.array(b, dtype=np.float32)
+            return np.cross(a_, b_)
+
+        t_tool_wrt_ft = cross(self.tool.com, f_tool_wrt_ft)
+        ft_comp = sm.SpatialForce(np.append(f_tool_wrt_ft, t_tool_wrt_ft))
+        return ft_raw + ft_comp
 
     def set_tcp(self, frame: str = 'tool_tip') -> None:
         """ Function to set the tcp relative to the tool flange. """
-        offset = ur_format2tr(self.__frame_to_offset(frame=frame))
+        offset = self.__frame_to_offset(frame=frame)
         self.robot.set_tcp(offset)
 
-    def move_home(self) -> list[float]:
-        self.context.check_mode(expected=self.context.mode_types.POSITION)
-        self.robot.move_home()
-        # self.robot.move_home()
-        new_j_pos = self.robot.get_joint_pos()
-        return new_j_pos
-
-    def move_to_joint_pos(self, q: Sequence[float]) -> list[float]:
+    def move_to_joint_pos(self, q: npt.ArrayLike) -> npt.NDArray[np.float_]:
         self.context.check_mode(expected=self.context.mode_types.POSITION)
         # Move to requested joint position
         self.robot.movej(q)
-        new_joint_pos = self.robot.get_joint_pos()
+        new_joint_pos = self.robot.joint_pos
         return new_joint_pos
 
     def move_to_tcp_pose(self, target: sm.SE3, time_out: float = 3.0) -> tuple[bool, sm.SE3]:
@@ -236,11 +219,11 @@ class Pilot:
             fin = True
         elif self.context.mode == self.context.mode_types.MOTION:
             t_start = perf_counter()
-            tgt_3pts = target.to_3pt_set()
+            tgt_3pts = utils.se3_to_3pt_set(target)
             while True:
                 # self.robot.motion_controller.update(target_se3)
                 self.robot.motion_mode(target)
-                cur_3pts = self.robot.get_tcp_pose().to_3pt_set()
+                cur_3pts = utils.se3_to_3pt_set(self.robot.tcp_pose)
                 error = np.mean(np.abs(tgt_3pts, cur_3pts))
                 if error <= 0.005:  # 5 mm
                     fin = True
@@ -250,26 +233,25 @@ class Pilot:
                     break
         return fin, self.robot.tcp_pose
 
-    def push_linear(self, force: Vector3d, compliant_axes: list[int], duration: float) -> float:
+    def push_linear(self, force: npt.ArrayLike, compliant_axes: list[int], duration: float) -> float:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
-        wrench = Vector6d().from_Vector3d(force, Vector3d()).xyzXYZ
-        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        x_ref = self.robot.tcp_pos
+        task_frame = self.robot.tcp_pose
+        wrench = np.append(np.reshape(force, 3), np.zeros(3)).tolist()
         t_start = perf_counter()
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench)
             if (perf_counter() - t_start) > duration:
                 break
-        x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        x_now = self.robot.tcp_pos
         dist: float = np.sum(np.abs(x_now - x_ref))  # L1 norm
         # Stop robot movement.
-        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return dist
 
     def screw_ee_force_mode(self, torque: float, ang: float, time_out: float) -> bool:
@@ -279,10 +261,9 @@ class Pilot:
         wrench_vec = 6 * [0.0]
         compliant_axes = [1, 1, 1, 0, 0, 1]
         # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        task_frame = self.robot.tcp_pose
         # Create target
-        ee_jt_pos = self.robot.get_joint_pos()[-1]
+        ee_jt_pos = self.robot.joint_pos[-1]
         ee_jt_pos_tgt = ee_jt_pos + ang
         # Time observation
         success = False
@@ -292,7 +273,7 @@ class Pilot:
         i_err = 0.0
         while True:
             # Angular error
-            ee_jt_pos_now = self.robot.get_joint_pos()[-1]
+            ee_jt_pos_now = self.robot.joint_pos[-1]
             ang_error = (ee_jt_pos_tgt - ee_jt_pos_now)
             p_err = torque * ang_error
             if prev_error is np.NAN:
@@ -304,7 +285,7 @@ class Pilot:
             prev_error = ang_error
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
             t_now = perf_counter()
@@ -318,9 +299,8 @@ class Pilot:
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
-        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        task_frame = self.robot.tcp_pose
+        x_ref = self.robot.tcp_pos
         # Check if axis is valid
         if not axis.lower() in ['x', 'y', 'z']:
             raise ValueError(f"Only linear axes allowed.")
@@ -335,13 +315,13 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
             t_now = perf_counter()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
-                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                x_now = self.robot.tcp_pos
                 if np.allclose(x_ref, x_now, atol=0.001):
                     fin = True
                     break
@@ -349,7 +329,7 @@ class Pilot:
             if t_now - t_start > time_out:
                 break
         # Stop robot movement.
-        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
 
     def plug_in_force_ramp(
@@ -375,15 +355,14 @@ class Pilot:
         force = 3 * [0.0]
         for f in force_ramp:
             force[wrench_idx] = f
-            mov_dt = self.push_linear(Vector3d().from_xyz(force), compliant_axes, 1.0)
+            mov_dt = self.push_linear(force, compliant_axes, 1.0)
             if mov_dt < 0.0025:
                 fin = True
                 break
             self.relax(0.25)
         return fin
 
-    def plug_in_with_target(
-            self, force: float, T_Base2Socket: Transformation, axis: str = 'z', time_out: float = 10.0) -> bool:
+    def plug_in_with_target(self, force: float, T_Base2Socket: sm.SE3, axis: str = 'z', time_out: float = 10.0) -> bool:
         """
 
         Args:
@@ -397,8 +376,7 @@ class Pilot:
         """
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        task_frame = self.robot.tcp_pose
         wrench_idx = utils.axis2index(axis.lower())
         wrench_vec = 6 * [0.0]
         wrench_vec[wrench_idx] = force
@@ -408,14 +386,14 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=select_vec,
                 wrench=wrench_vec
             )
             # Get current transformation from base to end-effector
-            T_Base2Tip = Transformation().from_pose(self.get_pose('tool_tip'))
-            T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
-            if T_Tip2Socket.tau[wrench_idx] <= -0.032:
+            T_Base2Tip = self.get_pose('tool_tip')
+            T_Tip2Socket = T_Base2Tip.inv() * T_Base2Socket
+            if T_Tip2Socket.t[wrench_idx] <= -0.032:
                 fin = True
                 break
             t_now = perf_counter()
@@ -424,7 +402,7 @@ class Pilot:
                 break
         return fin
 
-    def pair_to_socket(self, T_Base2Socket: Transformation, force: float = 10.0, time_out: float = 5.0) -> bool:
+    def pair_to_socket(self, T_Base2Socket: sm.SE3, force: float = 10.0, time_out: float = 5.0) -> bool:
         """ Pair the plug to the socket while using low force to insert for 1.5cm
 
         Args:
@@ -437,8 +415,7 @@ class Pilot:
         """
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        task_frame = self.robot.tcp_pose
         select_vec = [1, 1, 1, 0, 0, 1]  # Be compliant as possible
         wrench = [0.0, 0.0, abs(force), 0.0, 0.0, 0.0]  # Apply force in tool direction
         # Time observation
@@ -446,13 +423,13 @@ class Pilot:
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=select_vec,
                 wrench=wrench
             )
             # Get current transformation from base to end-effector
-            T_Base2Tip = Transformation().from_pose(self.get_pose('tool_tip'))
-            T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
+            T_Base2Tip = self.get_pose('tool_tip')
+            T_Tip2Socket = T_Base2Tip.inv() * T_Base2Socket
             if T_Tip2Socket.tau[2] <= -0.015:
                 fin = True
                 break
@@ -461,12 +438,11 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement.
-        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
 
     def jog_in_plug(self,
-                    T_Base2Socket: Transformation, force: float = 20.0, moment: float = 1.0,
-                    time_out: float = 5.0) -> bool:
+                    T_Base2Socket: sm.SE3, force: float = 20.0, moment: float = 1.0, time_out: float = 5.0) -> bool:
         """ Push in plug with additional (sinusoidal) jiggling
 
         Args:
@@ -484,8 +460,7 @@ class Pilot:
         f = abs(force)
         m = abs(moment)
         # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        task_frame = self.robot.tcp_pose
         select_vec = [0, 0, 1, 0, 1, 0]
         t_start = perf_counter()
         while True:
@@ -494,13 +469,13 @@ class Pilot:
             wrench = [0.0, 0.0, f, 0.0, m * math.sin(freq * dt), 0.0]
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=select_vec,
                 wrench=wrench
             )
             # Get current transformation from base to end-effector
-            T_Base2Tip = Transformation().from_pose(self.get_pose('tool_tip'))
-            T_Tip2Socket = T_Base2Tip.inverse() @ T_Base2Socket
+            T_Base2Tip = self.get_pose('tool_tip')
+            T_Tip2Socket = T_Base2Tip.inv() * T_Base2Socket
             if T_Tip2Socket.tau[2] <= -0.032:
                 fin = True
                 break
@@ -509,27 +484,24 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
 
     def tcp_force_mode(self,
-                       wrench: Vector6d,
-                       compliant_axes: list[int],
-                       distance: float,
-                       time_out: float) -> bool:
+                       wrench: npt.ArrayLike, compliant_axes: list[int], distance: float, time_out: float) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Wrench will be applied with respect to the current TCP pose
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        task_frame = self.robot.tcp_pose
         t_start = perf_counter()
-        x_ref = np.array(X_tcp.xyz, dtype=np.float32)
+        x_ref = self.robot.tcp_pos
+        ft_vec = np.reshape(wrench, 6).tolist()
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=compliant_axes,
-                wrench=wrench.xyzXYZ)
-            x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                wrench=ft_vec)
+            x_now = self.robot.tcp_pos
             l2_norm_dist = np.linalg.norm(x_now - x_ref)
             t_now = perf_counter()
             if l2_norm_dist >= distance:
@@ -539,28 +511,28 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
         return fin
 
-    def find_contact_point(self, direction: Sequence[int], time_out: float) -> tuple[bool, Pose]:
+    def find_contact_point(self, direction: Sequence[int], time_out: float) -> tuple[bool, sm.SE3]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Map direction to wrench
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
         selection_vector = [1 if d != 0 else 0 for d in direction]
-        task_frame = 6 * [0.0]  # Robot base
-        x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        task_frame = sm.SE3()  # Robot base
+        x_ref = self.robot.tcp_pos
         t_start = t_ref = perf_counter()
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=selection_vector,
                 wrench=wrench
             )
             t_now = perf_counter()
             # Check every 500 milliseconds if robot is still moving
             if t_now - t_ref > 0.5:
-                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                x_now = self.robot.tcp_pos
                 if np.allclose(x_ref, x_now, atol=0.001):
                     fin = True
                     break
@@ -570,27 +542,26 @@ class Pilot:
                 break
         return fin, self.get_pose(frame='flange')
 
-    def sensing_depth(self, T_Base2Target: Transformation, time_out: float) -> tuple[bool, Transformation]:
+    def sensing_depth(self, T_Base2Target: sm.SE3, time_out: float) -> tuple[bool, sm.SE3]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Parameter set. Sensing is in tool direction
         selection_vector = [0, 0, 1, 0, 0, 0]
         wrench = [0.0, 0.0, 10.0, 0.0, 0.0, 0.0]
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        task_frame = self.robot.tcp_pose
         # Process observation variables
-        x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        x_ref = self.robot.tcp_pos
         t_start = t_ref = perf_counter()
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=selection_vector,
                 wrench=wrench
             )
             t_now = perf_counter()
             # Check every 500 millisecond if robot is still moving
             if t_now - t_ref > 0.5:
-                x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+                x_now = self.robot.tcp_pos
                 if np.allclose(x_ref, x_now, atol=0.001):
                     fin = True
                     break
@@ -599,71 +570,70 @@ class Pilot:
                 fin = False
                 break
         if not fin:
-            return fin, Transformation()
+            return fin, sm.SE3()
         else:
-            tau_Base2Target = self.robot.get_tcp_pose().xyz
-            rot = T_Base2Target.rot_matrix
-            tau = np.array(tau_Base2Target)
-            return fin, Transformation().from_rot_tau(rot_mat=rot, tau=tau)
+            T_Base2Target_meas = sm.SE3.Rt(R=T_Base2Target.R, t=self.robot.tcp_pos)
+            return fin, T_Base2Target_meas
 
-    def plug_in_motion_mode(self, target: Pose, time_out: float) -> tuple[bool, Pose]:
+    def plug_in_motion_mode(self, target: sm.SE3, time_out: float) -> tuple[bool, sm.SE3]:
         self.context.check_mode(expected=self.context.mode_types.MOTION)
         t_start = perf_counter()
         while True:
             # Move linear to target
             self.robot.motion_mode(target)
             # Check error in plugging direction
-            act_pose = self.robot.get_tcp_pose()
-            error_p = target.p - act_pose.p
+            act_pose = self.robot.tcp_pose
+            error_p = target.t - act_pose.t
             # Rotate in tcp frame
-            error_p_tcp = act_pose.q.apply(error_p, inverse=True)
-            if abs(error_p_tcp.xyz[-1]) <= 0.005:
+            error_p_tcp = act_pose.inv() * error_p
+            if abs(error_p_tcp.t[-1]) <= 0.005:
                 fin = True
                 break
             elif perf_counter() - t_start > time_out:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(ur_format2tr(6 * [0.0]), 6 * [0], 6 * [0.0])
-        return fin, self.robot.get_tcp_pose()
+        self.robot.force_mode(sm.SE3(), 6 * [0], 6 * [0.0])
+        return fin, self.robot.tcp_pose
 
-    def relax(self, time_duration: float) -> Pose:
+    def relax(self, time_duration: float) -> sm.SE3:
         self.context.check_mode(expected=[
             self.context.mode_types.FORCE, self.context.mode_types.MOTION, self.context.mode_types.HYBRID
         ])
-        X_tcp = self.robot.get_tcp_pose()
-        task_frame = X_tcp.xyz + X_tcp.axis_angle
+        task_frame = self.robot.tcp_pose
         t_start = perf_counter()
         # Apply zero wrench and be compliant in all axes
         wrench = 6 * [0.0]
         compliant_axes = 6 * [1]
         while perf_counter() - t_start < time_duration:
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench)
         # Stop robot movement.
-        self.robot.force_mode(task_frame=ur_format2tr(task_frame), selection_vector=6 * [0], wrench=6 * [0.0])
-        return self.robot.get_tcp_pose()
+        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
+        return self.robot.tcp_pose
 
     def retreat(self,
-                task_frame: Sequence[float], direction: Sequence[int],
-                distance: float = 0.02, time_out: float = 3.0) -> tuple[bool, Pose]:
+                task_frame: sm.SE3,
+                direction: Sequence[int],
+                distance: float = 0.02,
+                time_out: float = 3.0) -> tuple[bool, sm.SE3]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Map direction to wrench
         wrench = np.clip([10.0 * d for d in direction], -10.0, 10.0).tolist()
         selection_vector = [1 if d != 0 else 0 for d in direction]
         t_start = perf_counter()
-        x_ref = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+        x_ref = self.robot.tcp_pos
         while True:
             # Apply wrench
             self.robot.force_mode(
-                task_frame=ur_format2tr(task_frame),
+                task_frame=task_frame,
                 selection_vector=selection_vector,
                 wrench=wrench
             )
             t_now = perf_counter()
-            x_now = np.array(self.robot.get_tcp_pose().xyz, dtype=np.float32)
+            x_now = self.robot.tcp_pos
             l2_norm_dist = np.linalg.norm(x_now - x_ref)
             if l2_norm_dist >= distance:
                 fin = True
@@ -671,7 +641,7 @@ class Pilot:
             elif t_now - t_start > time_out:
                 fin = False
                 break
-        return fin, self.robot.get_tcp_pose()
+        return fin, self.robot.tcp_pose
 
     def move_joints_random(self) -> npt.NDArray[np.float32]:
         self.context.check_mode(expected=self.context.mode_types.POSITION)
