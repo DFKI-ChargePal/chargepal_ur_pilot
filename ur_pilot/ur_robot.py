@@ -98,7 +98,7 @@ class URRobot(RealURRobot):
         # wrench.
         angle_error = np.clip(angle_error, 0.0, 1.0)
         ax_error = angle_error * axis_error
-        distance_error = np.clip(pos_error.magnitude, -1.0, 1.0)
+        distance_error = np.clip(np.linalg.norm(pos_error), -1.0, 1.0)
         po_error = distance_error * pos_error
         motion_error = np.append(po_error, ax_error)
         f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.dt)

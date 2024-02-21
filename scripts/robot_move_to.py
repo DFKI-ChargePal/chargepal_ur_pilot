@@ -15,7 +15,8 @@ def move_to() -> None:
     # Connect to pilot/robot
     with ur_pilot.connect() as pilot:
         # Move home
-        with pilot.context.position_control():
+        # with pilot.context.position_control():
+        with pilot.context.motion_control():
             pilot.robot.move_home()
 
             LOGGER.info(f"Start pose: {ur_pilot.utils.se3_to_str(pilot.robot.tcp_pose)}")
