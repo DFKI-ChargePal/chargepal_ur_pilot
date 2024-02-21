@@ -32,7 +32,7 @@ def move_to() -> None:
             pilot.move_to_tcp_pose(T_base2target)
             # Move in xz direction wrt tcp
             T_base2tcp = pilot.robot.tcp_pose
-            T_tcp2target = sm.SE3.Trans(x=0.05, y=0.0, z=-0.05)
+            T_tcp2target = sm.SE3().Trans(x=0.05, y=0.0, z=-0.05)
             T_base2target = T_base2tcp * T_tcp2target
             pilot.move_to_tcp_pose(T_base2target)
             # Print result

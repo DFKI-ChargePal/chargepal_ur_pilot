@@ -1,4 +1,4 @@
-""" Script for testing the pure plugging process. Means inserting and removing the plug in one go. """
+""" Script for testing the plugging process combined with splitting the end-effector and the plug. """
 
 # global
 import time
@@ -17,8 +17,8 @@ _T_fpi2save_pre = sm.SE3().Trans([0.0, 0.0, -0.034 - 0.02])
 _T_fpi2junction = sm.SE3().Trans([0.0, 0.0, -0.034 + 0.01])
 
 
-def plugging(opt: Namespace) -> None:
-    """ Function to run through the plugging procedure
+def plugging_and_split(opt: Namespace) -> None:
+    """ Function to run through the procedure
 
     Args:
         opt: Script arguments
@@ -45,7 +45,7 @@ def plugging(opt: Namespace) -> None:
             error = np.linalg.norm(xyz_base2jct_base_est - xyz_base2jct_base_meas)
             if error > 0.01:
                 raise RuntimeError(f"Remaining position error {error} to alignment state is to large. "
-                                f"Robot is probably in an undefined condition.")
+                                   f"Robot is probably in an undefined condition.")
         # Start to apply some force
         with pilot.context.force_control():
             # Try to fully plug in
@@ -57,15 +57,25 @@ def plugging(opt: Namespace) -> None:
             if error > 0.01:
                 print(f"The remaining position error {error} is quite large!")
             pilot.relax(2.0)
-            # Plug out again
-            plug_out_ft = np.array([0.0, 0.0, -100.0, 0.0, 0.0, 0.0])
-            success = pilot.tcp_force_mode(
-                wrench=plug_out_ft,
-                compliant_axes=[0, 0, 1, 0, 0, 0],
-                distance=0.06,  # 6cm
-                time_out=10.0)
-            if not success:
-                raise RuntimeError(f"Error while trying to unplug. Plug is probably still connected.")
+            # Release plug via twisting end-effector
+            success = pilot.screw_ee_force_mode(5.0, -np.pi/2, 12.0)
+        if not success:
+            raise RuntimeError(f"Robot did not succeed in opening the twist lock. "
+                               f"Robot is probably in an undefined condition.")
+        with pilot.context.motion_control():
+            # Move -20 mm in tcp z direction to disconnect from plug
+            T_tcp2target = sm.SE3().Trans([0.0, 0.0, -0.025])
+            T_base2tcp = pilot.robot.tcp_pose
+            T_base2target = T_base2tcp * T_tcp2target
+            pilot.move_to_tcp_pose(T_base2target, time_out=3.0)
+
+        # Check if robot is in target area
+        xyz_base2target_base_est = T_base2target.t
+        xyz_base2target_base_meas = pilot.robot.tcp_pos
+        error = np.linalg.norm(xyz_base2target_base_est - xyz_base2target_base_meas)
+        if error > 0.01:
+            raise RuntimeError(f"Remaining position error {error} is to large. "
+                               f"Robot is probably in an undefined condition.")
 
         # End at home position
         time.sleep(2.0)
@@ -83,4 +93,4 @@ if __name__ == '__main__':
         args.logging_level = logging.DEBUG
     else:
         args.logging_level = logging.INFO
-    plugging(args)
+    plugging_and_split(args)
