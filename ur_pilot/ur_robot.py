@@ -81,9 +81,12 @@ class URRobot(RealURRobot):
         """
         task_frame = sm.SE3()  # Move w.r.t. robot base
         # Compute spatial error
-        delta_vec = self.tcp_pose.delta(target)
-        pos_error = delta_vec[0:3]
-        aa_error = delta_vec[3:6]
+        T_13 = target
+        T_12 = self.tcp_pose
+        T_21 = T_12.inv()
+        T_23 = T_21 * T_13
+        pos_error = sm.SO3(T_12.R) * T_23.t
+        aa_error = T_23.eulervec()
 
         # Angles error always within [0,Pi)
         angle_error = np.max(np.abs(aa_error))
@@ -145,23 +148,23 @@ class URRobot(RealURRobot):
         self._motion_pd = SpatialPDController(Kp_6=m_Kp, Kd_6=m_Kd)
         self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
 
-    def hybrid_mode(self, pose: sm.SE3, wrench: npt.ArrayLike) -> None:
+    def hybrid_mode(self, target: sm.SE3, wrench: npt.ArrayLike) -> None:
         """ Update hybrid mode control error
 
         Args:
-            pose:   Target pose of the TCP
+            target:   Target pose of the TCP
             wrench: Target wrench w.r.t. the TCP
 
         """
-        task_frame = sm.SE3()  # Move w.r.t. robot bose
-        # Get current Pose
-        actual = self.tcp_pose
+        task_frame = sm.SE3()  # Move w.r.t. robot base
         # Compute spatial error
-        T_13 = pose
-        T_21 = actual.inv()
+        T_13 = target
+        T_12 = self.tcp_pose
+        T_21 = T_12.inv()
         T_23 = T_21 * T_13
-        pos_error = T_23.t
+        pos_error = sm.SO3(T_12.R) * T_23.t
         aa_error = T_23.eulervec()
+
         # Angles error always within [0,Pi)
         angle_error = np.max(np.abs(aa_error))
         if angle_error < 1e7:

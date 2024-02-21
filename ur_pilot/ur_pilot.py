@@ -359,7 +359,7 @@ class Pilot:
             if mov_dt < 0.0025:
                 fin = True
                 break
-            self.relax(0.25)
+            # self.relax(0.25)
         return fin
 
     def plug_in_with_target(self, force: float, T_Base2Socket: sm.SE3, axis: str = 'z', time_out: float = 10.0) -> bool:

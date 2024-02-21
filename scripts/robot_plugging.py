@@ -39,40 +39,39 @@ def plugging(opt: Namespace) -> None:
 
         # Getting in junction between plug and socket
         with pilot.context.motion_control():
-            pilot.move_to_tcp_pose(T_base2junction, time_out=3.0)
-        # Check if robot is in target area
-        xyz_base2jct_base_est = T_base2junction.t
-        xyz_base2jct_base_meas = pilot.robot.tcp_pos
-        error = np.linalg.norm(xyz_base2jct_base_est - xyz_base2jct_base_meas)
-        if error > 0.01:
-            raise RuntimeError(f"Remaining position error {error} to alignment state is to large. "
-                               f"Robot is probably in an undefined condition.")
-        # # Start to apply some force
-        # time.sleep(2.0)
-        # with pilot.context.force_control():
-        #     # Try to fully plug in
-        #     pilot.plug_in_force_ramp(f_axis='z', f_start=50.0, f_end=90, duration=3.0)
-        #     # Check if robot is in target area
-        #     xyz_base2fpi_base_est = _T_base2fpi.t
-        #     xyz_base2fpi_base_meas = pilot.robot.tcp_pose
-        #     error = np.sqrt(np.sum(np.square(xyz_base2fpi_base_est - xyz_base2fpi_base_meas)))
-        #     if error > 0.01:
-        #         print(f"The remaining position error {error} is quite large!")
-        #     pilot.relax(2.0)
-        #     # Plug out again
-        #     plug_out_ft = np.array([0.0, 0.0, -100.0, 0.0, 0.0, 0.0])
-        #     success = pilot.tcp_force_mode(
-        #         wrench=plug_out_ft,
-        #         compliant_axes=[0, 0, 1, 0, 0, 0],
-        #         distance=0.06,  # 6cm
-        #         time_out=10.0)
-        #     if not success:
-        #         raise RuntimeError(f"Error while trying to unplug. Plug is probably still connected.")
+            pilot.move_to_tcp_pose(T_base2junction, time_out=4.0)
+            # Check if robot is in target area
+            xyz_base2jct_base_est = T_base2junction.t
+            xyz_base2jct_base_meas = pilot.robot.tcp_pos
+            error = np.linalg.norm(xyz_base2jct_base_est - xyz_base2jct_base_meas)
+            if error > 0.01:
+                raise RuntimeError(f"Remaining position error {error} to alignment state is to large. "
+                                f"Robot is probably in an undefined condition.")
+            # Start to apply some force
+            with pilot.context.force_control():
+                # Try to fully plug in
+                pilot.plug_in_force_ramp(f_axis='z', f_start=50.0, f_end=100, duration=3.0)
+                # Check if robot is in target area
+                xyz_base2fpi_base_est = _T_base2fpi.t
+                xyz_base2fpi_base_meas = pilot.robot.tcp_pos
+                error = np.linalg.norm(xyz_base2fpi_base_est - xyz_base2fpi_base_meas)
+                if error > 0.01:
+                    print(f"The remaining position error {error} is quite large!")
+                pilot.relax(2.0)
+                # Plug out again
+                plug_out_ft = np.array([0.0, 0.0, -100.0, 0.0, 0.0, 0.0])
+                success = pilot.tcp_force_mode(
+                    wrench=plug_out_ft,
+                    compliant_axes=[0, 0, 1, 0, 0, 0],
+                    distance=0.06,  # 6cm
+                    time_out=10.0)
+                if not success:
+                    raise RuntimeError(f"Error while trying to unplug. Plug is probably still connected.")
 
-        # # End at home position
-        # time.sleep(2.0)
-        # with pilot.context.position_control():
-        #     pilot.robot.move_home()
+        # End at home position
+        time.sleep(2.0)
+        with pilot.context.position_control():
+            pilot.robot.move_home()
 
 
 if __name__ == '__main__':
