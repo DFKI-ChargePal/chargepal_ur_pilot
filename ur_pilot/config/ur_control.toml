@@ -19,3 +19,9 @@ vel = 0.05
 max_vel = 0.1
 acc = 0.05
 max_acc = 0.1
+
+[robot.force_mode]
+mode = 2
+gain = 0.99
+damping = 0.075
+tcp_speed_limits = [0.025, 0.025, 0.025, 0.5, 0.5, 0.5]

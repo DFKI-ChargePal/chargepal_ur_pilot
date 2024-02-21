@@ -30,8 +30,8 @@ class URRobot(RealURRobot):
         self.force_limit = 0.0
         # Control attributes
         self.ctrl_cfg = ur_pilot_cfg
-        self.cfg.robot.force_mode.gain = self.ctrl_cfg.robot.force_mode.gain
-        self.cfg.robot.force_mode.damping = self.ctrl_cfg.robot.force_mode.damping
+        # self.cfg.robot.force_mode.gain = self.ctrl_cfg.robot.force_mode.gain
+        # self.cfg.robot.force_mode.damping = self.ctrl_cfg.robot.force_mode.damping
         self._motion_pd: SpatialPDController | None = None
         self._force_pd: SpatialPDController | None = None
 
