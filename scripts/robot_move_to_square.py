@@ -18,11 +18,11 @@ def move_to_square(ctrl_type: str, length: float) -> None:
     with ur_pilot.connect() as pilot:
         # Move home
         with pilot.context.position_control():
-            pilot.move_home()
+            pilot.robot.move_home()
 
         # Use motion mode to moving to the corners
         with pilot.context.motion_control():
-            ref_pose = pilot.robot.get_tcp_pose()
+            ref_pose = pilot.robot.tcp_pose
             ref_p, ref_q = ref_pose.p, ref_pose.q
             # Move 10 cm in y direction
             new_pose = Pose().from_xyz_wxyz(np.array(ref_p.xyz) + np.array((0.0, -length, 0.0)), ref_q.wxyz)

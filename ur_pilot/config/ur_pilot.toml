@@ -6,7 +6,7 @@ email = "georg.john@dfki.de"
 [pilot.tool_model]
 mass = 0.4
 com = [0.00057, 0.00017, 0.0089]
-tip_frame = [0.0, 0.0, 0.195, 0.0, 0.0, 0.0]
+tip_frame = [0.0, 0.0, 0.195, 0.0, -0.2618, 0.0]
 sense_frame = [-0.025, 0.0, 0.19417, 0.0, -0.2618, 0.0]
 
 [robot.force_mode]

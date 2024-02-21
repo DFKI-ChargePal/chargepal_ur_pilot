@@ -31,7 +31,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
     # Connect to pilot
     with ur_pilot.connect() as pilot:
         with pilot.context.position_control():
-            pilot.move_home()
+            pilot.robot.move_home()
 
         # Prepare recording
         state_seq: list[Sequence[float]] = []
@@ -49,10 +49,10 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
                 display.show(img)
                 if ck.user.save():
                     # Save current joint position configuration
-                    joint_pos = pilot.robot.get_joint_pos()
+                    joint_pos = pilot.robot.joint_pos
                     info_str = f"Save joint pos: {ur_pilot.utils.vec_to_str(joint_pos, 3)}"
                     LOGGER.info(info_str)
-                    state_seq.append(joint_pos)
+                    state_seq.append(joint_pos.tolist())
                 elif ck.user.stop():
                     LOGGER.info("The recording process is terminated by the user.")
                     break

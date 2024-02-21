@@ -4,7 +4,6 @@ Script to move the robot to different positions.
 # libs
 import logging
 import ur_pilot
-import numpy as np
 import spatialmath as sm
 
 
@@ -17,7 +16,7 @@ def move_to() -> None:
     with ur_pilot.connect() as pilot:
         # Move home
         with pilot.context.position_control():
-            pilot.move_home()
+            pilot.robot.move_home()
 
             LOGGER.info(f"Start pose: {ur_pilot.utils.se3_to_str(pilot.robot.tcp_pose)}")
             # Move in z direction wrt tcp
