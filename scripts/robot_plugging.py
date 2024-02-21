@@ -6,16 +6,15 @@ import logging
 import argparse
 import ur_pilot
 import numpy as np
-from rigmopy import Pose, Vector6d
+import spatialmath as sm
 
 # typing
 from argparse import Namespace
 
 # Constants
-_pose_base2fpi = Pose().from_xyz((0.935, 0.294, 0.477)).from_axis_angle((0.005, 1.568, -0.010))
-_pose_fpi2save_pre = Pose().from_xyz([0.0, 0.0, -0.034 - 0.02])
-_pose_fpi2junction = Pose().from_xyz(xyz=[0.0, 0.0, -0.034 + 0.01])
-# _pose_socket2fpi = Pose().from_xyz(xyz=[0.0, 0.0, 0.034])
+_T_base2fpi = sm.SE3.Rt(R=sm.SO3.EulerVec((0.005, 1.568, -0.010)), t=(0.935, 0.294, 0.477))
+_T_fpi2save_pre = sm.SE3().Trans([0.0, 0.0, -0.034 - 0.02])
+_T_fpi2junction = sm.SE3().Trans([0.0, 0.0, -0.034 + 0.01])
 
 
 def plugging(opt: Namespace) -> None:
@@ -27,49 +26,45 @@ def plugging(opt: Namespace) -> None:
 
     # Connect to pilot
     with ur_pilot.connect() as pilot:
-        # Get transformation matrices
-        T_base2fpi = _pose_base2fpi.transformation
-        T_fpi2save_pre = _pose_fpi2save_pre.transformation
-        T_fpi2junction = _pose_fpi2junction.transformation
         # Apply transformation chain
-        T_base2save_pre = T_base2fpi @ T_fpi2save_pre
-        T_base2junction = T_base2fpi @ T_fpi2junction
+        T_base2save_pre = _T_base2fpi * _T_fpi2save_pre
+        T_base2junction = _T_base2fpi @ _T_fpi2junction
         # Free space movements
         with pilot.context.position_control():
             # Start at home position
-            pilot.move_home()
+            pilot.robot.move_home()
             # Move to pre-connect pose
             pilot.move_to_tcp_pose(T_base2save_pre.pose)
         time.sleep(2.0)
 
         # Getting in junction between plug and socket
         with pilot.context.motion_control():
-            pilot.move_to_tcp_pose(T_base2junction.pose, time_out=3.0)
+            pilot.move_to_tcp_pose(T_base2junction, time_out=3.0)
         # Check if robot is in target area
-        xyz_base2jct_base_est = np.reshape(T_base2junction.tau, 3)
-        xyz_base2jct_base_meas = np.reshape(pilot.robot.get_tcp_pose().xyz, 3)
+        xyz_base2jct_base_est = T_base2junction.t
+        xyz_base2jct_base_meas = pilot.robot.tcp_pose
         error = np.sqrt(np.sum(np.square(xyz_base2jct_base_est - xyz_base2jct_base_meas)))
         if error > 0.01:
             raise RuntimeError(f"Remaining position error {error} to alignment state is to large. "
-                                f"Robot is probably in an undefined condition.")
+                               f"Robot is probably in an undefined condition.")
         # Start to apply some force
         time.sleep(2.0)
         with pilot.context.force_control():
             # Try to fully plug in
             pilot.plug_in_force_ramp(f_axis='z', f_start=50.0, f_end=90, duration=3.0)
             # Check if robot is in target area
-            xyz_base2fpi_base_est = np.reshape(T_base2fpi.tau, 3)
-            xyz_base2fpi_base_meas = np.reshape(pilot.robot.get_tcp_pose().xyz, 3)
+            xyz_base2fpi_base_est = _T_base2fpi.t
+            xyz_base2fpi_base_meas = pilot.robot.tcp_pose
             error = np.sqrt(np.sum(np.square(xyz_base2fpi_base_est - xyz_base2fpi_base_meas)))
             if error > 0.01:
-                print(f"Remaining position error {error} quite large!")
+                print(f"The remaining position error {error} is quite large!")
             pilot.relax(2.0)
             # Plug out again
-            plug_out_ft = Vector6d().from_xyzXYZ([0.0, 0.0, -100.0, 0.0, 0.0, 0.0])
+            plug_out_ft = np.array([0.0, 0.0, -100.0, 0.0, 0.0, 0.0])
             success = pilot.tcp_force_mode(
                 wrench=plug_out_ft,
                 compliant_axes=[0, 0, 1, 0, 0, 0],
-                distance=0.060,
+                distance=0.06,  # 6cm
                 time_out=10.0)
             if not success:
                 raise RuntimeError(f"Error while trying to unplug. Plug is probably still connected.")
@@ -77,11 +72,11 @@ def plugging(opt: Namespace) -> None:
         # End at home position
         time.sleep(2.0)
         with pilot.context.position_control():
-            pilot.move_home()
+            pilot.robot.move_home()
 
 
-def main() -> None:
-    """ Main function to start process. """
+if __name__ == '__main__':
+    """ Entry point to start process. """
     # Input parsing
     parser = argparse.ArgumentParser(description='Script to connect the plug with the socket.')
     parser.add_argument('--debug', action='store_true', help='Debug flag')
@@ -91,7 +86,3 @@ def main() -> None:
     else:
         args.logging_level = logging.INFO
     plugging(args)
-
-
-if __name__ == '__main__':
-    main()

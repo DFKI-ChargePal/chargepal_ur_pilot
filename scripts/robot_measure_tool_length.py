@@ -25,7 +25,7 @@ def main() -> None:
         # Move to home position
         with pilot.context.position_control():
             # Move to home position
-            pilot.move_home()
+            pilot.robot.move_home()
             # Move to tiled position
             pilot.move_to_tcp_pose(START_POSE_TILTED)
 

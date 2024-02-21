@@ -15,7 +15,7 @@ def keep_pose(soft: bool, time_out: float) -> None:
             pilot.cfg.robot.motion_mode.Kp = [25.0, 25.0, 25.0, 1.0, 1.0, 1.0]
         
         with pilot.context.motion_control():
-            init_pose = pilot.robot.get_tcp_pose()
+            init_pose = pilot.robot.tcp_pose
             LOGGER.info(f"You can now start moving the end-effector")
             pilot.move_to_tcp_pose(init_pose, time_out=time_out)
             LOGGER.info(f"Shutting down the demo")
