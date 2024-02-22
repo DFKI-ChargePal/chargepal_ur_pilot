@@ -40,8 +40,9 @@ class ForceMode(BaseModel):
 class MotionMode(BaseModel):
     """ Data model for robot motion mode.
     """
-    error_scale = 5000.0
-    force_limit = 50.0
+    error_scale = 1.0
+    force_limit = 30.0
+    torque_limit = 3.0
     Kp: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     Kd: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
 

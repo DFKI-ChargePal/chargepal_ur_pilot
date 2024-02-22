@@ -14,7 +14,7 @@ from argparse import Namespace
 # Constants
 _T_base2fpi = sm.SE3.Rt(R=sm.SO3.EulerVec((0.005, 1.568, -0.010)), t=(0.935, 0.294, 0.477))
 _T_fpi2save_pre = sm.SE3().Trans([0.0, 0.0, -0.034 - 0.02])
-_T_fpi2junction = sm.SE3().Trans([0.0, 0.0, -0.034 + 0.01])
+_T_fpi2junction = sm.SE3().Trans([0.0, 0.0, -0.034 + 0.02])
 
 
 def plugging(opt: Namespace) -> None:
@@ -49,7 +49,7 @@ def plugging(opt: Namespace) -> None:
         # Start to apply some force
         with pilot.context.force_control():
             # Try to fully plug in
-            pilot.plug_in_force_ramp(f_axis='z', f_start=50.0, f_end=100, duration=3.0)
+            pilot.plug_in_force_ramp(f_axis='z', f_start=70.0, f_end=110, duration=4.0)
             # Check if robot is in target area
             xyz_base2fpi_base_est = _T_base2fpi.t
             xyz_base2fpi_base_meas = pilot.robot.tcp_pos

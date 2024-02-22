@@ -11,7 +11,7 @@ from ur_control.utils import clip, tr2ur_format, ur_format2tr
 from ur_control.robots import RealURRobot
 
 from ur_pilot.config_mdl import Config
-from ur_pilot.utils import SpatialPDController
+from ur_pilot.utils import SpatialPDController, vec_to_str
 
 # typing
 from typing import Sequence
@@ -28,10 +28,9 @@ class URRobot(RealURRobot):
         self.dt = 1 / self.cfg.robot.rtde_freq
         self.error_scale_motion_mode = 1.0
         self.force_limit = 0.0
+        self.torque_limit = 0.0
         # Control attributes
         self.ctrl_cfg = ur_pilot_cfg
-        # self.cfg.robot.force_mode.gain = self.ctrl_cfg.robot.force_mode.gain
-        # self.cfg.robot.force_mode.damping = self.ctrl_cfg.robot.force_mode.damping
         self._motion_pd: SpatialPDController | None = None
         self._force_pd: SpatialPDController | None = None
 
@@ -54,6 +53,7 @@ class URRobot(RealURRobot):
     def set_up_motion_mode(self,
                            error_scale: float | None = None,
                            force_limit: float | None = None,
+                           torque_limit: float | None = None,
                            Kp_6: Sequence[float] | None = None,
                            Kd_6: Sequence[float] | None = None,
                            ft_gain: float | None = None,
@@ -70,6 +70,7 @@ class URRobot(RealURRobot):
         """
         self.error_scale_motion_mode = error_scale if error_scale else self.ctrl_cfg.robot.motion_mode.error_scale
         self.force_limit = force_limit if force_limit else self.ctrl_cfg.robot.motion_mode.force_limit
+        self.torque_limit = torque_limit if torque_limit else self.ctrl_cfg.robot.motion_mode.torque_limit
         Kp = Kp_6 if Kp_6 is not None else self.ctrl_cfg.robot.motion_mode.Kp
         Kd = Kd_6 if Kd_6 is not None else self.ctrl_cfg.robot.motion_mode.Kd
         self._motion_pd = SpatialPDController(Kp_6=Kp, Kd_6=Kd)
@@ -83,12 +84,12 @@ class URRobot(RealURRobot):
         """
         task_frame = sm.SE3()  # Move w.r.t. robot base
         # Compute spatial error
-        T_13 = target
-        T_12 = self.tcp_pose
-        T_21 = T_12.inv()
-        T_23 = T_21 * T_13
-        pos_error = sm.SO3(T_12.R) * T_23.t
-        aa_error = T_23.eulervec()
+        T_31 = target
+        T_21 = self.tcp_pose
+        T_12 = T_21.inv()
+        T_32 = T_31 * T_12
+        pos_error = T_32.t
+        aa_error = T_32.eulervec()
 
         # Angles error always within [0,Pi)
         angle_error = np.max(np.abs(aa_error))
@@ -108,7 +109,10 @@ class URRobot(RealURRobot):
         motion_error = np.append(po_error, ax_error)
         f_net = self.error_scale_motion_mode * self.motion_pd.update(motion_error, self.dt)
         # Clip to maximum forces
-        f_net_clip = np.clip(f_net, a_min=-self.force_limit, a_max=self.force_limit)
+        f_net_clip = np.append(
+            np.clip(f_net[0:3], a_min=-self.force_limit, a_max=self.force_limit), 
+            np.clip(f_net[3:6], a_min=-self.torque_limit, a_max=self.torque_limit)
+            )
         self.force_mode(task_frame=task_frame, selection_vector=6 * (1,), wrench=f_net_clip.tolist())
 
     def stop_motion_mode(self) -> None:
@@ -160,12 +164,12 @@ class URRobot(RealURRobot):
         """
         task_frame = sm.SE3()  # Move w.r.t. robot base
         # Compute spatial error
-        T_13 = target
-        T_12 = self.tcp_pose
-        T_21 = T_12.inv()
-        T_23 = T_21 * T_13
-        pos_error = sm.SO3(T_12.R) * T_23.t
-        aa_error = T_23.eulervec()
+        T_31 = target
+        T_21 = self.tcp_pose
+        T_12 = T_21.inv()
+        T_32 = T_31 * T_12
+        pos_error = T_32.t
+        aa_error = T_32.eulervec()
 
         # Angles error always within [0,Pi)
         angle_error = np.max(np.abs(aa_error))

@@ -58,30 +58,26 @@ def plugging_and_split(opt: Namespace) -> None:
                 print(f"The remaining position error {error} is quite large!")
             pilot.relax(2.0)
             # Release plug via twisting end-effector
-            success = pilot.screw_ee_force_mode(5.0, -np.pi/2, 12.0)
-        if not success:
-            raise RuntimeError(f"Robot did not succeed in opening the twist lock. "
-                               f"Robot is probably in an undefined condition.")
-        with pilot.context.motion_control():
-            # Move -20 mm in tcp z direction to disconnect from plug
-            T_flange2fl_tgt = sm.SE3().Trans([0.0, 0.0, -0.025])
-            T_base2flange = pilot.get_pose('flange')
-            T_flange2tcp = pilot.tool.T_mounting2tip
-            T_base2tcp = T_base2flange * T_flange2fl_tgt * T_flange2tcp
-            pilot.move_to_tcp_pose(T_base2tcp, time_out=3.0)
-
-        # Check if robot is in target area
-        xyz_base2target_base_est = T_base2tcp.t
-        xyz_base2target_base_meas = pilot.robot.tcp_pos
-        error = np.linalg.norm(xyz_base2target_base_est - xyz_base2target_base_meas)
-        if error > 0.01:
-            raise RuntimeError(f"Remaining position error {error} is to large. "
-                               f"Robot is probably in an undefined condition.")
+            success = pilot.screw_ee_force_mode(4.0, -np.pi/2, 12.0)
+            if not success:
+                raise RuntimeError(f"Robot did not succeed in opening the twist lock. "
+                                   f"Robot is probably in an undefined condition.")
+            release_ft = np.array([0.0, 0.0, -25.0, 0.0, 0.0, 0.0])
+            success = pilot.frame_force_mode(
+                wrench=release_ft,
+                compliant_axes=[1, 1, 1, 0, 0, 0],
+                distance=0.04,
+                time_out=5.0,
+                frame='flange'
+            )
+            if not success:
+                raise RuntimeError(
+                    f"Error while trying to release the lock. Robot end-effector is probably still connected.")
 
         # End at home position
         time.sleep(2.0)
         with pilot.context.position_control():
-            pilot.robot.move_home()
+            pilot.robot.movej([3.6226, -1.6558, 1.8276, 0.1048, 2.0615, -1.4946])
 
 
 if __name__ == '__main__':
