@@ -288,6 +288,7 @@ class Pilot:
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
+            time.sleep(self.robot.dt)
             t_now = perf_counter()
             if abs(ang_error) < 5e-3:
                 success = True

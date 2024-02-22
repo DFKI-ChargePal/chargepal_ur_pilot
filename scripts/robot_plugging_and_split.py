@@ -64,13 +64,14 @@ def plugging_and_split(opt: Namespace) -> None:
                                f"Robot is probably in an undefined condition.")
         with pilot.context.motion_control():
             # Move -20 mm in tcp z direction to disconnect from plug
-            T_tcp2target = sm.SE3().Trans([0.0, 0.0, -0.025])
-            T_base2tcp = pilot.robot.tcp_pose
-            T_base2target = T_base2tcp * T_tcp2target
-            pilot.move_to_tcp_pose(T_base2target, time_out=3.0)
+            T_flange2fl_tgt = sm.SE3().Trans([0.0, 0.0, -0.025])
+            T_base2flange = pilot.get_pose('flange')
+            T_flange2tcp = pilot.tool.T_mounting2tip
+            T_base2tcp = T_base2flange * T_flange2fl_tgt * T_flange2tcp
+            pilot.move_to_tcp_pose(T_base2tcp, time_out=3.0)
 
         # Check if robot is in target area
-        xyz_base2target_base_est = T_base2target.t
+        xyz_base2target_base_est = T_base2tcp.t
         xyz_base2target_base_meas = pilot.robot.tcp_pos
         error = np.linalg.norm(xyz_base2target_base_est - xyz_base2target_base_meas)
         if error > 0.01:
