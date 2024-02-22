@@ -261,7 +261,7 @@ class Pilot:
         wrench_vec = 6 * [0.0]
         compliant_axes = [1, 1, 1, 0, 0, 1]
         # Wrench will be applied with respect to the current TCP pose
-        task_frame = self.robot.tcp_pose
+        task_frame = self.get_pose('flange')
         # Create target
         ee_jt_pos = self.robot.joint_pos[-1]
         ee_jt_pos_tgt = ee_jt_pos + ang
