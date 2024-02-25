@@ -27,7 +27,7 @@ def plugging_and_split(opt: Namespace) -> None:
     with ur_pilot.connect() as pilot:
         # Apply transformation chain
         T_base2save_pre = _T_base2fpi * _T_fpi2save_pre
-        T_base2junction = _T_base2fpi @ _T_fpi2junction
+        T_base2junction = _T_base2fpi * _T_fpi2junction
         # Free space movements
         with pilot.context.position_control():
             # Start at home position
@@ -74,7 +74,7 @@ def plugging_and_split(opt: Namespace) -> None:
                 raise RuntimeError(
                     f"Error while trying to release the lock. Robot end-effector is probably still connected.")
 
-        # End at home position
+        # End at retreat position
         time.sleep(2.0)
         with pilot.context.position_control():
             pilot.robot.movej([3.6226, -1.6558, 1.8276, 0.1048, 2.0615, -1.4946])
