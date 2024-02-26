@@ -32,7 +32,7 @@ def record_calibration_imgs(opt: Namespace) -> None:
     # Connect to arm
     with ur_pilot.connect() as pilot:
 
-        with pilot.position_control():
+        with pilot.context.position_control():
             pilot.move_home()
 
             # Move to all states in sequence

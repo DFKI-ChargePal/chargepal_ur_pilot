@@ -1,11 +1,10 @@
 """ Configuration class definitions. """
 from __future__ import annotations
 
-# global
+# libs
 import tomli
-from pathlib import Path
-
 import tomli_w
+from pathlib import Path
 from pydantic import BaseModel, Field, NoneStr
 
 # typing
@@ -20,24 +19,6 @@ class MissingConfigError(Exception):
         super().__init__(self.message)
 
 
-class Joints(BaseModel):
-    """ Data model for robot joint values.
-    """
-    vel: float = 0.2
-    max_vel: float = 1.0
-    acc: float = 0.5
-    max_acc: float = 1.0
-
-
-class TCP(BaseModel):
-    """ Data model for robot TCP values.
-    """
-    vel: float = 0.2
-    max_vel: float = 1.0
-    acc: float = 0.5
-    max_acc: float = 1.0
-
-
 class ToolModel(BaseModel):
     """ Data model for the end-effector
     """
@@ -45,15 +26,6 @@ class ToolModel(BaseModel):
     com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
     tip_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
     sense_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
-
-
-class Servo(BaseModel):
-    """ Data model for robot servo values. 
-    """
-    vel: float = 0.5
-    acc: float = 0.5
-    gain: float = 200.0
-    lkh_time: float = 0.2
 
 
 class ForceMode(BaseModel):
@@ -68,8 +40,9 @@ class ForceMode(BaseModel):
 class MotionMode(BaseModel):
     """ Data model for robot motion mode.
     """
-    error_scale = 5000.0
-    force_limit = 50.0
+    error_scale = 1.0
+    force_limit = 30.0
+    torque_limit = 3.0
     Kp: List[float] = Field(default_factory=lambda: [100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     Kd: List[float] = Field(default_factory=lambda: [0.99, 0.99, 0.99, 0.99, 0.99, 0.99])
 
@@ -97,23 +70,20 @@ class FTSensor(BaseModel):
     ft_bias: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 
-class Robot(BaseModel):
-    """ Base data model for robot configuration.
-    """
-    ip_address: str = "192.168.13.42"
-    rtde_freq: float = 500.0
-    home_radians: Optional[List[float]] = None
-    joints: Joints = Joints()
-    tcp: TCP = TCP()
-    tool: ToolModel = ToolModel()
-    servo: Servo = Servo()
+class Pilot(BaseModel):
+
+    tool_model: ToolModel = ToolModel()
     ft_sensor: Optional[FTSensor] = None
+
+
+class Robot(BaseModel):
+    """ Base data model for robot configuration. """
     force_mode: ForceMode = ForceMode()
     motion_mode: MotionMode = MotionMode()
     hybrid_mode: HybridMode = HybridMode()
 
 
-class Config(Robot):
+class Config(Pilot):
     """ Data model for robot configuration.
     """
     name: NoneStr = None
@@ -121,6 +91,7 @@ class Config(Robot):
     author: NoneStr = None
     email: NoneStr = None
     robot: Robot
+    pilot: Pilot
 
 
 def read_toml(config_file: Path) -> dict[str, Any]:

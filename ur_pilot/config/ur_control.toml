@@ -1,0 +1,27 @@
+name = "ur_control"
+description = "Configuration file for the ur_control package."
+author = "Georg John"
+email = "georg.john@dfki.de"
+
+[robot]
+tool = "None"
+home_radians = [3.42, -1.40, 2.00, -0.33, 1.84, -1.50]  # [3.429, -1.371, 2.127, -0.747, 1.867, -1.565]
+ip_address = "192.168.13.42"
+
+[robot.joints]
+vel = 0.35
+max_vel = 0.5
+acc = 0.1
+max_acc = 0.5
+
+[robot.tcp]
+vel = 0.05
+max_vel = 0.1
+acc = 0.05
+max_acc = 0.1
+
+[robot.force_mode]
+mode = 2
+gain = 0.99
+damping = 0.075
+tcp_speed_limits = [0.025, 0.025, 0.025, 0.5, 0.5, 0.5]

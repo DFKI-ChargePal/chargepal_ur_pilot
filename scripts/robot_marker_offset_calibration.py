@@ -39,12 +39,12 @@ def calibration_procedure(opt: Namespace) -> None:
 
     # Connect to arm
     with ur_pilot.connect() as pilot:
-        pilot.robot.register_ee_cam(cam)
+        pilot.register_ee_cam(cam)
         if opt.target is not None:
-            with pilot.position_control():
+            with pilot.context.position_control():
                 pilot.move_to_tcp_pose(Pose().from_xyz(opt.target[:3]).from_axis_angle(opt.target[3:]))
         elif not opt.start_at_target:
-            with pilot.teach_in_control():
+            with pilot.context.teach_in_control():
                 LOGGER.info('Start teach in mode')
                 LOGGER.info("   You can now move the arm to the target pose")
                 LOGGER.info("   Press key 'r' or 'R' to go to the next step")
@@ -55,10 +55,10 @@ def calibration_procedure(opt: Namespace) -> None:
         time.sleep(0.5)
         pose_base2target = pilot.robot.get_tcp_pose()
         if opt.observation is not None:
-            with pilot.position_control():
+            with pilot.context.position_control():
                 pilot.move_to_tcp_pose(Pose().from_xyz(opt.observation[:3]).from_axis_angle(opt.observation[3:]))
         else:
-            with pilot.teach_in_control():
+            with pilot.context.teach_in_control():
                 LOGGER.info('Start teach in mode')
                 LOGGER.info("  You can now bring the arm into a pose where the marker can be observed")
                 LOGGER.info("  Press key 'r' or 'R' to go to the next step")
@@ -77,7 +77,7 @@ def calibration_procedure(opt: Namespace) -> None:
         T_cam2marker = pose_cam2marker.transformation
         T_base2target = pose_base2target.transformation
         T_target2base = T_base2target.inverse()
-        T_tcp2cam = pilot.robot.cam_mdl.T_flange2camera
+        T_tcp2cam = pilot.cam_mdl.T_flange2camera
         
         T_tcp2marker = T_tcp2cam @ T_cam2marker
         T_base2marker = T_base2tcp @ T_tcp2marker

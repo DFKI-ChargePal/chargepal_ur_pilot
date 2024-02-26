@@ -4,5 +4,5 @@ import ur_pilot
 
 if __name__ == '__main__':
     with ur_pilot.connect() as pilot:
-        with pilot.position_control():
-            pilot.move_home()
+        with pilot.context.position_control():
+            pilot.robot.move_home()

@@ -30,15 +30,15 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
         cam = None
     # Connect to pilot
     with ur_pilot.connect() as pilot:
-        with pilot.position_control():
-            pilot.move_home()
+        with pilot.context.position_control():
+            pilot.robot.move_home()
 
         # Prepare recording
         state_seq: list[Sequence[float]] = []
         file_path.parent.mkdir(exist_ok=True)
 
         # Enable free drive mode
-        with pilot.teach_in_control():
+        with pilot.context.teach_in_control():
             LOGGER.info('Start teach in mode:')
             LOGGER.info("You can now move the arm and record joint positions pressing 's' or 'S' ...")
             while True:
@@ -49,10 +49,10 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
                 display.show(img)
                 if ck.user.save():
                     # Save current joint position configuration
-                    joint_pos = pilot.robot.get_joint_pos()
-                    info_str = f"Save joint pos: " + " ".join(f"{q:.3f}" for q in joint_pos)
+                    joint_pos = pilot.robot.joint_pos
+                    info_str = f"Save joint pos: {ur_pilot.utils.vec_to_str(joint_pos, 3)}"
                     LOGGER.info(info_str)
-                    state_seq.append(joint_pos)
+                    state_seq.append(joint_pos.tolist())
                 elif ck.user.stop():
                     LOGGER.info("The recording process is terminated by the user.")
                     break

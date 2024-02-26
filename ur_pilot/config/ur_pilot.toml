@@ -1,0 +1,28 @@
+name = "ur_pilot"
+description = "Configuration file for the ur_pilot package."
+author = "Georg John"
+email = "georg.john@dfki.de"
+
+[pilot.tool_model]
+mass = 0.5
+com = [0.00057, 0.00017, 0.0089]
+# linear plug
+tip_frame = [0.0, 0.0, 0.235, 0.0, 0.0, 0.0]
+sense_frame = [0.0, 0.0, 0.23417, 0.0, -0.2618, 0.0]
+# curved plug
+# tip_frame = [-0.0325, 0.0, 0.225, 0.0, -0.2618, 0.0]
+# sense_frame = [-0.025, 0.0, 0.19417, 0.0, -0.2618, 0.0]
+
+[robot.motion_mode]
+error_scale = 30.0
+torque_limit = 0.0
+Kp = [1000.0, 1000.0, 1000.0, 1.0, 1.0, 1.0]
+Kd = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+
+[robot.hybrid_mode]
+error_scale = 150.0
+force_limit = 20.0
+Kp_force = [0.02, 0.02, 0.02, 0.02, 0.02, 0.02]
+Kd_force = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+Kp_motion = [150.0, 150.0, 150.0, 150.0, 150.0, 150.0]
+Kd_motion = [0.99, 0.99, 0.99, 0.99, 0.99, 0.99]
