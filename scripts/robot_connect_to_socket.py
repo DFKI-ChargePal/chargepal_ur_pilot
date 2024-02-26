@@ -22,6 +22,8 @@ _dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 
 # Fixed configurations
 _socket_obs_j_pos = (3.4045, -1.6260, 1.8820, 0.1085, 1.8359, -1.5003)
+_finale_j_pos = (3.6226, -1.6558, 1.8276, 0.1048, 2.0615, -1.4946)
+
 _T_socket2socket_pre = sm.SE3().Trans([0.0, 0.0, 0.0 - 0.02])  # Retreat pose with respect to the socket
 _T_fpi2junction = sm.SE3().Trans([0.0, 0.0, -0.034 + 0.015])
 _T_socket2fpi = sm.SE3().Trans([-0.005, 0.0, 0.034])
@@ -62,11 +64,11 @@ def connect_to_socket(opt: Namespace) -> None:
                 # Get transformation matrices
                 T_flange2cam = pilot.cam_mdl.T_flange2camera
                 T_base2flange = pilot.get_pose('flange')
-                T_base2socket = T_base2flange * T_flange2cam * T_cam2socket
                 # Get searched transformations
-                print("Base-Socket    : ", ur_pilot.utils.se3_to_str(T_base2socket))
+                T_base2socket = T_base2flange * T_flange2cam * T_cam2socket
                 T_base2socket_pre = T_base2socket * _T_socket2socket_pre
-                print("Base-Socket_Pre: ", ur_pilot.utils.se3_to_str(T_base2socket_pre))
+                LOGGER.debug("Base-Socket    : ", ur_pilot.utils.se3_to_str(T_base2socket))
+                LOGGER.debug("Base-Socket_Pre: ", ur_pilot.utils.se3_to_str(T_base2socket_pre))
                 found_socket = True
     
         if not found_socket:
@@ -121,7 +123,7 @@ def connect_to_socket(opt: Namespace) -> None:
             # End at retreat position
             time.sleep(2.0)
             with pilot.context.position_control():
-                pilot.robot.movej([3.6226, -1.6558, 1.8276, 0.1048, 2.0615, -1.4946])
+                pilot.robot.movej(_finale_j_pos)
 
     # Stop camera stream
     cam.end()
