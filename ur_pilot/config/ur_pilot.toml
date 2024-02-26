@@ -4,10 +4,14 @@ author = "Georg John"
 email = "georg.john@dfki.de"
 
 [pilot.tool_model]
-mass = 0.4
+mass = 0.5
 com = [0.00057, 0.00017, 0.0089]
-tip_frame = [-0.0325, 0.0, 0.225, 0.0, -0.2618, 0.0]
-sense_frame = [-0.025, 0.0, 0.19417, 0.0, -0.2618, 0.0]
+# linear plug
+tip_frame = [0.0, 0.0, 0.235, 0.0, 0.0, 0.0]
+sense_frame = [0.0, 0.0, 0.23417, 0.0, -0.2618, 0.0]
+# curved plug
+# tip_frame = [-0.0325, 0.0, 0.225, 0.0, -0.2618, 0.0]
+# sense_frame = [-0.025, 0.0, 0.19417, 0.0, -0.2618, 0.0]
 
 [robot.motion_mode]
 error_scale = 30.0

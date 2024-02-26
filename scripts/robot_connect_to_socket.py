@@ -21,10 +21,10 @@ LOGGER = logging.getLogger(__name__)
 _dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 
 # Fixed configurations
-_socket_obs_j_pos = (3.387, -1.469, 1.747, -0.016, 1.789, -1.565)
+_socket_obs_j_pos = (3.4045, -1.6260, 1.8820, 0.1085, 1.8359, -1.5003)
 _T_socket2socket_pre = sm.SE3().Trans([0.0, 0.0, 0.0 - 0.02])  # Retreat pose with respect to the socket
-_T_fpi2junction = sm.SE3().Trans([0.0, 0.0, -0.034 + 0.01])
-_T_socket2fpi = sm.SE3().Trans([0.0, 0.0, 0.034])
+_T_fpi2junction = sm.SE3().Trans([0.0, 0.0, -0.034 + 0.015])
+_T_socket2fpi = sm.SE3().Trans([-0.005, 0.0, 0.034])
 
 
 def connect_to_socket(opt: Namespace) -> None:
@@ -37,7 +37,7 @@ def connect_to_socket(opt: Namespace) -> None:
     cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
-    dtt = pd.factory.create(_dtt_cfg_dir.joinpath(opt.config_file))
+    dtt = pd.factory.create(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
 
     # Connect to pilot
@@ -60,12 +60,13 @@ def connect_to_socket(opt: Namespace) -> None:
             found, T_cam2socket = dtt.find_pose(render=True)
             if found:
                 # Get transformation matrices
-                T_plug2cam = pilot.cam_mdl.T_flange2camera
-                T_base2plug = pilot.get_pose('tool_tip')
+                T_flange2cam = pilot.cam_mdl.T_flange2camera
+                T_base2flange = pilot.get_pose('flange')
+                T_base2socket = T_base2flange * T_flange2cam * T_cam2socket
                 # Get searched transformations
-                T_base2socket = T_base2plug * T_plug2cam * T_cam2socket
-                print(ur_pilot.utils.se3_to_str(T_base2socket))
+                print("Base-Socket    : ", ur_pilot.utils.se3_to_str(T_base2socket))
                 T_base2socket_pre = T_base2socket * _T_socket2socket_pre
+                print("Base-Socket_Pre: ", ur_pilot.utils.se3_to_str(T_base2socket_pre))
                 found_socket = True
     
         if not found_socket:
@@ -79,10 +80,9 @@ def connect_to_socket(opt: Namespace) -> None:
                 T_base2fpi = T_base2socket * _T_socket2fpi
                 T_base2junction = T_base2fpi * _T_fpi2junction
             time.sleep(1.0)
-            ck.user.wait_for_command()
             # Getting in junction between plug and socket
             with pilot.context.motion_control():
-                pilot.move_to_tcp_pose(T_base2junction, time_out=4.0)
+                pilot.move_to_tcp_pose(T_base2junction, time_out=5.0)
                 # Check if robot is in target area
                 xyz_base2jct_base_est = T_base2junction.t
                 xyz_base2jct_base_meas = pilot.robot.tcp_pos
