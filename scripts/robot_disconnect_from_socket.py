@@ -22,12 +22,12 @@ LOGGER = logging.getLogger(__name__)
 _dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 
 _start_j_pos = (3.6226, -1.6558, 1.8276, 0.1048, 2.0615, -1.4946)
-_socket_obs_j_pos = ()
+_socket_obs_j_pos = (3.3345, -1.6781, 1.9960, -0.1054, 1.6789, -1.5370)
 
-_T_socket2pre_connect = sm.SE3().Rt(R=sm.SO3.EulerVec((0.0, 0.0, -np.pi/2)), t=(0.0, 0.0, 0.034 - 0.02))
+_T_socket2pre_connect = sm.SE3().Rt(R=sm.SO3.EulerVec((0.0, 0.0, -np.pi/2)), t=(0.005, 0.0, 0.034 - 0.02))
 _T_socket2junction = sm.SE3().Rt(R=sm.SO3.EulerVec((0.0, 0.0, -np.pi/2)), t=(0.0, 0.0, 0.034))
-_T_socket2post_connect = sm.SE3().Trans([0.0, 0.0, -0.02])
-_T_socket2fpi = sm.SE3().Trans([0.0, 0.0, 0.034])
+# _T_socket2post_connect = sm.SE3().Trans([0.0, 0.0, -0.02])
+# _T_socket2fpi = sm.SE3().Trans([0.0, 0.0, 0.034])
 
 
 def disconnect_from_socket(opt: Namespace) -> None:
@@ -93,11 +93,18 @@ def disconnect_from_socket(opt: Namespace) -> None:
                                        f"Robot is probably in an undefined condition.")
             # Start to apply some force
             with pilot.context.force_control():
+                # Move further to apply better connection
+                _ = pilot.tcp_force_mode(
+                        wrench=np.array([0.0, 0.0, 30.0, 0.0, 0.0, 0.0]),
+                        compliant_axes=[0, 0, 1, 0, 0, 0],
+                        distance=0.01,  # 1cm
+                        time_out=3.0)
                 # Fix plug via twisting end-effector
                 success = pilot.screw_ee_force_mode(4.0, np.pi / 2, 12.0)
                 if not success:
                     raise RuntimeError(f"Robot did not succeed in closing the twist lock. "
                                        f"Robot is probably in an undefined condition.")
+                pilot.relax(0.5)
                 # Plug out
                 plug_out_ft = np.array([0.0, 0.0, -100.0, 0.0, 0.0, 0.0])
                 success = pilot.tcp_force_mode(

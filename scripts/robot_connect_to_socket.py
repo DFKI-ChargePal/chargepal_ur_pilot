@@ -84,13 +84,13 @@ def connect_to_socket(opt: Namespace) -> None:
             time.sleep(1.0)
             # Getting in junction between plug and socket
             with pilot.context.motion_control():
-                pilot.move_to_tcp_pose(T_base2junction, time_out=5.0)
+                pilot.move_to_tcp_pose(T_base2junction, time_out=7.0)
                 # Check if robot is in target area
                 xyz_base2jct_base_est = T_base2junction.t
                 xyz_base2jct_base_meas = pilot.robot.tcp_pos
-                error = np.linalg.norm(xyz_base2jct_base_est - xyz_base2jct_base_meas)
-                if error > 0.01:
-                    raise RuntimeError(f"Remaining position error {error} to alignment state is to large. "
+                error_z = np.squeeze(sm.SO3(pilot.robot.tcp_pose.R) * (xyz_base2jct_base_est - xyz_base2jct_base_meas))[-1]
+                if abs(error_z) > 0.015:
+                    raise RuntimeError(f"Remaining position error {error_z} to alignment state is to large. "
                                        f"Robot is probably in an undefined condition.")
             # Start to apply some force
             with pilot.context.force_control():
