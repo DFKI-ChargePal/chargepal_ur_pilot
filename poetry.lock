@@ -1319,7 +1319,7 @@ ui = ["textual[dev]"]
 type = "git"
 url = "git@git.ni.dfki.de:chargepal/ur_control.git"
 reference = "develop/orin"
-resolved_reference = "65cd121286a3158356dd311546eb7e3494e1d2c0"
+resolved_reference = "759b4901a94b0e65d5f217c357d77c81ad130d32"
 
 [[package]]
 name = "virtualenv"
