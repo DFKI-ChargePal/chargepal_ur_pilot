@@ -1,19 +1,22 @@
-# global
+# libs
 import time
 import logging
 import argparse
 import ur_pilot
 import cvpd as pd
 import camera_kit as ck
+import spatialmath as sm
 from pathlib import Path
-from rigmopy import Pose
 
 # typing
 from argparse import Namespace
 
 
 LOGGER = logging.getLogger(__name__)
+
 _dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
+
+_T_fpi2socket = sm.SE3().Trans([0.0, 0.0, -0.034])
 
 
 def calibration_procedure(opt: Namespace) -> None:
@@ -26,81 +29,64 @@ def calibration_procedure(opt: Namespace) -> None:
     cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
     cam.load_coefficients()
     cam.render()
-    dtt: pd.DetectorABC
-    if opt.detector_config_file.startswith("aruco_marker"):
-        dtt = pd.ArucoMarkerDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
-    elif opt.detector_config_file.startswith("aruco_pattern"):
-        dtt = pd.ArucoPatternDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
-    elif opt.detector_config_file.startswith("charuco"):
-        dtt = pd.CharucoDetector(_dtt_cfg_dir.joinpath(opt.detector_config_file))
-    else:
-        raise ValueError(f"Not a valid configuration file name: {opt.detector_config_file}")
+    dtt = pd.factory.create(_dtt_cfg_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
 
     # Connect to arm
     with ur_pilot.connect() as pilot:
         pilot.register_ee_cam(cam)
-        if opt.target is not None:
-            with pilot.context.position_control():
-                pilot.move_to_tcp_pose(Pose().from_xyz(opt.target[:3]).from_axis_angle(opt.target[3:]))
-        elif not opt.start_at_target:
-            with pilot.context.teach_in_control():
-                LOGGER.info('Start teach in mode')
-                LOGGER.info("   You can now move the arm to the target pose")
-                LOGGER.info("   Press key 'r' or 'R' to go to the next step")
-                while not ck.user.resume():
-                    cam.render()
-                LOGGER.info('Stop teach in mode\n')
+
+        # Enable free drive mode
+        with pilot.context.teach_in_control():
+            LOGGER.info('Start teach in mode')
+            LOGGER.info("   You can now move the arm to the fully-plugged-in socket pose")
+            LOGGER.info("   Press key 'r' or 'R' to go to the next step")
+            while not ck.user.resume():
+                cam.render()
+            LOGGER.info('Stop teach in mode\n')
         # Measure target pose
         time.sleep(0.5)
-        pose_base2target = pilot.robot.get_tcp_pose()
-        if opt.observation is not None:
-            with pilot.context.position_control():
-                pilot.move_to_tcp_pose(Pose().from_xyz(opt.observation[:3]).from_axis_angle(opt.observation[3:]))
-        else:
-            with pilot.context.teach_in_control():
-                LOGGER.info('Start teach in mode')
-                LOGGER.info("  You can now bring the arm into a pose where the marker can be observed")
-                LOGGER.info("  Press key 'r' or 'R' to go to the next step")
-                while not ck.user.resume():
-                    cam.render()
-                LOGGER.info('Stop teach in mode\n')
+        T_base2fpi = pilot.get_pose('tool_tip')
+        with pilot.context.teach_in_control():
+            LOGGER.info('Start teach in mode')
+            LOGGER.info("  You can now bring the arm into a pose where the marker can be observed")
+            LOGGER.info("  Press key 'r' or 'R' to go to the next step")
+            while not ck.user.resume():
+                cam.render()
+            LOGGER.info('Stop teach in mode\n')
         # Measure observation pose
         time.sleep(0.5)
-        pose_base2tcp = pilot.robot.get_tcp_pose()
-        found, pose_marker = dtt.find_pose(render=True)
-        pose_cam2marker = Pose().from_xyz_xyzw(*pose_marker)
-    if found:
-        LOGGER.info('Found marker')
-        # Get pose from target to marker
-        T_base2tcp = pose_base2tcp.transformation
-        T_cam2marker = pose_cam2marker.transformation
-        T_base2target = pose_base2target.transformation
-        T_target2base = T_base2target.inverse()
-        T_tcp2cam = pilot.cam_mdl.T_flange2camera
-        
-        T_tcp2marker = T_tcp2cam @ T_cam2marker
-        T_base2marker = T_base2tcp @ T_tcp2marker
-        T_target2marker = T_target2base @ T_base2marker
-        LOGGER.debug(f"TCP - Cam: {T_tcp2cam}")
-        LOGGER.debug(f"Base - TCP: {T_base2tcp}")
-        LOGGER.debug(f"Base - Target: {T_base2target}")
-        LOGGER.debug(f"Cam - Marker: {T_cam2marker}")
-        LOGGER.debug(f"TCP - Marker: {T_tcp2marker}")
-        LOGGER.debug(f"Base - Marker: {T_base2marker}")
-        LOGGER.debug(f"Target - Marker: {T_target2marker}")
-        # Convert to pose
-        pose_marker2target = Pose().from_transformation(T_target2marker).inverse()
-        # xyz = [float(v) for v in pose_marker2target.xyz]
-        # xyzw = [float(v) for v in pose_marker2target.xyzw]
-        # Save new offset position
-        dtt.adjust_offset(*pose_marker2target.xyz_xyzw)
-        LOGGER.info(f"  Calculated transformation from marker to target:")
-        LOGGER.info(f"  {pose_marker2target.xyz, pose_marker2target.to_euler_angle(degrees=True)}\n")
-    else:
-        LOGGER.info(f"Marker not found. Please check configuration and make sure marker is in camera fov")
-    time.sleep(2.0)
-    cam.end()
+        T_base2flange = pilot.get_pose('flange')
+        found, T_cam2marker = dtt.find_pose(render=True)
+
+        if found:
+            LOGGER.info('Found marker')
+            # Get pose from target to marker
+            T_base2socket = T_base2fpi * _T_fpi2socket
+            T_socket2base = T_base2socket.inv()
+            T_flange2cam = pilot.cam_mdl.T_flange2camera
+
+            T_flange2marker = T_flange2cam * T_cam2marker
+            T_base2marker = T_base2flange * T_flange2marker
+            T_socket2marker = T_socket2base * T_base2marker
+            T_marker2socket = T_socket2marker.inv()
+
+            LOGGER.debug(f"Base - Flange:   {ur_pilot.utils.se3_to_str(T_base2flange)}")
+            LOGGER.debug(f"Base - Marker:   {ur_pilot.utils.se3_to_str(T_base2marker)}")
+            LOGGER.debug(f"Base - Socket:   {ur_pilot.utils.se3_to_str(T_base2socket)}")
+            LOGGER.debug(f"Flange - Cam:    {ur_pilot.utils.se3_to_str(T_flange2cam)}")
+            LOGGER.debug(f"Flange - Marker: {ur_pilot.utils.se3_to_str(T_flange2marker)}")
+            LOGGER.debug(f"Socket - Marker: {ur_pilot.utils.se3_to_str(T_socket2marker)}")
+            LOGGER.debug(f"Cam - Marker:    {ur_pilot.utils.se3_to_str(T_cam2marker)}")
+
+            dtt.adjust_offset(T_marker2socket)
+
+            LOGGER.info(f"  Calculated transformation from marker to socket:")
+            LOGGER.info(f"  {ur_pilot.utils.se3_to_str(T_marker2socket)}\n")
+        else:
+            LOGGER.info(f"Marker not found. Please check configuration and make sure marker is in camera fov")
+        if cam is not None:
+            cam.end()
 
 
 if __name__ == '__main__':
@@ -108,11 +94,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=des)
     parser.add_argument('detector_config_file', type=str, 
                         help='Description and configuration of the used marker as .yaml file')
-    parser.add_argument('--target', nargs='+', type=float, 
-                        help="Target pose in format position [x y z] and axis-angle representation [Rx Ry Rz]")
-    parser.add_argument('--observation', nargs='+', type=float, 
-                        help="Observation pose in format position [x y z] and axis-angle representation [Rx Ry Rz]")
-    parser.add_argument('--start_at_target', action='store_true', help='Optional if robot already at target position.')
     parser.add_argument('--debug', action='store_true', help='Option to set global logger level')
     # Parse input arguments
     args = parser.parse_args()
@@ -120,11 +101,5 @@ if __name__ == '__main__':
         args.logging_level = logging.DEBUG
     else:
         args.logging_level = logging.INFO
-    if args.target:
-        if len(args.target) != 6:
-            raise ValueError(f"Not a valid target pose {args.target}. Need exact 6 float values")
-    if args.observation:
-        if len(args.observation) != 6:
-            raise ValueError(f"Not a valid observation pose {args.observation}. Need exact 6 float values")
     ur_pilot.utils.check_file_extension(Path(args.detector_config_file), '.yaml')
     calibration_procedure(args)
