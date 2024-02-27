@@ -1,15 +1,18 @@
 """ This file contains common functionality. """
 from __future__ import annotations
 
-# global
+# libs
 import abc
 import sys
 import pysoem
-from rigmopy import Vector6d
+import numpy as np
+import spatialmath as sm
+
 from pathlib import Path
 
 # typing
 from typing import Sequence
+from numpy import typing as npt
 
 
 def get_pkg_path() -> Path:
@@ -75,6 +78,63 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             return valid[choice]
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
+
+
+def se3_to_str(mat: sm.SE3, digits: int = 4) -> str:
+    """ Convert SE(3) object to UR style string
+    Args:
+        mat:    SE(3) transformation matrix
+        digits: Print precision
+    
+    Returns:
+        representation string
+    """
+    xyz = ", ".join("{0:.{1}f}".format(v, digits) for v in mat.t.tolist())
+    aa = ", ".join("{0:.{1}f}".format(v, digits) for v in mat.eulervec().tolist())
+    return f"trans=[{xyz}] -- axis ang=[{aa}]"
+
+
+def se3_to_3pt_set(mat: sm.SE3, dist: float = 1.0, axes: str = 'xy') -> npt.NDArray[np.float64]:
+    """ Convert the pose to a set of 3 points, the idea being that, 3 (non-collinear) points can encode both position
+        and orientation
+
+    Args:
+        mat:  Transformation matrix as SE(3) object
+        dist: Distance from original pose to other two points [m].
+        axes: Axes of pose orientation to transform other 2 points along.
+              Must be a two letter combination of _x, _y and _z, in any order.
+
+    Returns:
+        ndarray: A 3x3 np array of each point, with each row containing a single point. The first point is the
+                 original point from the 'pose' argument.
+    """
+    possible_axes = ["xy", "yx", "xz", "zx", "yz", "zy"]
+    assert axes in possible_axes, f"param axes must be in: {possible_axes}"
+    # First point is just the origin of the pose
+    axes = axes.replace('x', '0')
+    axes = axes.replace('y', '1')
+    axes = axes.replace('z', '2')
+    pt1 = mat.t
+    tau2, tau3 = np.zeros(3), np.zeros(3)
+    tau2[int(axes[0])] = dist
+    tau3[int(axes[1])] = dist
+    pt2 = np.squeeze(mat * tau2)
+    pt3 = np.squeeze(mat * tau3)
+    points = np.stack([pt1, pt2, pt3])
+    return np.array(points)
+
+
+def vec_to_str(vec: Sequence[float] | npt.NDArray[np.float32 | np.float64 | np.float_], digits: int = 4) -> str:
+    """ Convert a vector to a formatted string
+    Args:
+        vec:    The vector object
+        digits: Print precision
+
+    Returns:
+        representation string
+    """
+    vec_str = ", ".join("{0:.{1}f}".format(v, digits) for v in np.array(vec).flatten().tolist())
+    return f"[{vec_str}]"
 
 
 def ramp(start: float, end: float, duration: float) -> list[float]:
@@ -238,7 +298,7 @@ class SpatialController:
         for ctrl in self.ctrl_l:
             ctrl.reset()
 
-    def update(self, errors: Vector6d, period: float) -> Vector6d:
+    def update(self, errors: npt.ArrayLike, period: float) -> npt.NDArray[np.float_]:
         """ Update sub-controllers
 
         Args:
@@ -248,8 +308,8 @@ class SpatialController:
         Returns:
             List with new controller outputs
         """
-        out = [ctrl.update(err, period) for ctrl, err in zip(self.ctrl_l, errors.xyzXYZ)]
-        return Vector6d().from_xyzXYZ(out)
+        out = [ctrl.update(err, period) for ctrl, err in zip(self.ctrl_l, np.reshape(errors, 6).tolist())]
+        return np.array(out)
 
 
 class SpatialPDController(SpatialController):

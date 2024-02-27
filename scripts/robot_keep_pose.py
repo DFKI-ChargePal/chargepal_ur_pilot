@@ -1,21 +1,27 @@
 """ Short demo to demonstrate motion mode. Goal is to keep the current pose """
+import logging
 import ur_pilot
+
+LOGGER = logging.getLogger(__name__)
 
 
 def keep_pose(soft: bool, time_out: float) -> None:
 
     # Connect to pilot/robot arm
     with ur_pilot.connect() as pilot:
-
-        if soft:
-            Kp = [1.0, 1.0, 1.0, 0.01, 0.01, 0.01]
-        else:
-            Kp = [25.0, 25.0, 25.0, 1.0, 1.0, 1.0]
         
-        with pilot.motion_control(Kp_6=Kp):
-            init_pose = pilot.robot.get_tcp_pose()
-            pilot.move_to_tcp_pose(init_pose, time_out=time_out)
+        with pilot.context.position_control():
+            pilot.robot.move_home()
+
+        with pilot.context.motion_control():
+            init_pose = pilot.robot.tcp_pose
+            new_pose = init_pose
+            LOGGER.info(f"You can now start moving the end-effector")
+            success, _ = pilot.move_to_tcp_pose(new_pose, time_out=time_out)
+            LOGGER.info(f"Success: {success}")
+            LOGGER.info(f"Shutting down the demo")
 
 
 if __name__ == '__main__':
-    keep_pose(True, 30.0)
+    ur_pilot.logger.set_logging_level(logging.INFO)
+    keep_pose(True, 10.0)
