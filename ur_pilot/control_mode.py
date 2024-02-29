@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # libs
 import abc
+import logging
 from enum import auto, Enum
 from contextlib import contextmanager
 from ur_pilot.ur_robot import URRobot
@@ -9,6 +10,9 @@ from ur_pilot.config_mdl import Config
 
 # typing
 from typing import Iterator
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ModeTypes(Enum):
@@ -170,41 +174,69 @@ class ControlContextManager:
     @contextmanager
     def position_control(self) -> Iterator[None]:
         self.mode = PositionMode.enter(self.robot, self.cfg)
-        yield
-        self.exit()
+        try:
+            LOGGER.debug(f"Enter position control context")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit position control context")
 
     @contextmanager
     def velocity_control(self) -> Iterator[None]:
         self.mode = VelocityMode.enter(self.robot, self.cfg)
-        yield
-        self.exit()
+        try:
+            LOGGER.debug(f"Enter velocity control context")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit velocity control context")
 
     @contextmanager
     def servo_control(self) -> Iterator[None]:
         self.mode = ServoMode.enter(self.robot, self.cfg)
-        yield
-        self.exit()
+        try:
+            LOGGER.debug(f"Enter servo control context")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit servo control context")
 
     @contextmanager
     def force_control(self) -> Iterator[None]:
         self.mode = ForceMode.enter(self.robot, self.cfg)
-        yield
-        self.exit()
+        try:
+            LOGGER.debug(f"Enter force control context")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit force control context")
 
     @contextmanager
     def teach_in_control(self) -> Iterator[None]:
         self.mode = TeachMode.enter(self.robot, self.cfg)
-        yield
-        self.exit()
+        try:
+            LOGGER.debug(f"Enter teach-in control context")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit teach-in control context")
 
     @contextmanager
     def hybrid_control(self) -> Iterator[None]:
         self.mode = HybridMode.enter(self.robot, self.cfg)
-        yield
-        self.exit()
+        try:
+            LOGGER.debug(f"Enter hybrid control context")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit hybrid control context")
 
     @contextmanager
     def motion_control(self) -> Iterator[None]:
         self.mode = MotionMode.enter(self.robot, self.cfg)
-        yield
-        self.exit()
+        try:
+            LOGGER.debug(f"Enter motion control context")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit motion control context")
