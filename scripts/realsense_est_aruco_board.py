@@ -6,27 +6,29 @@ import logging
 import cvpd as pd
 import camera_kit as ck
 from pathlib import Path
+from time import perf_counter
 
 
 LOGGER = logging.getLogger(__name__)
 
-_cfg_fp = Path(__file__).absolute().parent.parent.joinpath('detector/aruco_pattern_bat_socket_ccs_adj.yaml')
+_log_freq = 1
+_cfg_fp = Path(__file__).absolute().parent.parent.joinpath('detector/aruco_pattern_test_adj.yaml')
 # _cfg_fp = Path(__file__).absolute().parent.parent.joinpath('detector/charuco_ads_socket_ty2.yaml')
 
 
-def estimate_board_pose() -> None:
+def find_pose() -> None:
 
     with ck.camera_manager('realsense_tcp_cam', logger_level=logging.INFO) as cam:
-        cam.load_coefficients()
-        pose_detector = pd.ArucoPatternDetector(_cfg_fp)
-        # pose_detector = pd.CharucoDetector(_cfg_fp)
-        pose_detector.register_camera(cam)
-        found, pose = False, None
+        dtt = pd.factory.create(_cfg_fp)
+        dtt.register_camera(cam)
+        log_interval = 1.0 / _log_freq
+        _t_start = perf_counter()
         while not ck.user.stop():
-            found, pose = pose_detector.find_pose(render=True)
-        if found:
-            LOGGER.info(f"Last found pose: \n {pose}")
+            found, T_cam2obj = dtt.find_pose(render=True)
+            if perf_counter() - _t_start > log_interval and found:
+                print(f"Transformation Camera - Object: {T_cam2obj.t.tolist()} {T_cam2obj.eulervec().tolist()}")
+                _t_start = perf_counter()
 
 
 if __name__ == '__main__':
-    estimate_board_pose()
+    find_pose()
