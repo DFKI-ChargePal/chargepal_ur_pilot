@@ -6,7 +6,7 @@ email = "georg.john@dfki.de"
 [robot]
 tool = "None"
 home_radians = [-3.3811, -1.8087, 2.2713, -0.2545, 1.3631, -1.6137]
-ip_address = "192.168.11.40"  # "192.168.13.42"
+ip_address = "192.168.13.42"  # "192.168.11.40"  # 
 
 [robot.joints]
 vel = 0.35
