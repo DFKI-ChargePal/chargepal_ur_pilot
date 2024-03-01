@@ -123,10 +123,9 @@ dmypy.json
 # Configuration Cache
 .config_cache.json
 
-# Project data
-data/
-detector/
-camera_info/
+# Project configuration data
+/config/
+/scripts/config/
 
 # PyCharm
 python-sudo.sh

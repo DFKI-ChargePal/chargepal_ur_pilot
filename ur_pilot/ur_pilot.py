@@ -699,7 +699,7 @@ class Pilot:
         # Move to home joint position
         self.robot.move_home()
         # Move to random joint positions near to the home configuration
-        home_q = np.array(self.robot.cfg.robot.home_radians, dtype=np.float32)
+        home_q = np.array(self.robot.cfg.robot_dir.home_radians, dtype=np.float32)
         tgt_joint_q = np.array(home_q + (np.random.rand(6) * 2.0 - 1.0) * 0.075, dtype=np.float32)
         self.robot.movej(tgt_joint_q)
         # Move back to home joint positions

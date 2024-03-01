@@ -18,7 +18,7 @@ _cfg_fp = Path(__file__).absolute().parent.parent.joinpath('detector/aruco_patte
 
 def find_pose() -> None:
 
-    with ck.camera_manager('realsense_tcp_cam', logger_level=logging.INFO) as cam:
+    with ck.camera_manager('realsense_tcp_cam', logging.INFO) as cam:
         dtt = pd.factory.create(_cfg_fp)
         dtt.register_camera(cam)
         log_interval = 1.0 / _log_freq
