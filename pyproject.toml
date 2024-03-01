@@ -17,17 +17,13 @@ testresources = "^2.0.1"
 pyrealsense2 = "^2.54.2.5684"
 spatialmath-python = "^1.1.9"
 # Internal dependencies
-chargepal_cvpd = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git", rev="feat/spatialmath"}
-chargepal_camera_kit = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_camera_kit.git", rev="feat/spatialmath"}
+chargepal_cvpd = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git", branch="feat/spatialmath"}
+chargepal_camera_kit = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_camera_kit.git", branch="feat/spatialmath"}
 
-[tool.poetry.group.arm]
-ur_control = {git="git@git.ni.dfki.de:chargepal/ur_control.git", rev="develop/orin"}
-
-[tool.poetry.group.x86]
-ur_control = {git="git@git.ni.dfki.de:chargepal/ur_control.git", rev="integration/ur_pilot_py3_8"}
-
-[tool.poetry.group.x64]
-ur_control = {git="git@git.ni.dfki.de:chargepal/ur_control.git", rev="integration/ur_pilot_py3_8"}
+ur_control = [
+    {markers = "platform_machine == 'x86_64'", git="git@git.ni.dfki.de:chargepal/ur_control.git", branch="integration/ur_pilot_py3_8"},
+    {markers = "platform_machine == 'arm'", git="git@git.ni.dfki.de:chargepal/ur_control.git", branch="develop/orin"},
+]
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.0.0"

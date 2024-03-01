@@ -11,4 +11,3 @@ from typing import Sequence
 class TargetConfig:
     xyz: Sequence[float]
     xyzw: Sequence[float]
-

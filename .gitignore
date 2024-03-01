@@ -131,4 +131,5 @@ camera_info/
 # PyCharm
 python-sudo.sh
 
-ur_pilot/config/laptop_dev.toml
+# Poetry lock to avoid platform conflicts
+poetry.lock
