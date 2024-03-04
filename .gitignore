@@ -125,7 +125,10 @@ dmypy.json
 
 # Project configuration data
 /config/
-/scripts/config/
+/data/
+/detector/
+/target/
+/camera_info/
 
 # PyCharm
 python-sudo.sh
