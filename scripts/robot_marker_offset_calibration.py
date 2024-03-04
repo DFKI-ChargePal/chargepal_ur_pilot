@@ -7,14 +7,12 @@ import cvpd as pd
 import camera_kit as ck
 import spatialmath as sm
 from pathlib import Path
+from config import config
 
 # typing
 from argparse import Namespace
 
-
 LOGGER = logging.getLogger(__name__)
-
-_dtt_cfg_dir = Path(__file__).absolute().parent.parent.joinpath('detector')
 
 _T_fpi2socket = sm.SE3().Trans([0.0, 0.0, -0.034])
 
@@ -25,11 +23,12 @@ def calibration_procedure(opt: Namespace) -> None:
     Args:
         opt: Script arguments
     """
-    # Create perception setup
-    cam = ck.camera_factory.create("realsense_tcp_cam", opt.logging_level)
-    cam.load_coefficients()
+    LOGGER.info(config)
+    # Perception setup
+    cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
+    cam.load_coefficients(config.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
     cam.render()
-    dtt = pd.factory.create(_dtt_cfg_dir.joinpath(opt.detector_config_file))
+    dtt = pd.factory.create(config.detector_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
 
     # Connect to arm
