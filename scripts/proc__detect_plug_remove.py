@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 # libs
+import time
 import logging
 import argparse
-import time
-
+import ur_pilot
 import cvpd as pd
 import numpy as np
 import camera_kit as ck
@@ -21,7 +21,6 @@ from config import config
 from ur_pilot import Pilot
 from argparse import Namespace
 
-import ur_pilot
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,36 +51,42 @@ def detect(pilot: Pilot, cam: ck.CameraBase, opt: Namespace) -> tuple[bool, sm.S
     return found, T_base2socket
 
 
-def plug_in(pilot: Pilot, T_base2socket: sm.SE3) -> bool:
-    success = True
-    T_base2fpi = T_base2socket * _T_socket2fpi
+def move_to_pre(pilot: Pilot, T_base2socket: sm.SE3) -> bool:
     T_base2socket_pre = T_base2socket * _T_socket2socket_pre
+    success, _ = pilot.move_to_tcp_pose(T_base2socket_pre)
+    return success
+
+
+def get_in_touch(pilot: Pilot, T_base2socket: sm.SE3) -> bool:
     T_base2socket_junction = T_base2socket * _T_socket2socket_junction
-    with pilot.context.position_control():
-        pilot.move_to_tcp_pose(T_base2socket_pre)
-    # Getting in junction between plug and socket
-    with pilot.context.motion_control():
-        pilot.move_to_tcp_pose(T_base2socket_junction, time_out=4.0)
-        # Check if robot is in target area
-        xyz_base2jct_base_est = T_base2socket_junction.t
-        xyz_base2jct_base_meas = pilot.robot.tcp_pos
-        error_z = np.squeeze(sm.SO3(pilot.robot.tcp_pose.R) * (xyz_base2jct_base_est - xyz_base2jct_base_meas))[-1]
-        if abs(error_z) > 0.015:
-            LOGGER.warning(f"Remaining position error {error_z} to alignment state is quite large. "
-                           f"Robot is probably in an undefined condition.")
-            success = False
-    if success:
-        with pilot.context.force_control():
-            # Try to fully plug in
-            pilot.plug_in_force_ramp(f_axis='z', f_start=60.0, f_end=100, duration=3.0)
-            # Check if robot is in target area
-            xyz_base2fpi_base_est = T_base2fpi.t
-            xyz_base2fpi_base_meas = pilot.robot.tcp_pos
-            error = np.linalg.norm(xyz_base2fpi_base_est - xyz_base2fpi_base_meas)
-            if error > 0.01:
-                LOGGER.warning(f"Remaining position error {error} is to large. "
-                               f"Robot is probably in an undefined condition.")
-                success = False
+    pilot.move_to_tcp_pose(T_base2socket_junction, time_out=4.0)
+    # Check if robot is in target area
+    xyz_base2jct_base_est = T_base2socket_junction.t
+    xyz_base2jct_base_meas = pilot.robot.tcp_pos
+    error_z = np.squeeze(sm.SO3(pilot.robot.tcp_pose.R) * (xyz_base2jct_base_est - xyz_base2jct_base_meas))[-1]
+    if abs(error_z) < 0.015:
+        success = True
+    else:
+        LOGGER.warning(f"Remaining position error {error_z} to alignment state is quite large. "
+                       f"Robot is probably in an undefined condition.")
+        success = False
+    return success
+
+
+def plug_in(pilot: Pilot, T_base2socket: sm.SE3) -> bool:
+    # Try to fully plug in
+    T_base2fpi = T_base2socket * _T_socket2fpi
+    pilot.plug_in_force_ramp(f_axis='z', f_start=60.0, f_end=100, duration=3.0)
+    # Check if robot is in target area
+    xyz_base2fpi_base_est = T_base2fpi.t
+    xyz_base2fpi_base_meas = pilot.robot.tcp_pos
+    error = np.linalg.norm(xyz_base2fpi_base_est - xyz_base2fpi_base_meas)
+    if error < 0.01:
+        success = True
+    else:
+        LOGGER.warning(f"Remaining position error {error} is to large. "
+                       f"Robot is probably in an undefined condition.")
+        success = False
     return success
 
 
@@ -117,15 +122,20 @@ def main(opt: Namespace) -> None:
 
         found, T_base2socket = detect(pilot, cam, opt)
         if found:
-            # TODO: Do not exit force mode to early!!!
-            success = plug_in(pilot, T_base2socket)
-            if not success:
-                raise RuntimeError(f"Robot did not succeed in the plugging the plug in. "
-                                   f"Robot is probably in an undefined condition.")
+            with pilot.context.position_control():
+                move_to_pre(pilot, T_base2socket)
 
-            success = plug_out(pilot, T_base2socket)
-            if not success:
-                raise RuntimeError(f"Error while trying to unplug. Plug is probably still connected.")
+            with pilot.context.motion_control():
+                get_in_touch(pilot, T_base2socket)
+
+            with pilot.context.force_control():
+                success = plug_in(pilot, T_base2socket)
+                if not success:
+                    raise RuntimeError(f"Robot did not succeed in the plugging the plug in. "
+                                       f"Robot is probably in an undefined condition.")
+                success = plug_out(pilot, T_base2socket)
+                if not success:
+                    raise RuntimeError(f"Error while trying to unplug. Plug is probably still connected.")
 
         with pilot.context.position_control():
             pilot.robot.move_home()
