@@ -7,7 +7,7 @@ import cvpd as pd
 import camera_kit as ck
 import spatialmath as sm
 from pathlib import Path
-from config import config
+from config import data
 
 # typing
 from argparse import Namespace
@@ -23,16 +23,16 @@ def calibration_procedure(opt: Namespace) -> None:
     Args:
         opt: Script arguments
     """
-    LOGGER.info(config)
+    LOGGER.info(data)
     # Perception setup
     cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
-    cam.load_coefficients(config.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
+    cam.load_coefficients(data.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
     cam.render()
-    dtt = pd.factory.create(config.detector_dir.joinpath(opt.detector_config_file))
+    dtt = pd.factory.create(data.detector_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
 
     # Connect to arm
-    with ur_pilot.connect() as pilot:
+    with ur_pilot.connect(data.robot_dir) as pilot:
         pilot.register_ee_cam(cam)
 
         # Enable free drive mode
@@ -93,6 +93,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=des)
     parser.add_argument('detector_config_file', type=str, 
                         help='Description and configuration of the used marker as .yaml file')
+    parser.add_argument('--camera_name', type=str, default='realsense_tcp_cam', help='Camera name')
     parser.add_argument('--debug', action='store_true', help='Option to set global logger level')
     # Parse input arguments
     args = parser.parse_args()

@@ -25,7 +25,7 @@ class URRobot(RealURRobot):
     def __init__(self, ur_control_cfg: Path, ur_pilot_cfg: Config) -> None:
         super().__init__(ur_control_cfg)
         # Constants
-        self.dt = 1 / self.cfg.robot_dir.rtde_freq
+        self.dt = 1 / self.cfg.robot.rtde_freq
         self.error_scale_motion_mode = 1.0
         self.force_limit = 0.0
         self.torque_limit = 0.0
@@ -215,14 +215,14 @@ class URRobot(RealURRobot):
         """
         wps_f32 = [np.array(np.reshape(target, 6), dtype=np.float32) for target in wps]
         speed = (
-            clip(vel, 0.0, self.cfg.robot_dir.joints.max_vel)
+            clip(vel, 0.0, self.cfg.robot.joints.max_vel)
             if vel
-            else self.cfg.robot_dir.joints.vel
+            else self.cfg.robot.joints.vel
         )
         acceleration = (
-            clip(acc, 0.0, self.cfg.robot_dir.joints.max_acc)
+            clip(acc, 0.0, self.cfg.robot.joints.max_acc)
             if acc
-            else self.cfg.robot_dir.joints.acc
+            else self.cfg.robot.joints.acc
         )
         bf = clip(bf, 0.0, 0.1) if bf else 0.02
         path = [[*tg.tolist(), speed, acceleration, bf] for tg in wps_f32]

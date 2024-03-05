@@ -15,7 +15,7 @@ from pathlib import Path
 from time import perf_counter
 
 # configuration
-from config import config
+from config import data
 
 # typing
 from ur_pilot import Pilot
@@ -25,7 +25,7 @@ from argparse import Namespace
 LOGGER = logging.getLogger(__name__)
 
 # Fixed configurations
-_socket_obs_j_pos = (3.4045, -1.6260, 1.8820, 0.1085, 1.8359, -1.5003)
+_socket_obs_j_pos = [3.4035, -1.6286, 2.1541, -0.4767, 1.8076, -1.5921]  # (3.4045, -1.6260, 1.8820, 0.1085, 1.8359, -1.5003)
 
 _T_socket2socket_pre = sm.SE3().Trans([0.0, 0.0, -0.02])  # Retreat pose with respect to the socket
 _T_socket2socket_junction = sm.SE3().Trans([0.0, 0.0, 0.015])
@@ -35,7 +35,7 @@ _T_socket2fpi = sm.SE3().Trans([-0.005, 0.0, 0.034])
 def detect(pilot: Pilot, cam: ck.CameraBase, opt: Namespace) -> tuple[bool, sm.SE3]:
     """ Function to run detect socket pose. """
     # Perception setup
-    dtt = pd.factory.create(config.detector_dir.joinpath(opt.detector_config_file))
+    dtt = pd.factory.create(data.detector_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
     found, T_base2socket = False, sm.SE3()
     _t_out, _t_start = 2.0, perf_counter()
@@ -109,13 +109,15 @@ def plug_out(pilot: Pilot, T_base2socket: sm.SE3) -> bool:
 
 def main(opt: Namespace) -> None:
     """ Main function to start process. """
-    LOGGER.info(config)
+    LOGGER.info(data)
     # Perception setup
     cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
-    cam.load_coefficients(config.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
+    cam.load_coefficients(data.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
     cam.render()
 
-    with ur_pilot.connect(config.robot_dir) as pilot:
+    # Connect to arm
+    with ur_pilot.connect(data.robot_dir) as pilot:
+        pilot.register_ee_cam(cam, data.camera_info_dir.joinpath(opt.camera_name))
 
         with pilot.context.position_control():
             pilot.move_to_joint_pos(_socket_obs_j_pos)

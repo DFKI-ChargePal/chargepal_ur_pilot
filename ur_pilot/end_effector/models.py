@@ -32,7 +32,7 @@ class ToolModel:
 class CameraModel:
 
     def __init__(self) -> None:
-        self.T_flange2camera = sm.SE3
+        self.T_flange2camera = sm.SE3()
 
 
 class BotaSensONEModel:
