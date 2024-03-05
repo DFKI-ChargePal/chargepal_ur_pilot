@@ -112,12 +112,13 @@ def main(opt: Namespace) -> None:
     LOGGER.info(data)
     # Perception setup
     cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
-    cam.load_coefficients(data.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
+    calib_dir = data.camera_info_dir.joinpath(opt.camera_name, 'calibration')
+    cam.load_coefficients(calib_dir.joinpath('coefficients.toml'))
     cam.render()
 
     # Connect to arm
     with ur_pilot.connect(data.robot_dir) as pilot:
-        pilot.register_ee_cam(cam, data.camera_info_dir.joinpath(opt.camera_name))
+        pilot.register_ee_cam(cam, calib_dir)
 
         with pilot.context.position_control():
             pilot.move_to_joint_pos(_socket_obs_j_pos)

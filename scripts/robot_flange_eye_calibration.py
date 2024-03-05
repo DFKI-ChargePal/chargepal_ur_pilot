@@ -27,7 +27,7 @@ def calibration_procedure(opt: Namespace) -> None:
     calib_dir = data.camera_info_dir.joinpath(opt.camera_name, 'calibration')
     cam.load_coefficients(calib_dir.joinpath('coefficients.toml'))
     cam.render()
-    dtt = pd.factory.create(data.detector_dir.joinpath('flange_eye_calibration.yaml'))
+    dtt = pd.factory.create(data.detector_dir.joinpath('charuco_flange_eye_calibration.yaml'))
     dtt.register_camera(cam)
 
     # Connect to arm
@@ -37,7 +37,7 @@ def calibration_procedure(opt: Namespace) -> None:
             pilot.robot.move_home()
 
             # Move to all states in sequence
-            n_tf = 1
+            n_tf, user_quit = 1, False
             FlangeEyeCalibration.clear_directories(cam)
             file_path = ur_pilot.utils.get_pkg_path().joinpath(opt.data_dir).joinpath(opt.file_name)
             for joint_pos in state_sequence_reader(file_path):
@@ -60,12 +60,12 @@ def calibration_procedure(opt: Namespace) -> None:
                     n_tf += 1
                 if ck.user.stop():
                     LOGGER.warning("The recording process is terminated by the user.")
-                    _quit = True
+                    user_quit = True
                     break
             # Move back to home
             pilot.robot.move_home()
 
-        if not _quit:
+        if not user_quit:
             # Run calculation for calibration
             # Get transformation matrix of camera in the flange frame
             np_T_flange2cam = FlangeEyeCalibration.est_transformation(cam, calib_dir)

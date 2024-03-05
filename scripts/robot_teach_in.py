@@ -6,6 +6,7 @@ import argparse
 import ur_pilot
 import numpy as np
 import camera_kit as ck
+from config import data
 from pathlib import Path
 from argparse import Namespace
 
@@ -29,7 +30,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
     else:
         cam = None
     # Connect to pilot
-    with ur_pilot.connect() as pilot:
+    with ur_pilot.connect(data.robot_dir) as pilot:
         with pilot.context.position_control():
             pilot.robot.move_home()
 
