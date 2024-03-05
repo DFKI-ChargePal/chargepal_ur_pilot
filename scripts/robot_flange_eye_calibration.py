@@ -1,6 +1,6 @@
 # libs
-import argparse
 import logging
+import argparse
 import ur_pilot
 import cvpd as pd
 from config import data
@@ -23,7 +23,6 @@ def calibration_procedure(opt: Namespace) -> None:
     """
     LOGGER.info(data)
     # Perception setup
-
     cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
     calib_dir = data.camera_info_dir.joinpath(opt.camera_name, 'calibration')
     cam.load_coefficients(calib_dir.joinpath('coefficients.toml'))
@@ -85,6 +84,8 @@ def calibration_procedure(opt: Namespace) -> None:
 if __name__ == '__main__':
     des = """" Robot flange to eye calibration script """
     parser = argparse.ArgumentParser(description=des)
+    parser.add_argument('file_name', type=str, help='.json file name')
+    parser.add_argument('--data_dir', type=str, default='data/teach_in')
     parser.add_argument('--camera_name', type=str, default='realsense_tcp_cam', help='Camera name')
     parser.add_argument('--debug', action='store_true', help='Option to set global logger level')
     # Parse input arguments
