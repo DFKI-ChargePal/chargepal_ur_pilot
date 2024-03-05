@@ -40,7 +40,7 @@ class FlangeEyeCalibration:
         return dp_imgs, dp_cam2tgt, dp_base2flange
 
     @staticmethod
-    def clear_directories(camera: CameraBase, dir_path: str = "") -> None:
+    def clear_directories(camera: CameraBase, dir_path: str | Path = "") -> None:
         """ Method to prepare flange-eye calibration recording """
 
         # Get path
@@ -56,7 +56,7 @@ class FlangeEyeCalibration:
                       file_prefix: str,
                       T_base2flange: npt.NDArray[np.float_],
                       T_cam2tgt: npt.NDArray[np.float_],
-                      dir_path: str = ""
+                      dir_path: str | Path = ""
                       ) -> None:
         """ Method to record a flange-eye calibration sample
 
@@ -92,7 +92,7 @@ class FlangeEyeCalibration:
         dump_np2toml(T_base2flange, 'T_base2flange', base2flange_fp)
 
     @staticmethod
-    def est_transformation(camera: CameraBase, dir_path: str = "") -> npt.NDArray[np.float_]:
+    def est_transformation(camera: CameraBase, dir_path: str | Path = "") -> npt.NDArray[np.float_]:
         """ Method to estimate the transformation between robot flange and camera.
 
         Args:
@@ -151,7 +151,7 @@ class FlangeEyeCalibration:
         return T_flange2cam
 
     @staticmethod
-    def save_transformation(camera: CameraBase, T_flange2cam: npt.NDArray[np.float_], dir_path: str = "") -> None:
+    def save_transformation(camera: CameraBase, T_flange2cam: npt.NDArray[np.float_], dir_path: str | Path = "") -> None:
         """ Helper function to save the transformation matrix between flange and camera
 
         Args:
@@ -177,7 +177,7 @@ class FlangeEyeCalibration:
         LOGGER.info(f"Save new calibration matrix in folder {str(fp.parent)}")
 
     @staticmethod
-    def load_transformation(camera: CameraBase, dir_path: str = "") -> npt.NDArray[np.float_]:
+    def load_transformation(camera: CameraBase, dir_path: str | Path = "") -> npt.NDArray[np.float_]:
         """ Helper function to load the calibration transformation matrix between flange and camera.
 
         Args:
