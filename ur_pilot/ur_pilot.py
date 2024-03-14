@@ -48,8 +48,9 @@ class Pilot:
         # Parse configuration
         config_raw = read_toml(self.config_dir.joinpath('ur_pilot.toml'))
         self.cfg = Config(**config_raw)
-        # Set control context manager
-        self.context = ControlContextManager(self.robot, self.cfg)
+        # Define robot
+        self._robot: URRobot | None = None
+        self.is_connected = False
         # Set up end-effector
         if self.cfg.pilot.ft_sensor is None:
             self.extern_sensor = False
@@ -60,13 +61,12 @@ class Pilot:
             self._ft_sensor = BotaFtSensor(**self.cfg.pilot.ft_sensor.dict())
             self._ft_sensor_mdl = BotaSensONEModel()
             self._ft_sensor.start()
-
+        # Set up tool model
         self.tool = ToolModel(**self.cfg.pilot.tool_model.dict())
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
-
-        self._robot: URRobot | None = None
-        self.is_connected = False
+        # Set control context manager
+        self.context = ControlContextManager(self._robot, self.cfg)
 
     @property
     def robot(self) -> URRobot:
