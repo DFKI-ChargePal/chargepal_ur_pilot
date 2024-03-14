@@ -14,6 +14,7 @@ from typing import Generator
 def connect(config_dir: Path | None = None) -> Generator[Pilot, None, None]:
     pilot = Pilot(config_dir)
     try:
+        pilot.connect()
         yield pilot
     finally:
         pilot.disconnect()

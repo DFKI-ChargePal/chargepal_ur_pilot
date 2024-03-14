@@ -48,8 +48,6 @@ class Pilot:
         # Parse configuration
         config_raw = read_toml(self.config_dir.joinpath('ur_pilot.toml'))
         self.cfg = Config(**config_raw)
-        # Set up ur_control
-        self.robot = URRobot(self.config_dir.joinpath('ur_control.toml'), self.cfg)
         # Set control context manager
         self.context = ControlContextManager(self.robot, self.cfg)
         # Set up end-effector
@@ -64,9 +62,18 @@ class Pilot:
             self._ft_sensor.start()
 
         self.tool = ToolModel(**self.cfg.pilot.tool_model.dict())
-        self.set_tcp()
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
+
+        self._robot: URRobot | None = None
+        self.is_connected = False
+
+    @property
+    def robot(self) -> URRobot:
+        if self._robot is not None:
+            return self._robot
+        else:
+            raise RuntimeError("Pilot is not connected to the robot. Please try to connect first.")
 
     @property
     def ft_sensor(self) -> BotaFtSensor:
@@ -699,14 +706,24 @@ class Pilot:
         # Move to home joint position
         self.robot.move_home()
         # Move to random joint positions near to the home configuration
-        home_q = np.array(self.robot.cfg.robot_dir.home_radians, dtype=np.float32)
+        home_q = np.array(self.robot.cfg.robot.home_radians, dtype=np.float32)
         tgt_joint_q = np.array(home_q + (np.random.rand(6) * 2.0 - 1.0) * 0.075, dtype=np.float32)
         self.robot.movej(tgt_joint_q)
         # Move back to home joint positions
         self.robot.move_home()
         return tgt_joint_q
 
+    def connect(self) -> None:
+        if not self.is_connected:
+            # Set up ur_control
+            self._robot = URRobot(self.config_dir.joinpath('ur_control.toml'), self.cfg)
+            self.set_tcp()
+            self.is_connected = True
+
     def disconnect(self) -> None:
         """ Exit function which will be called from the context manager at the end """
         self.context.exit()
-        self.robot.disconnect()
+        if self.is_connected:
+            self.robot.disconnect()
+            self._robot = None
+            self.is_connected = False
