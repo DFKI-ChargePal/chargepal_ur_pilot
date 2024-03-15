@@ -50,6 +50,7 @@ class Pilot:
         self.cfg = Config(**config_raw)
         # Define robot
         self._robot: URRobot | None = None
+        self._context: ControlContextManager | None = None
         self.is_connected = False
         # Set up end-effector
         if self.cfg.pilot.ft_sensor is None:
@@ -65,13 +66,18 @@ class Pilot:
         self.tool = ToolModel(**self.cfg.pilot.tool_model.dict())
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
-        # Set control context manager
-        self.context = ControlContextManager(self._robot, self.cfg)
 
     @property
     def robot(self) -> URRobot:
         if self._robot is not None:
             return self._robot
+        else:
+            raise RuntimeError("Pilot is not connected to the robot. Please try to connect first.")
+
+    @property
+    def context(self) -> ControlContextManager:
+        if self._context is not None:
+            return self._context
         else:
             raise RuntimeError("Pilot is not connected to the robot. Please try to connect first.")
 
@@ -717,13 +723,16 @@ class Pilot:
         if not self.is_connected:
             # Set up ur_control
             self._robot = URRobot(self.config_dir.joinpath('ur_control.toml'), self.cfg)
+            self._context = ControlContextManager(self.robot, self.cfg)
             self.set_tcp()
             self.is_connected = True
+            # Set control context manager
 
     def disconnect(self) -> None:
         """ Exit function which will be called from the context manager at the end """
-        self.context.exit()
         if self.is_connected:
+            self.context.exit()
             self.robot.disconnect()
             self._robot = None
+            self._context = None
             self.is_connected = False
