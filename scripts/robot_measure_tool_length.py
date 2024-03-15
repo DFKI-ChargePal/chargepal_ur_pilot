@@ -57,7 +57,7 @@ def main() -> None:
 
         with pilot.context.position_control():
             # Move back to home position()
-            pilot.move_home()
+            pilot.robot.move_home()
 
         # Calculate tilted tool offset.
         tcp_offset_straight = pilot.robot.tcp_offset

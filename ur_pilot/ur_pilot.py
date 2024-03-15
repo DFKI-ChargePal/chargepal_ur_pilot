@@ -126,7 +126,7 @@ class Pilot:
             self._ft_sensor.stop()
         self.disconnect()
 
-    def register_ee_cam(self, cam: CameraBase, tf_dir: str = "") -> None:
+    def register_ee_cam(self, cam: CameraBase, tf_dir: str | Path = "") -> None:
         self.cam = cam
         if not self.cam.is_calibrated:
             self.cam.load_coefficients()
