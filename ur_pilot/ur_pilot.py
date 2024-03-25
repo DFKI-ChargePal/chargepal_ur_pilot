@@ -17,7 +17,7 @@ from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.control_mode import ControlContextManager
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
-from ur_pilot.end_effector.models import CameraModel, ToolModel, ToolLinkModel, BotaSensONEModel
+from ur_pilot.end_effector.models import CameraModel, PlugModel, ToolLinkModel, BotaSensONEModel
 
 # typing
 from numpy import typing as npt
@@ -67,9 +67,9 @@ class Pilot:
         # Set up end-effector models
         self.tool_link = ToolLinkModel(**self.cfg.pilot.tool_link.dict())
         self.plugs = {
-            'type2_female': ToolModel(name='type2_female', **self.cfg.pilot.tm_type2_female.dict()),
-            'type2_male': ToolModel(name='type2_male', **self.cfg.pilot.tm_type2_male.dict()),
-            'ccs_female': ToolModel(name='ccs_female', **self.cfg.pilot.tm_ccs_female.dict()),
+            'type2_female': PlugModel(name='type2_female', **self.cfg.pilot.tm_type2_female.dict()),
+            'type2_male': PlugModel(name='type2_male', **self.cfg.pilot.tm_type2_male.dict()),
+            'ccs_female': PlugModel(name='ccs_female', **self.cfg.pilot.tm_ccs_female.dict()),
         }
         self.PLUG_NAMES_ = list(self.plugs.keys())
         self.cam: CameraBase | None = None

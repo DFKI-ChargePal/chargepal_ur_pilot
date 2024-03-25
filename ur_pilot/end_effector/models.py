@@ -27,7 +27,7 @@ class ToolLinkModel:
         self.T_mounting2link = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
 
 
-class ToolModel:
+class PlugModel:
 
     def __init__(self,
                  name: str,
