@@ -19,11 +19,20 @@ class MissingConfigError(Exception):
         super().__init__(self.message)
 
 
-class ToolModel(BaseModel):
+class ToolLinkModel(BaseModel):
+    """ Data model for the tool to plug adapter
+    """
+    mass: float = 0.0
+    com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+    flange_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
+
+
+class PlugModel(BaseModel):
     """ Data model for the end-effector
     """
     mass: float = 0.0
     com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+    lip_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
     tip_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
     sense_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
 
@@ -72,8 +81,11 @@ class FTSensor(BaseModel):
 
 class Pilot(BaseModel):
 
-    tool_model: ToolModel = ToolModel()
     ft_sensor: Optional[FTSensor] = None
+    tool_link: ToolLinkModel = ToolLinkModel()
+    tm_type2_female: PlugModel = PlugModel()
+    tm_type2_male: PlugModel = PlugModel()
+    tm_ccs_female: PlugModel = PlugModel()
 
 
 class Robot(BaseModel):

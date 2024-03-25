@@ -17,7 +17,7 @@ from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.control_mode import ControlContextManager
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
-from ur_pilot.end_effector.models import CameraModel, ToolModel, BotaSensONEModel
+from ur_pilot.end_effector.models import CameraModel, ToolModel, ToolLinkModel, BotaSensONEModel
 
 # typing
 from numpy import typing as npt
@@ -27,8 +27,10 @@ from typing import Iterator, Sequence
 
 class Pilot:
     R_WORLD2BASE_ = sm.SO3.Rx(np.pi)
+    PLUG_NAMES_: list[str] = []
+    PLUG_FRAMES_ = ['lip', 'sense', 'tip']
     FT_SENSOR_FRAMES_ = ['world', 'arm_base', 'ft_sensor']
-    EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_tip', 'tool_sense', 'camera']
+    EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_link', 'camera']
 
     def __init__(self, config_dir: Path | None = None) -> None:
         """ Core class to interact with the robot
@@ -62,8 +64,14 @@ class Pilot:
             self._ft_sensor = BotaFtSensor(**self.cfg.pilot.ft_sensor.dict())
             self._ft_sensor_mdl = BotaSensONEModel()
             self._ft_sensor.start()
-        # Set up tool model
-        self.tool = ToolModel(**self.cfg.pilot.tool_model.dict())
+        # Set up end-effector models
+        self.tool_link = ToolLinkModel(**self.cfg.pilot.tool_link.dict())
+        self.plugs = {
+            'type2_female': ToolModel(name='type2_female', **self.cfg.pilot.tm_type2_female.dict()),
+            'type2_male': ToolModel(name='type2_male', **self.cfg.pilot.tm_type2_male.dict()),
+            'ccs_female': ToolModel(name='ccs_female', **self.cfg.pilot.tm_ccs_female.dict()),
+        }
+        self.PLUG_NAMES_ = list(self.plugs.keys())
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
 
@@ -153,16 +161,11 @@ class Pilot:
             else:
                 # Tread internal force torque sensor as mounted in flange frame
                 offset = sm.SE3()
-        elif frame == 'tool_tip':
+        elif frame == 'tool_link':
             if self.extern_sensor:
-                offset = self.ft_sensor_mdl.T_mounting2wrench * self.tool.T_mounting2tip
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.tool_link.T_mounting2link
             else:
-                offset = self.tool.T_mounting2tip
-        elif frame == 'tool_sense':
-            if self.extern_sensor:
-                offset = self.ft_sensor_mdl.T_mounting2wrench * self.tool.T_mounting2sense
-            else:
-                offset = self.tool.T_mounting2sense
+                offset = self.tool_link.T_mounting2link
         elif frame == 'camera':
             offset = self.cam_mdl.T_flange2camera
         else:
@@ -198,7 +201,7 @@ class Pilot:
             ft_raw = self.robot.tcp_wrench
         # TODO: Check frame
         # Compensate Tool mass
-        f_tool_wrt_world = self.tool.f_inertia
+        f_tool_wrt_world = self.tool_link.f_inertia
         f_tool_wrt_ft: npt.NDArray[np.float_] = self.rot_world2arm * f_tool_wrt_world
 
         def cross(a: npt.ArrayLike, b: npt.ArrayLike) -> npt.NDArray[np.float32]:
@@ -207,7 +210,7 @@ class Pilot:
             b_ = np.array(b, dtype=np.float32)
             return np.cross(a_, b_)
 
-        t_tool_wrt_ft = cross(self.tool.com, f_tool_wrt_ft)
+        t_tool_wrt_ft = cross(self.tool_link.com, f_tool_wrt_ft)
         ft_comp = sm.SpatialForce(np.append(f_tool_wrt_ft, t_tool_wrt_ft))
         return ft_raw + ft_comp
 
@@ -311,6 +314,26 @@ class Pilot:
             if t_now - t_start > time_out:
                 break
         return success
+
+    def try2_couple_plug(self, force: float, time_out: float) -> bool:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        # Limit input
+        force = np.clip(force, 0.0, 50.0)
+        wrench_vec = 6 * [0.0]
+        compliant_axes = [1, 1, 1, 0, 0, 1]
+        return False
+
+    def try2_decouple_plug(self) -> bool:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        return False
+
+    def try2_unlock_plug(self) -> bool:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        return False
+
+    def try2_lock_plug(self) -> bool:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        return False
 
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)

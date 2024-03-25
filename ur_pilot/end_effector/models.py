@@ -10,15 +10,34 @@ from typing import Sequence
 from numpy import typing as npt
 
 
+class ToolLinkModel:
+
+    def __init__(self,
+                 name: str,
+                 mass: float,
+                 com: npt.ArrayLike,
+                 gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
+                 link_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                 ):
+        self.mass = mass
+        self.com = np.reshape(com, 3)
+        self.gravity = np.reshape(gravity, 3)
+        self.f_inertia = self.mass * self.gravity
+        l_frame = np.reshape(link_frame, 6)
+        self.T_mounting2link = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
+
+
 class ToolModel:
 
     def __init__(self,
+                 name: str,
                  mass: float,
                  com: npt.ArrayLike,
                  gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
                  tip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
                  sense_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
                  ) -> None:
+        self.name = name
         self.mass = mass
         self.com = np.reshape(com, 3)
         self.gravity = np.reshape(gravity, 3)
