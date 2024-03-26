@@ -339,13 +339,54 @@ class Pilot:
                 break
         return success
 
-    def try2_couple_plug(self, force: float, time_out: float) -> bool:
+    def try2_couple_plug(self, T_base2socket: sm.SE3, force: float, time_out: float) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         force = np.clip(force, 0.0, 50.0)
         wrench_vec = 6 * [0.0]
-        compliant_axes = [1, 1, 1, 0, 0, 1]
-        return False
+        selection_vector = [1, 1, 1, 0, 0, 1]
+
+        x_ctrl = utils.PDController(kp=100.0, kd=0.99)
+        y_ctrl = utils.PDController(kp=100.0, kd=0.99)
+        z_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
+
+        # Get estimation of the plug pose
+        T_socket2plug = self.plug_model.T_mounting2lip.inv()
+        T_base2plug_est = T_base2socket * T_socket2plug
+
+        # Wrench will be applied with respect to the current TCP pose
+        task_frame = T_base2plug_meas = self.get_pose(EndEffectorFrames.TOOL_LINK)
+        T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
+        p_meas2est_ref = p_meas2est = T_meas2est.t
+        success = False
+        t_ref = t_start = perf_counter()
+        while True:
+
+            wrench_vec[0] = np.clip(x_ctrl.update(p_meas2est[0], self.robot.dt), -50.0, 50.0)
+            wrench_vec[1] = np.clip(y_ctrl.update(p_meas2est[1], self.robot.dt), -50.0, 50.0)
+            wrench_vec[2] = np.clip(z_ctrl.update(p_meas2est[2], self.robot.dt), -50.0, 50.0)
+
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=selection_vector,
+                wrench=wrench_vec,
+            )
+
+            T_base2plug_meas = self.get_pose(EndEffectorFrames.TOOL_LINK)
+            T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
+            p_meas2est = T_meas2est.t
+
+            t_now = perf_counter()
+            # Check every second if robot is still moving
+            if t_now - t_ref > 1.0:
+                if np.allclose(p_meas2est_ref, p_meas2est, atol=0.001):
+                    fin = True
+                    break
+                t_ref, p_meas2est_ref = t_now, p_meas2est
+            if t_now - t_start > time_out:
+                break
+
+        return success
 
     def try2_decouple_plug(self) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
