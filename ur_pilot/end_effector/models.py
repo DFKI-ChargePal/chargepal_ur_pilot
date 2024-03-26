@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+# libs
+import logging
 import numpy as np
-# global
 import spatialmath as sm
+from enum import Enum, auto
 from spatialmath.base import q2r
+from contextlib import contextmanager
+from ur_pilot.config_mdl import Config
 
 # typing
-from typing import Sequence
 from numpy import typing as npt
+from typing import Iterator, Sequence
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ToolLinkModel:
@@ -27,25 +34,137 @@ class ToolLinkModel:
         self.T_mounting2link = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
 
 
+class PlugTypes(Enum):
+
+    NONE = auto()
+    TYPE2_FEMALE = auto()
+    TYPE2_MALE = auto()
+    CCS_FEMALE = auto()
+
+
 class PlugModel:
 
     def __init__(self,
-                 name: str,
                  mass: float,
                  com: npt.ArrayLike,
                  gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
+                 lip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
                  tip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
                  sense_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
                  ) -> None:
-        self.name = name
         self.mass = mass
         self.com = np.reshape(com, 3)
         self.gravity = np.reshape(gravity, 3)
         self.f_inertia = self.mass * self.gravity
+        l_frame = np.reshape(lip_frame, 6)
+        self.T_mounting2lip = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
         t_frame = np.reshape(tip_frame, 6)
         self.T_mounting2tip = sm.SE3.Rt(R=sm.SO3.EulerVec(t_frame[3:6]), t=t_frame[0:3])
         s_frame = np.reshape(sense_frame, 6)
         self.T_mounting2sense = sm.SE3.Rt(R=sm.SO3.EulerVec(s_frame[3:6]), t=s_frame[0:3])
+
+
+class PlugModelContext:
+
+    plug_types = PlugTypes
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.type = self.plug_types.NONE
+        self.models: dict[PlugTypes, PlugModel] = {
+            self.plug_types.TYPE2_FEMALE: PlugModel(**self.cfg.pilot.tm_type2_female.dict()),
+            self.plug_types.TYPE2_MALE: PlugModel(**self.cfg.pilot.tm_type2_male.dict()),
+            self.plug_types.CCS_FEMALE: PlugModel(**self.cfg.pilot.tm_ccs_female.dict()),
+        }
+
+    @property
+    def mass(self) -> float:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context is inactive.")
+        else:
+            mass = self.models[self.type].mass
+        return mass
+
+    @property
+    def com(self) -> npt.NDArray[np.float_]:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context is inactive.")
+        else:
+            com = self.models[self.type].com
+        return com
+
+    @property
+    def gravity(self) -> npt.NDArray[np.float_]:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context is inactive.")
+        else:
+            gravity = self.models[self.type].gravity
+        return gravity
+
+    @property
+    def f_inertia(self) -> npt.NDArray[np.float_]:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context is inactive.")
+        else:
+            f_inertia = self.models[self.type].f_inertia
+        return f_inertia
+
+    @property
+    def T_mounting2lip(self) -> sm.SE3:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context is inactive.")
+        else:
+            T_mounting2lip = self.models[self.type].T_mounting2lip
+        return T_mounting2lip
+
+    @property
+    def T_mounting2tip(self) -> sm.SE3:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context is inactive.")
+        else:
+            T_mounting2tip = self.models[self.type].T_mounting2tip
+        return T_mounting2tip
+
+    @property
+    def T_mounting2sense(self) -> sm.SE3:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context is inactive.")
+        else:
+            T_mounting2sense = self.models[self.type].T_mounting2sense
+        return T_mounting2sense
+
+    def exit(self) -> None:
+        self.type = self.plug_types.NONE
+
+    @contextmanager
+    def type2_female(self) -> Iterator[None]:
+        self.type = self.plug_types.TYPE2_FEMALE
+        try:
+            LOGGER.debug(f"Enter workspace context using plug type: Type 2 female")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit workspace context using plug type: Type 2 female")
+
+    @contextmanager
+    def type2_male(self) -> Iterator[None]:
+        self.type = self.plug_types.TYPE2_MALE
+        try:
+            LOGGER.debug(f"Enter workspace context using plug type: Type 2 male")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit workspace context using plug type: Type 2 male")
+
+    @contextmanager
+    def ccs_female(self) -> Iterator[None]:
+        self.type = self.plug_types.CCS_FEMALE
+        try:
+            LOGGER.debug(f"Enter workspace context using plug type: CCS female")
+            yield
+        finally:
+            self.exit()
+            LOGGER.debug(f"Exit workspace context using plug type: CCS female")
 
 
 class CameraModel:

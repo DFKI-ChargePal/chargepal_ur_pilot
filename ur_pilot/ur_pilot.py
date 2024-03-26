@@ -6,6 +6,7 @@ import time
 import numpy as np
 from pathlib import Path
 import spatialmath as sm
+from strenum import StrEnum
 from time import perf_counter
 from contextlib import contextmanager
 
@@ -17,7 +18,7 @@ from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.control_mode import ControlContextManager
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
-from ur_pilot.end_effector.models import CameraModel, PlugModel, ToolLinkModel, BotaSensONEModel
+from ur_pilot.end_effector.models import CameraModel, PlugModelContext, ToolLinkModel, BotaSensONEModel
 
 # typing
 from numpy import typing as npt
@@ -25,12 +26,23 @@ from camera_kit import CameraBase
 from typing import Iterator, Sequence
 
 
+class EndEffectorFrames(StrEnum):
+
+    FLANGE = 'flange'
+    FT_SENSOR = 'ft_sensor'
+    TOOL_LINK = 'tool_link'
+    PLUG_LIP = 'plug_lip'
+    PLUG_TIP = 'plug_tip'
+    PLUG_SENSE = 'plug_sense'
+    CAMERA = 'camera'
+
+
 class Pilot:
+
     R_WORLD2BASE_ = sm.SO3.Rx(np.pi)
     PLUG_NAMES_: list[str] = []
-    PLUG_FRAMES_ = ['lip', 'sense', 'tip']
     FT_SENSOR_FRAMES_ = ['world', 'arm_base', 'ft_sensor']
-    EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_link', 'camera']
+    # EE_FRAMES_ = ['flange', 'ft_sensor', 'tool_link', 'plug_lip', 'plug_tip', 'plug_sense', 'camera']
 
     def __init__(self, config_dir: Path | None = None) -> None:
         """ Core class to interact with the robot
@@ -66,12 +78,7 @@ class Pilot:
             self._ft_sensor.start()
         # Set up end-effector models
         self.tool_link = ToolLinkModel(**self.cfg.pilot.tool_link.dict())
-        self.plugs = {
-            'type2_female': PlugModel(name='type2_female', **self.cfg.pilot.tm_type2_female.dict()),
-            'type2_male': PlugModel(name='type2_male', **self.cfg.pilot.tm_type2_male.dict()),
-            'ccs_female': PlugModel(name='ccs_female', **self.cfg.pilot.tm_ccs_female.dict()),
-        }
-        self.PLUG_NAMES_ = list(self.plugs.keys())
+        self.plug_model = PlugModelContext(self.cfg)
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
 
@@ -150,29 +157,44 @@ class Pilot:
         if self.robot.get_digital_out_state(0):
             raise ValueError(f"Digital output shout be 'LOW' but is 'HIGH'.")
 
-    def __frame_to_offset(self, frame: str) -> sm.SE3:
-        if frame not in self.EE_FRAMES_:
-            raise ValueError(f"Given frame is not available. Please select one of '{self.EE_FRAMES_}'")
-        if frame == 'flange':
+    def __frame_to_offset(self, frame: EndEffectorFrames) -> sm.SE3:
+        # if frame not in self.EE_FRAMES_:
+        #     raise ValueError(f"Given frame is not available. Please select one of '{self.EE_FRAMES_}'")
+        if frame == EndEffectorFrames.FLANGE:
             offset = sm.SE3()
-        elif frame == 'ft_sensor':
+        elif frame == EndEffectorFrames.FT_SENSOR:
             if self.extern_sensor:
                 offset = self.ft_sensor_mdl.T_mounting2wrench
             else:
                 # Tread internal force torque sensor as mounted in flange frame
                 offset = sm.SE3()
-        elif frame == 'tool_link':
+        elif frame == EndEffectorFrames.TOOL_LINK:
             if self.extern_sensor:
                 offset = self.ft_sensor_mdl.T_mounting2wrench * self.tool_link.T_mounting2link
             else:
                 offset = self.tool_link.T_mounting2link
-        elif frame == 'camera':
+        elif frame == EndEffectorFrames.PLUG_LIP:
+            if self.extern_sensor:
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.plug_model.T_mounting2lip
+            else:
+                offset = self.plug_model.T_mounting2lip
+        elif frame == EndEffectorFrames.PLUG_TIP:
+            if self.extern_sensor:
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.plug_model.T_mounting2tip
+            else:
+                offset = self.plug_model.T_mounting2tip
+        elif frame == EndEffectorFrames.PLUG_SENSE:
+            if self.extern_sensor:
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.plug_model.T_mounting2sense
+            else:
+                offset = self.plug_model.T_mounting2sense
+        elif frame == EndEffectorFrames.CAMERA:
             offset = self.cam_mdl.T_flange2camera
         else:
             raise RuntimeError("This code should not be reached. Please check the frame definitions.")
         return offset
 
-    def get_pose(self, frame: str = 'flange') -> sm.SE3:
+    def get_pose(self, frame: EndEffectorFrames | str = 'flange') -> sm.SE3:
         """ Get pose of the desired frame w.r.t the robot base. This function is independent of the TCP offset defined
             on the robot side.
         Args:
@@ -180,6 +202,7 @@ class Pilot:
         Returns:
             6D pose as SE(3) transformation matrix
         """
+        frame = EndEffectorFrames(frame)
         tcp_offset = self.__frame_to_offset(frame=frame)
         return self.robot.get_pose(tcp_offset)
 
@@ -214,8 +237,9 @@ class Pilot:
         ft_comp = sm.SpatialForce(np.append(f_tool_wrt_ft, t_tool_wrt_ft))
         return ft_raw + ft_comp
 
-    def set_tcp(self, frame: str = 'tool_tip') -> None:
+    def set_tcp(self, frame: EndEffectorFrames | str = 'tool_link') -> None:
         """ Function to set the tcp relative to the tool flange. """
+        frame = EndEffectorFrames(frame)
         offset = self.__frame_to_offset(frame=frame)
         self.robot.set_tcp(offset)
 

@@ -24,6 +24,7 @@ ur_control = [
     {markers = "platform_machine == 'x86_64'", git="git@git.ni.dfki.de:chargepal/ur_control.git", branch="integration/ur_pilot_py3_8"},
     {markers = "platform_machine == 'aarch64'", git="git@git.ni.dfki.de:chargepal/ur_control.git", branch="develop/orin"},
 ]
+strenum = "^0.4.15"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.0.0"
