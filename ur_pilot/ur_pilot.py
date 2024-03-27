@@ -304,14 +304,12 @@ class Pilot:
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench)
-            time.sleep(self.robot.dt)
             if (perf_counter() - t_start) > duration:
                 break
         x_now = self.robot.tcp_pos
         dist: float = np.sum(np.abs(x_now - x_ref))  # L1 norm
         # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
-        time.sleep(self.robot.dt)
+        self.robot.pause_force_mode()
         return dist
 
     def screw_ee_force_mode(self, torque: float, ang: float, time_out: float) -> bool:
@@ -348,13 +346,14 @@ class Pilot:
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
-            time.sleep(self.robot.dt)
             t_now = perf_counter()
             if abs(ang_error) < 5e-3:
                 success = True
                 break
             if t_now - t_start > time_out:
                 break
+        # Stop robot movement.
+        self.robot.pause_force_mode()
         return success
 
     def try2_couple_plug(self, T_base2socket: sm.SE3, time_out: float) -> tuple[bool, tuple[float, float]]:
@@ -363,7 +362,7 @@ class Pilot:
         time_out = abs(time_out)
         # Setup controller
         wrench_vec = 6 * [0.0]
-        selection_vector = [1, 1, 1, 0, 0, 1]
+        selection_vec = [1, 1, 1, 0, 0, 1]
         x_ctrl = utils.PDController(kp=100.0, kd=0.99)
         y_ctrl = utils.PDController(kp=100.0, kd=0.99)
         z_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
@@ -385,7 +384,7 @@ class Pilot:
             wrench_vec[2] = np.clip(z_ctrl.update(p_meas2est[2], self.robot.dt), -50.0, 50.0)
             self.robot.force_mode(
                 task_frame=task_frame,
-                selection_vector=selection_vector,
+                selection_vector=selection_vec,
                 wrench=wrench_vec,
             )
             # Update error
@@ -412,17 +411,57 @@ class Pilot:
             if xy_error > 0.02 or ang_error > np.pi/12:  # xy limit 2 cm angular limit 15 deg
                 success = False
                 break
+        # Stop robot movement.
+        self.robot.pause_force_mode()
+        # Evaluate spatial error
         T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
-        T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
-        lin_error = float(np.linalg.norm(T_meas2est.t))
-        ang_error = float(T_base2plug_est.angdist(T_base2plug_meas))
-        return success, (lin_error, ang_error)
+        lin_ang_err = utils.lin_ang_error(T_base2plug_est, T_base2plug_meas)
+        return success, lin_ang_err
 
-    def try2_decouple_plug(self) -> bool:
+    def try2_decouple_plug(self, time_out: float) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
+        # Limit input arguments
+        time_out = abs(time_out)
+        # Setup controller
+        wrench_vec = 6 * [0.0]
+        selection_vec = [0, 0, 1, 0, 0, 1]
+        x_ctrl = utils.PDController(kp=100.0, kd=0.99)
+        y_ctrl = utils.PDController(kp=100.0, kd=0.99)
+        z_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
 
-
-        return False
+        # Get estimation of the safety pose
+        T_base2safety_est = self.get_pose(EndEffectorFrames.COUPLING_SAFETY)
+        # Get current coupling pose
+        task_frame = T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+        # Get control input difference
+        T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
+        p_meas2est_ref = p_meas2est = T_meas2est.t
+        success = False
+        t_now = t_start = perf_counter()
+        while t_now - t_start <= time_out:
+            # Update controller
+            wrench_vec[0] = np.clip(x_ctrl.update(p_meas2est[0], self.robot.dt), -50.0, 50.0)
+            wrench_vec[1] = np.clip(y_ctrl.update(p_meas2est[1], self.robot.dt), -50.0, 50.0)
+            wrench_vec[2] = np.clip(z_ctrl.update(p_meas2est[2], self.robot.dt), -50.0, 50.0)
+            self.robot.force_mode(
+                task_frame=task_frame,
+                selection_vector=selection_vec,
+                wrench=wrench_vec,
+            )
+            # Update error
+            T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+            T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
+            p_meas2est = T_meas2est.t
+            if abs(p_meas2est[2]) <= 0.003:  # Only check for depth value of the coupling
+                success = True
+                break
+            t_now = perf_counter()
+        # Stop robot movement
+        self.robot.pause_force_mode()
+        # Evaluate spatial error
+        T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+        lin_ang_err = utils.lin_ang_error(T_base2safety_est, T_base2safety_meas)
+        return success, lin_ang_err
 
     def try2_unlock_plug(self, T_base2socket: sm.SE3, time_out: float = 12.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
@@ -431,6 +470,7 @@ class Pilot:
         T_base2plug_est = T_base2socket * T_socket2plug
         # Turn end effector by 90 degrees counter-clockwise
         success = self.screw_ee_force_mode(torque=4.0, ang=-np.pi/2, time_out=time_out)
+        # Evaluate spatial error
         T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
         lin_ang_err = utils.lin_ang_error(T_base2plug_est, T_base2plug_meas)
         return success, lin_ang_err
@@ -442,6 +482,7 @@ class Pilot:
         T_base2plug_est = T_base2socket * T_socket2plug
         # Turn end effector by 90 degrees clockwise
         success = self.screw_ee_force_mode(torque=4.0, ang=np.pi/2, time_out=time_out)
+        # Evaluate spatial error
         T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_LOCKED)
         lin_ang_err = utils.lin_ang_error(T_base2plug_est, T_base2plug_meas)
         return success, lin_ang_err
@@ -468,7 +509,6 @@ class Pilot:
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
-            time.sleep(self.robot.dt)
             t_now = perf_counter()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
@@ -479,9 +519,8 @@ class Pilot:
                 t_ref, x_ref = t_now, x_now
             if t_now - t_start > time_out:
                 break
-        # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
-        time.sleep(self.robot.dt)
+        # Stop robot movement
+        self.robot.pause_force_mode()
         return fin
 
     def plug_in_force_ramp(
@@ -542,7 +581,6 @@ class Pilot:
                 selection_vector=select_vec,
                 wrench=wrench_vec
             )
-            time.sleep(self.robot.dt)
             # Get current transformation from base to end-effector
             T_Base2Tip = self.get_pose('tool_tip')
             T_Tip2Socket = T_Base2Tip.inv() * T_Base2Socket
@@ -553,6 +591,8 @@ class Pilot:
             if t_now - t_start > time_out:
                 fin = False
                 break
+        # Stop robot movement
+        self.robot.pause_force_mode()
         return fin
 
     def pair_to_socket(self, T_Base2Socket: sm.SE3, force: float = 10.0, time_out: float = 5.0) -> bool:
@@ -580,7 +620,6 @@ class Pilot:
                 selection_vector=select_vec,
                 wrench=wrench
             )
-            time.sleep(self.robot.dt)
             # Get current transformation from base to end-effector
             T_Base2Tip = self.get_pose('tool_tip')
             T_Tip2Socket = T_Base2Tip.inv() * T_Base2Socket
@@ -591,9 +630,8 @@ class Pilot:
             if t_now - t_start > time_out:
                 fin = False
                 break
-        # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
-        time.sleep(self.robot.dt)
+        # Stop robot movement
+        self.robot.pause_force_mode()
         return fin
 
     def jog_in_plug(self,
@@ -628,7 +666,6 @@ class Pilot:
                 selection_vector=select_vec,
                 wrench=wrench
             )
-            time.sleep(self.robot.dt)
             # Get current transformation from base to end-effector
             T_Base2Tip = self.get_pose('tool_tip')
             T_Tip2Socket = T_Base2Tip.inv() * T_Base2Socket
@@ -640,8 +677,7 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
-        time.sleep(self.robot.dt)
+        self.robot.pause_force_mode()
         return fin
 
     def tcp_force_mode(self,
@@ -658,7 +694,6 @@ class Pilot:
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=ft_vec)
-            time.sleep(self.robot.dt)
             x_now = self.robot.tcp_pos
             l2_norm_dist = np.linalg.norm(x_now - x_ref)
             t_now = perf_counter()
@@ -669,8 +704,7 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
-        time.sleep(self.robot.dt)
+        self.robot.pause_force_mode()
         return fin
 
     def frame_force_mode(self,
@@ -691,7 +725,6 @@ class Pilot:
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=ft_vec)
-            time.sleep(self.robot.dt)
             x_now = self.robot.tcp_pos
             l2_norm_dist = np.linalg.norm(x_now - x_ref)
             t_now = perf_counter()
@@ -702,8 +735,7 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
-        time.sleep(self.robot.dt)
+        self.robot.pause_force_mode()
         return fin
 
     def find_contact_point(self, direction: Sequence[int], time_out: float) -> tuple[bool, sm.SE3]:
@@ -721,7 +753,6 @@ class Pilot:
                 selection_vector=selection_vector,
                 wrench=wrench
             )
-            time.sleep(self.robot.dt)
             t_now = perf_counter()
             # Check every 500 milliseconds if robot is still moving
             if t_now - t_ref > 0.5:
@@ -751,7 +782,6 @@ class Pilot:
                 selection_vector=selection_vector,
                 wrench=wrench
             )
-            time.sleep(self.robot.dt)
             t_now = perf_counter()
             # Check every 500 millisecond if robot is still moving
             if t_now - t_ref > 0.5:
@@ -764,8 +794,12 @@ class Pilot:
                 fin = False
                 break
         if not fin:
+            # Stop robot movement
+            self.robot.pause_force_mode()
             return fin, sm.SE3()
         else:
+            # Stop robot movement
+            self.robot.pause_force_mode()
             T_Base2Target_meas = sm.SE3.Rt(R=T_Base2Target.R, t=self.robot.tcp_pos)
             return fin, T_Base2Target_meas
 
@@ -787,8 +821,7 @@ class Pilot:
                 fin = False
                 break
         # Stop robot movement
-        self.robot.force_mode(sm.SE3(), 6 * [0], 6 * [0.0])
-        time.sleep(self.robot.dt)
+        self.robot.pause_force_mode()
         return fin, self.robot.tcp_pose
 
     def relax(self, time_duration: float) -> sm.SE3:
@@ -805,10 +838,8 @@ class Pilot:
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench)
-            time.sleep(self.robot.dt)
         # Stop robot movement.
-        self.robot.force_mode(task_frame=task_frame, selection_vector=6 * [0], wrench=6 * [0.0])
-        time.sleep(self.robot.dt)
+        self.robot.pause_force_mode()
         return self.robot.tcp_pose
 
     def retreat(self,
@@ -829,7 +860,6 @@ class Pilot:
                 selection_vector=selection_vector,
                 wrench=wrench
             )
-            time.sleep(self.robot.dt)
             t_now = perf_counter()
             x_now = self.robot.tcp_pos
             l2_norm_dist = np.linalg.norm(x_now - x_ref)
@@ -839,6 +869,8 @@ class Pilot:
             elif t_now - t_start > time_out:
                 fin = False
                 break
+        # Stop robot movement
+        self.robot.pause_force_mode()
         return fin, self.robot.tcp_pose
 
     def move_joints_random(self) -> npt.NDArray[np.float32]:

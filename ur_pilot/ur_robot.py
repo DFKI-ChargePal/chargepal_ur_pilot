@@ -4,14 +4,14 @@ from __future__ import annotations
 import time
 import logging
 import numpy as np
-import spatialmath as sm
 from pathlib import Path
+import spatialmath as sm
 
-from ur_control.utils import clip, tr2ur_format, ur_format2tr
 from ur_control.robots import RealURRobot
+from ur_control.utils import clip, tr2ur_format, ur_format2tr
 
 from ur_pilot.config_mdl import Config
-from ur_pilot.utils import SpatialPDController, vec_to_str
+from ur_pilot.utils import SpatialPDController
 
 # typing
 from typing import Sequence
@@ -63,6 +63,7 @@ class URRobot(RealURRobot):
         Args:
             error_scale: Overall scaling parameter
             force_limit: The absolute value of the applied forces in tool space
+            torque_limit: The absoulte value of the applied torques in tool space
             Kp_6: 6 dimensional motion controller proportional gain
             Kd_6: 6 dimensional motion controller derivative gain
             ft_gain: Force torque gain parameter
@@ -230,6 +231,29 @@ class URRobot(RealURRobot):
         path[-1][-1] = 0.0
         success: bool = self.rtde_controller.moveJ(path=path)
         return success
+
+    def force_mode(self,
+                   task_frame: sm.SE3,
+                   selection_vector: Sequence[int],
+                   wrench: Sequence[float],
+                   f_mode_type: int | None = None,
+                   tcp_limits: Sequence[float] | None = None) -> None:
+        """ Overrides force mode of the base class
+
+        Args:
+            task_frame:       Defines the force frame relative to the base.
+            selection_vector: A 6d-vector of 0s and 1s. 1 means that the robot will be
+                              compliant in the corresponding axis of the task frame
+            wrench:           Forces/Torques the robot will apply to its environment.
+            f_mode_type:      Specifying how the  force frame is interpreted. Defaults to None.
+            tcp_limits:       Maximum tcp speed for compliant axes. Defaults to None.
+        """
+        super().force_mode(task_frame, selection_vector, wrench, f_mode_type, tcp_limits)
+        time.sleep(self.dt)
+
+    def pause_force_mode(self) -> None:
+        self.force_mode(task_frame=self.tcp_pose, selection_vector=6 * [0], wrench=6 * [0.0])
+        time.sleep(self.dt)
 
     ####################################
     # --- #   HELPER FUNCTIONS   # --- #
