@@ -18,7 +18,7 @@ from ur_pilot.config_mdl import Config, read_toml
 from ur_pilot.control_mode import ControlContextManager
 from ur_pilot.end_effector.bota_sensor import BotaFtSensor
 from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
-from ur_pilot.end_effector.models import CameraModel, PlugModelContext, ToolLinkModel, BotaSensONEModel
+from ur_pilot.end_effector.models import CameraModel, PlugModel, TwistCouplingModel, BotaSensONEModel
 
 # typing
 from numpy import typing as npt
@@ -30,7 +30,8 @@ class EndEffectorFrames(StrEnum):
 
     FLANGE = 'flange'
     FT_SENSOR = 'ft_sensor'
-    TOOL_LINK = 'tool_link'
+    COUPLING_LOCKED = 'coupling_locked'
+    COUPLING_UNLOCKED = 'coupling_unlocked'
     PLUG_LIP = 'plug_lip'
     PLUG_TIP = 'plug_tip'
     PLUG_SENSE = 'plug_sense'
@@ -77,8 +78,8 @@ class Pilot:
             self._ft_sensor_mdl = BotaSensONEModel()
             self._ft_sensor.start()
         # Set up end-effector models
-        self.tool_link = ToolLinkModel(**self.cfg.pilot.tool_link.dict())
-        self.plug_model = PlugModelContext(self.cfg)
+        self.coupling_model = TwistCouplingModel(**self.cfg.pilot.coupling.dict())
+        self.plug_model = PlugModel(self.cfg)
         self.cam: CameraBase | None = None
         self.cam_mdl = CameraModel()
 
@@ -168,11 +169,17 @@ class Pilot:
             else:
                 # Tread internal force torque sensor as mounted in flange frame
                 offset = sm.SE3()
-        elif frame == EndEffectorFrames.TOOL_LINK:
+        elif frame == EndEffectorFrames.COUPLING_LOCKED:
             if self.extern_sensor:
-                offset = self.ft_sensor_mdl.T_mounting2wrench * self.tool_link.T_mounting2link
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.coupling_model.T_mounting2locked
             else:
-                offset = self.tool_link.T_mounting2link
+                offset = self.coupling_model.T_mounting2locked
+        elif frame == EndEffectorFrames.COUPLING_UNLOCKED:
+            if self.extern_sensor:
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.coupling_model.T_mounting2unlocked
+            else:
+                offset = self.coupling_model.T_mounting2unlocked
+
         elif frame == EndEffectorFrames.PLUG_LIP:
             if self.extern_sensor:
                 offset = self.ft_sensor_mdl.T_mounting2wrench * self.plug_model.T_mounting2lip
@@ -224,7 +231,7 @@ class Pilot:
             ft_raw = self.robot.tcp_wrench
         # TODO: Check frame
         # Compensate Tool mass
-        f_tool_wrt_world = self.tool_link.f_inertia
+        f_tool_wrt_world = self.coupling_model.f_inertia
         f_tool_wrt_ft: npt.NDArray[np.float_] = self.rot_world2arm * f_tool_wrt_world
 
         def cross(a: npt.ArrayLike, b: npt.ArrayLike) -> npt.NDArray[np.float32]:
@@ -233,7 +240,7 @@ class Pilot:
             b_ = np.array(b, dtype=np.float32)
             return np.cross(a_, b_)
 
-        t_tool_wrt_ft = cross(self.tool_link.com, f_tool_wrt_ft)
+        t_tool_wrt_ft = cross(self.coupling_model.com, f_tool_wrt_ft)
         ft_comp = sm.SpatialForce(np.append(f_tool_wrt_ft, t_tool_wrt_ft))
         return ft_raw + ft_comp
 
@@ -339,13 +346,13 @@ class Pilot:
                 break
         return success
 
-    def try2_couple_plug(self, T_base2socket: sm.SE3, force: float, time_out: float) -> bool:
+    def try2_couple_plug(self, T_base2socket: sm.SE3, force: float, time_out: float) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
-        force = np.clip(force, 0.0, 50.0)
+        time_out = abs(time_out)
+        # Setup controller
         wrench_vec = 6 * [0.0]
         selection_vector = [1, 1, 1, 0, 0, 1]
-
         x_ctrl = utils.PDController(kp=100.0, kd=0.99)
         y_ctrl = utils.PDController(kp=100.0, kd=0.99)
         z_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
@@ -355,38 +362,50 @@ class Pilot:
         T_base2plug_est = T_base2socket * T_socket2plug
 
         # Wrench will be applied with respect to the current TCP pose
-        task_frame = T_base2plug_meas = self.get_pose(EndEffectorFrames.TOOL_LINK)
+        task_frame = T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
         T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
         p_meas2est_ref = p_meas2est = T_meas2est.t
         success = False
-        t_ref = t_start = perf_counter()
-        while True:
-
+        t_ref = t_now = t_start = perf_counter()
+        while t_now - t_start <= time_out:
+            # Update controller
             wrench_vec[0] = np.clip(x_ctrl.update(p_meas2est[0], self.robot.dt), -50.0, 50.0)
             wrench_vec[1] = np.clip(y_ctrl.update(p_meas2est[1], self.robot.dt), -50.0, 50.0)
             wrench_vec[2] = np.clip(z_ctrl.update(p_meas2est[2], self.robot.dt), -50.0, 50.0)
-
             self.robot.force_mode(
                 task_frame=task_frame,
                 selection_vector=selection_vector,
                 wrench=wrench_vec,
             )
-
-            T_base2plug_meas = self.get_pose(EndEffectorFrames.TOOL_LINK)
+            # Update error
+            T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
             T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
             p_meas2est = T_meas2est.t
-
             t_now = perf_counter()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
                 if np.allclose(p_meas2est_ref, p_meas2est, atol=0.001):
-                    fin = True
+                    # Check whether couple depth is reached
+                    d_err = p_meas2est[2]
+                    if abs(d_err) <= 0.002:
+                        success = True
+                    else:
+                        success = False
                     break
                 t_ref, p_meas2est_ref = t_now, p_meas2est
-            if t_now - t_start > time_out:
+            # Check whether error is getting to large
+            T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+            T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
+            xy_error = float(np.linalg.norm(T_meas2est.t[0:2]))
+            ang_error = float(T_base2plug_est.angdist(T_base2plug_meas))
+            if xy_error > 0.02 or ang_error > np.pi/12:  # xy limit 2 cm angular limit 15 deg
+                success = False
                 break
-
-        return success
+        T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+        T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
+        lin_error = float(np.linalg.norm(T_meas2est.t))
+        ang_error = float(T_base2plug_est.angdist(T_base2plug_meas))
+        return success, (lin_error, ang_error)
 
     def try2_decouple_plug(self) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
@@ -398,6 +417,7 @@ class Pilot:
 
     def try2_lock_plug(self) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
+        success = self.screw_ee_force_mode(torque=4.0, ang=np.pi/2, time_out=12.0)
         return False
 
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:

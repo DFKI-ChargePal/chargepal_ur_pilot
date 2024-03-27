@@ -17,21 +17,47 @@ from typing import Iterator, Sequence
 LOGGER = logging.getLogger(__name__)
 
 
-class ToolLinkModel:
+class ToolModel:
+
+    def __init__(self, mass: float, com: npt.ArrayLike, gravity: npt.ArrayLike = (0.0, 0.0, -9.80665)):
+        self.mass = mass
+        self.com = np.reshape(com, 3)
+        self.gravity = np.reshape(gravity, 3)
+        self.f_inertia = self.mass * self.gravity
+
+
+class TwistCouplingModel(ToolModel):
 
     def __init__(self,
-                 name: str,
                  mass: float,
                  com: npt.ArrayLike,
                  gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
                  link_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
                  ):
-        self.mass = mass
-        self.com = np.reshape(com, 3)
-        self.gravity = np.reshape(gravity, 3)
-        self.f_inertia = self.mass * self.gravity
+        super().__init__(mass, com, gravity)
         l_frame = np.reshape(link_frame, 6)
-        self.T_mounting2link = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
+        self.T_mounting2locked = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
+        T_locked2unlocked = sm.SE3.EulerVec((0.0, 0.0, -np.pi/2))
+        self.T_mounting2unlocked = self.T_mounting2locked * T_locked2unlocked
+
+
+class PlugToolModel(ToolModel):
+
+    def __init__(self,
+                 mass: float,
+                 com: npt.ArrayLike,
+                 gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
+                 lip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                 tip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                 sense_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                 ) -> None:
+        super().__init__(mass, com, gravity)
+        l_frame = np.reshape(lip_frame, 6)
+        self.T_mounting2lip = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
+        t_frame = np.reshape(tip_frame, 6)
+        self.T_mounting2tip = sm.SE3.Rt(R=sm.SO3.EulerVec(t_frame[3:6]), t=t_frame[0:3])
+        s_frame = np.reshape(sense_frame, 6)
+        self.T_mounting2sense = sm.SE3.Rt(R=sm.SO3.EulerVec(s_frame[3:6]), t=s_frame[0:3])
 
 
 class PlugTypes(Enum):
@@ -44,37 +70,15 @@ class PlugTypes(Enum):
 
 class PlugModel:
 
-    def __init__(self,
-                 mass: float,
-                 com: npt.ArrayLike,
-                 gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
-                 lip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-                 tip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-                 sense_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-                 ) -> None:
-        self.mass = mass
-        self.com = np.reshape(com, 3)
-        self.gravity = np.reshape(gravity, 3)
-        self.f_inertia = self.mass * self.gravity
-        l_frame = np.reshape(lip_frame, 6)
-        self.T_mounting2lip = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
-        t_frame = np.reshape(tip_frame, 6)
-        self.T_mounting2tip = sm.SE3.Rt(R=sm.SO3.EulerVec(t_frame[3:6]), t=t_frame[0:3])
-        s_frame = np.reshape(sense_frame, 6)
-        self.T_mounting2sense = sm.SE3.Rt(R=sm.SO3.EulerVec(s_frame[3:6]), t=s_frame[0:3])
-
-
-class PlugModelContext:
-
     plug_types = PlugTypes
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.type = self.plug_types.NONE
-        self.models: dict[PlugTypes, PlugModel] = {
-            self.plug_types.TYPE2_FEMALE: PlugModel(**self.cfg.pilot.tm_type2_female.dict()),
-            self.plug_types.TYPE2_MALE: PlugModel(**self.cfg.pilot.tm_type2_male.dict()),
-            self.plug_types.CCS_FEMALE: PlugModel(**self.cfg.pilot.tm_ccs_female.dict()),
+        self.models: dict[PlugTypes, PlugToolModel] = {
+            self.plug_types.TYPE2_FEMALE: PlugToolModel(**self.cfg.pilot.tm_type2_female.dict()),
+            self.plug_types.TYPE2_MALE: PlugToolModel(**self.cfg.pilot.tm_type2_male.dict()),
+            self.plug_types.CCS_FEMALE: PlugToolModel(**self.cfg.pilot.tm_ccs_female.dict()),
         }
 
     @property

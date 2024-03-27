@@ -19,7 +19,7 @@ class MissingConfigError(Exception):
         super().__init__(self.message)
 
 
-class ToolLinkModel(BaseModel):
+class CouplingModel(BaseModel):
     """ Data model for the tool to plug adapter
     """
     mass: float = 0.0
@@ -82,7 +82,7 @@ class FTSensor(BaseModel):
 class Pilot(BaseModel):
 
     ft_sensor: Optional[FTSensor] = None
-    tool_link: ToolLinkModel = ToolLinkModel()
+    coupling: CouplingModel = CouplingModel()
     tm_type2_female: PlugModel = PlugModel()
     tm_type2_male: PlugModel = PlugModel()
     tm_ccs_female: PlugModel = PlugModel()
