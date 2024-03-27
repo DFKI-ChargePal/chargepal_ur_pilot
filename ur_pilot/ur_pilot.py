@@ -30,11 +30,13 @@ class EndEffectorFrames(StrEnum):
 
     FLANGE = 'flange'
     FT_SENSOR = 'ft_sensor'
+    COUPLING_SAFETY = 'coupling_safety'
     COUPLING_LOCKED = 'coupling_locked'
     COUPLING_UNLOCKED = 'coupling_unlocked'
     PLUG_LIP = 'plug_lip'
     PLUG_TIP = 'plug_tip'
     PLUG_SENSE = 'plug_sense'
+    PLUG_SAFETY = 'plug_safety'
     CAMERA = 'camera'
 
 
@@ -169,6 +171,11 @@ class Pilot:
             else:
                 # Tread internal force torque sensor as mounted in flange frame
                 offset = sm.SE3()
+        elif frame == EndEffectorFrames.COUPLING_SAFETY:
+            if self.extern_sensor:
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.coupling_model.T_mounting2safety
+            else:
+                offset = self.coupling_model.T_mounting2safety
         elif frame == EndEffectorFrames.COUPLING_LOCKED:
             if self.extern_sensor:
                 offset = self.ft_sensor_mdl.T_mounting2wrench * self.coupling_model.T_mounting2locked
@@ -179,7 +186,6 @@ class Pilot:
                 offset = self.ft_sensor_mdl.T_mounting2wrench * self.coupling_model.T_mounting2unlocked
             else:
                 offset = self.coupling_model.T_mounting2unlocked
-
         elif frame == EndEffectorFrames.PLUG_LIP:
             if self.extern_sensor:
                 offset = self.ft_sensor_mdl.T_mounting2wrench * self.plug_model.T_mounting2lip
@@ -195,6 +201,11 @@ class Pilot:
                 offset = self.ft_sensor_mdl.T_mounting2wrench * self.plug_model.T_mounting2sense
             else:
                 offset = self.plug_model.T_mounting2sense
+        elif frame == EndEffectorFrames.PLUG_SAFETY:
+            if self.extern_sensor:
+                offset = self.ft_sensor_mdl.T_mounting2wrench * self.plug_model.T_mounting2safety
+            else:
+                offset = self.plug_model.T_mounting2safety
         elif frame == EndEffectorFrames.CAMERA:
             offset = self.cam_mdl.T_flange2camera
         else:
@@ -346,7 +357,7 @@ class Pilot:
                 break
         return success
 
-    def try2_couple_plug(self, T_base2socket: sm.SE3, force: float, time_out: float) -> tuple[bool, tuple[float, float]]:
+    def try2_couple_plug(self, T_base2socket: sm.SE3, time_out: float) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         time_out = abs(time_out)
@@ -409,16 +420,31 @@ class Pilot:
 
     def try2_decouple_plug(self) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
+
+
         return False
 
-    def try2_unlock_plug(self) -> bool:
+    def try2_unlock_plug(self, T_base2socket: sm.SE3, time_out: float = 12.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
-        return False
+        # Get estimation of the plug pose
+        T_socket2plug = self.plug_model.T_mounting2lip.inv()
+        T_base2plug_est = T_base2socket * T_socket2plug
+        # Turn end effector by 90 degrees counter-clockwise
+        success = self.screw_ee_force_mode(torque=4.0, ang=-np.pi/2, time_out=time_out)
+        T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+        lin_ang_err = utils.lin_ang_error(T_base2plug_est, T_base2plug_meas)
+        return success, lin_ang_err
 
-    def try2_lock_plug(self) -> bool:
+    def try2_lock_plug(self, T_base2socket: sm.SE3, time_out: float = 12.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
-        success = self.screw_ee_force_mode(torque=4.0, ang=np.pi/2, time_out=12.0)
-        return False
+        # Get estimation of the plug pose
+        T_socket2plug = self.plug_model.T_mounting2lip.inv()
+        T_base2plug_est = T_base2socket * T_socket2plug
+        # Turn end effector by 90 degrees clockwise
+        success = self.screw_ee_force_mode(torque=4.0, ang=np.pi/2, time_out=time_out)
+        T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_LOCKED)
+        lin_ang_err = utils.lin_ang_error(T_base2plug_est, T_base2plug_meas)
+        return success, lin_ang_err
 
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
         self.context.check_mode(expected=self.context.mode_types.FORCE)

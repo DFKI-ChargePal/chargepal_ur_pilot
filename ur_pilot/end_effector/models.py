@@ -33,12 +33,16 @@ class TwistCouplingModel(ToolModel):
                  com: npt.ArrayLike,
                  gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
                  link_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                 safety_margin: npt.ArrayLike = (0.0, 0.0, 0.04, 0.0, 0.0, 0.0)
                  ):
         super().__init__(mass, com, gravity)
         l_frame = np.reshape(link_frame, 6)
         self.T_mounting2locked = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
         T_locked2unlocked = sm.SE3.EulerVec((0.0, 0.0, -np.pi/2))
         self.T_mounting2unlocked = self.T_mounting2locked * T_locked2unlocked
+        s_margin = np.reshape(safety_margin, 6)
+        T_unlocked2safety = sm.SE3.Rt(R=sm.SO3.EulerVec(s_margin[3:6]), t=s_margin[0:3])
+        self.T_mounting2safety = self.T_mounting2unlocked * T_unlocked2safety
 
 
 class PlugToolModel(ToolModel):
@@ -49,7 +53,8 @@ class PlugToolModel(ToolModel):
                  gravity: npt.ArrayLike = (0.0, 0.0, -9.80665),
                  lip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
                  tip_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-                 sense_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                 sense_frame: npt.ArrayLike = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                 safety_margin: npt.ArrayLike = (0.0, 0.0, 0.02, 0.0, 0.0, 0.0)
                  ) -> None:
         super().__init__(mass, com, gravity)
         l_frame = np.reshape(lip_frame, 6)
@@ -58,6 +63,9 @@ class PlugToolModel(ToolModel):
         self.T_mounting2tip = sm.SE3.Rt(R=sm.SO3.EulerVec(t_frame[3:6]), t=t_frame[0:3])
         s_frame = np.reshape(sense_frame, 6)
         self.T_mounting2sense = sm.SE3.Rt(R=sm.SO3.EulerVec(s_frame[3:6]), t=s_frame[0:3])
+        s_margin = np.reshape(safety_margin, 6)
+        T_tip2safety = sm.SE3.Rt(R=sm.SO3.EulerVec(s_margin[3:6]), t=s_margin[0:3])
+        self.T_mounting2safety = self.T_mounting2tip * T_tip2safety
 
 
 class PlugTypes(Enum):
@@ -136,6 +144,14 @@ class PlugModel:
         else:
             T_mounting2sense = self.models[self.type].T_mounting2sense
         return T_mounting2sense
+
+    @property
+    def T_mounting2safety(self) -> sm.SE3:
+        if self.type == self.plug_types.NONE:
+            raise RuntimeError(f"Trying to access plug value while the context  is inactive.")
+        else:
+            T_mounting2safety = self.models[self.type].T_mounting2safety
+        return T_mounting2safety
 
     def exit(self) -> None:
         self.type = self.plug_types.NONE

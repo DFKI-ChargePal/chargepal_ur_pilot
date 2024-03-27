@@ -80,6 +80,22 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
 
 
+def lin_ang_error(T_a2b_est: sm.SE3, T_a2b_meas: sm.SE3) -> tuple[float, float]:
+    """ Calculates the linear and angular error/distance between two frames
+
+    Args:
+        T_a2b_est:  Frame of the estimated state
+        T_a2b_meas: Frame of the measured state
+
+    Returns:
+        Tuple of euclidian distance of the position error and the angular distance of the rotation error
+    """
+    T_meas2est = T_a2b_meas.inv() * T_a2b_est
+    lin_error = float(np.linalg.norm(T_meas2est.t))
+    ang_error = float(T_a2b_est.angdist(T_a2b_meas))
+    return lin_error, ang_error
+
+
 def se3_to_str(mat: sm.SE3, digits: int = 4) -> str:
     """ Convert SE(3) object to UR style string
     Args:
