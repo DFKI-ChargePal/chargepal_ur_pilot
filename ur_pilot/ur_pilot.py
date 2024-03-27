@@ -356,7 +356,7 @@ class Pilot:
         self.robot.pause_force_mode()
         return success
 
-    def try2_couple_plug(self, T_base2socket: sm.SE3, time_out: float) -> tuple[bool, tuple[float, float]]:
+    def try2_couple_to_plug(self, T_base2socket: sm.SE3, time_out: float) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         time_out = abs(time_out)
@@ -414,11 +414,10 @@ class Pilot:
         # Stop robot movement.
         self.robot.pause_force_mode()
         # Evaluate spatial error
-        T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
         lin_ang_err = utils.lin_ang_error(T_base2plug_est, T_base2plug_meas)
         return success, lin_ang_err
 
-    def try2_decouple_plug(self, time_out: float) -> tuple[bool, tuple[float, float]]:
+    def try2_decouple_to_plug(self, time_out: float) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input arguments
         time_out = abs(time_out)
@@ -430,12 +429,12 @@ class Pilot:
         z_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
 
         # Get estimation of the safety pose
-        T_base2safety_est = self.get_pose(EndEffectorFrames.COUPLING_SAFETY)
+        T_base2safety_est = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
         # Get current coupling pose
-        task_frame = T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+        task_frame = T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_SAFETY)
         # Get control input difference
         T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
-        p_meas2est_ref = p_meas2est = T_meas2est.t
+        p_meas2est = T_meas2est.t
         success = False
         t_now = t_start = perf_counter()
         while t_now - t_start <= time_out:
@@ -449,7 +448,7 @@ class Pilot:
                 wrench=wrench_vec,
             )
             # Update error
-            T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
+            T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_SAFETY)
             T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
             p_meas2est = T_meas2est.t
             if abs(p_meas2est[2]) <= 0.003:  # Only check for depth value of the coupling
@@ -459,7 +458,6 @@ class Pilot:
         # Stop robot movement
         self.robot.pause_force_mode()
         # Evaluate spatial error
-        T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
         lin_ang_err = utils.lin_ang_error(T_base2safety_est, T_base2safety_meas)
         return success, lin_ang_err
 
@@ -485,6 +483,52 @@ class Pilot:
         # Evaluate spatial error
         T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_LOCKED)
         lin_ang_err = utils.lin_ang_error(T_base2plug_est, T_base2plug_meas)
+        return success, lin_ang_err
+
+    def try2_engage_with_socket(self, T_base2socket: sm.SE3, time_out: float = 4.0) -> None:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        # Limit input
+        time_out = abs(time_out)
+        # TODO: Add functionality
+
+    def try2_insert_plug(self, ) -> None:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        self.plug_in_force_ramp(f_axis='z', f_start=50.0, f_end=100.0, duration=3.0)
+        # TODO: Add functionality
+
+    def try2_remove_plug(self, time_out: float = 10.0) -> tuple[bool, tuple[float, float]]:
+        self.context.check_mode(expected=self.context.mode_types.FORCE)
+        # Limit input arguments
+        time_out = abs(time_out)
+        # Setup controller
+        wrench_vec = 6 * [0.0]
+        selection_vec = [0, 0, 1, 0, 0, 0]
+        depth_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
+        # Get estimation of the safety pose
+        T_base2safety_est = self.get_pose(EndEffectorFrames.PLUG_LIP)
+        # Get current plug-in pose
+        task_frame = T_base2safety_meas = self.get_pose(EndEffectorFrames.PLUG_SAFETY)
+        # Get control input difference
+        T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
+        p_meas2est = T_meas2est.t
+        success = False
+        t_now = t_start = perf_counter()
+        while t_now - t_start <= time_out:
+            # Update controller
+            wrench_vec[2] = np.clip(depth_ctrl.update(p_meas2est[2], self.robot.dt), -125, 125)
+            self.robot.force_mode(task_frame=task_frame, selection_vector=selection_vec, wrench=wrench_vec)
+            # Update error
+            T_base2safety_meas = self.get_pose(EndEffectorFrames.PLUG_SAFETY)
+            T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
+            p_meas2est = T_meas2est.t
+            if abs(p_meas2est[2]) <= 0.003:  # Only check for depth value of the coupling
+                success = True
+                break
+            t_now = perf_counter()
+        # Stop robot movement
+        self.robot.pause_force_mode()
+        # Evaluate spatial error
+        lin_ang_err = utils.lin_ang_error(T_base2safety_est, T_base2safety_meas)
         return success, lin_ang_err
 
     def one_axis_tcp_force_mode(self, axis: str, force: float, time_out: float) -> bool:
