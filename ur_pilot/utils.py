@@ -80,8 +80,62 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
 
 
-def lin_ang_error(T_a2b_est: sm.SE3, T_a2b_meas: sm.SE3) -> tuple[float, float]:
-    """ Calculates the linear and angular error/distance between two frames
+def lin_error(T_a2b_ref: sm.SE3, T_a2b_meas: sm.SE3, axes: str = 'xyz') -> float:
+    """ Calculate the linear error/distance between two frames
+
+    Args:
+        T_a2b_ref:  Reference frame (ground truth)
+        T_a2b_meas: Measured frame (prediction)
+        axes:       Axes to be considered
+
+    Returns:
+        Euclidian distance for the chosen axes
+    """
+    _valid_axes = ['x', 'y', 'z', 'xy', 'xz', 'yz', 'xyz']
+    axes = ''.join(sorted(axes.lower()))
+    if axes not in _valid_axes:
+        raise ValueError(f"Unknown selection for axes: '{axes}'. Valid options are: {_valid_axes}")
+    p_meas2ref = (T_a2b_meas.inv() * T_a2b_ref).t
+    if 'x' not in axes:
+        p_meas2ref[0] = 0.0
+    if 'y' not in axes:
+        p_meas2ref[1] = 0.0
+    if 'z' not in axes:
+        p_meas2ref[2] = 0.0
+    l_err = float(np.linalg.norm(p_meas2ref))
+    return l_err
+
+
+def rot_error_single_axis(T_a2b_ref: sm.SE3, T_a2b_meas: sm.SE3, axis: str = 'yaw') -> float:
+    """ Calculate the rotational error between two frames for one principal axis
+
+    Args:
+        T_a2b_ref:  Reference frame (ground truth)
+        T_a2b_meas: Measured frame (prediction)
+        axis:       Principal axis [roll, pitch, yaw]
+
+    Returns:
+        Rotation error for a single principal axis
+    """
+    _valid_axes_short = ['R', 'P', 'Y']
+    _valid_axes_long = ['roll', 'pitch', 'yaw']
+    if axis.lower() not in _valid_axes_long and axis.upper() not in _valid_axes_short:
+        raise ValueError(f"Unknown principal axis '{axis}'. Valid options are: {_valid_axes_short + _valid_axes_long}")
+    axis = axis[0].upper()
+    rpy_meas2ref = sm.UnitQuaternion((T_a2b_meas.inv() * T_a2b_ref).R).rpy(order='zyx')
+    if axis == 'R':
+        r_err = rpy_meas2ref[0]
+    elif axis == 'P':
+        r_err = rpy_meas2ref[1]
+    elif axis == 'Y':
+        r_err = rpy_meas2ref[2]
+    else:
+        raise IndexError(f"Unknown axis index '{axis}'")
+    return float(r_err)
+
+
+def lin_rot_error(T_a2b_est: sm.SE3, T_a2b_meas: sm.SE3) -> tuple[float, float]:
+    """ Calculates the linear and rotational error/distance between two frames
 
     Args:
         T_a2b_est:  Frame of the estimated state
@@ -91,9 +145,9 @@ def lin_ang_error(T_a2b_est: sm.SE3, T_a2b_meas: sm.SE3) -> tuple[float, float]:
         Tuple of euclidian distance of the position error and the angular distance of the rotation error
     """
     T_meas2est = T_a2b_meas.inv() * T_a2b_est
-    lin_error = float(np.linalg.norm(T_meas2est.t))
-    ang_error = float(T_a2b_est.angdist(T_a2b_meas))
-    return lin_error, ang_error
+    lin_err = float(np.linalg.norm(T_meas2est.t))
+    ang_err = float(T_a2b_est.angdist(T_a2b_meas))
+    return lin_err, ang_err
 
 
 def se3_to_str(mat: sm.SE3, digits: int = 4) -> str:
@@ -196,7 +250,6 @@ def axis2index(axis: str) -> int:
 
 
 def find_ethernet_adapters() -> None:
-
     adapters = pysoem.find_adapters()
 
     for i, adapter in enumerate(adapters):
@@ -205,7 +258,7 @@ def find_ethernet_adapters() -> None:
         print(f'   {adapter.desc}\n')
 
 
-class Controller(metaclass=abc.ABCMeta):    
+class Controller(metaclass=abc.ABCMeta):
     """ Controller superclass. """
 
     @abc.abstractmethod
