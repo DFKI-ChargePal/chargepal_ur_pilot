@@ -259,7 +259,7 @@ class Pilot:
         ft_comp = sm.SpatialForce(np.append(f_tool_wrt_ft, t_tool_wrt_ft))
         return ft_raw + ft_comp
 
-    def set_tcp(self, frame: EndEffectorFrames | str = 'tool_link') -> None:
+    def set_tcp(self, frame: EndEffectorFrames | str = 'flange') -> None:
         """ Function to set the tcp relative to the tool flange. """
         frame = EndEffectorFrames(frame)
         offset = self.__frame_to_offset(frame=frame)

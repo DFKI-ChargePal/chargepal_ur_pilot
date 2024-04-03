@@ -15,7 +15,7 @@ from pathlib import Path
 from time import perf_counter
 
 # configuration
-from config import data
+from config import config_data
 
 # typing
 from ur_pilot import Pilot
@@ -35,7 +35,7 @@ _T_socket2fpi = sm.SE3().Trans([-0.005, 0.0, 0.034])
 def detect(pilot: Pilot, cam: ck.CameraBase, opt: Namespace) -> tuple[bool, sm.SE3]:
     """ Function to run detect socket pose. """
     # Perception setup
-    dtt = pd.factory.create(data.detector_dir.joinpath(opt.detector_config_file))
+    dtt = pd.factory.create(config_data.detector_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
     found, T_base2socket = False, sm.SE3()
     _t_out, _t_start = 2.0, perf_counter()
@@ -109,15 +109,15 @@ def plug_out(pilot: Pilot, T_base2socket: sm.SE3) -> bool:
 
 def main(opt: Namespace) -> None:
     """ Main function to start process. """
-    LOGGER.info(data)
+    LOGGER.info(config_data)
     # Perception setup
     cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
-    calib_dir = data.camera_info_dir.joinpath(opt.camera_name, 'calibration')
+    calib_dir = config_data.camera_info_dir.joinpath(opt.camera_name, 'calibration')
     cam.load_coefficients(calib_dir.joinpath('coefficients.toml'))
     cam.render()
 
     # Connect to arm
-    with ur_pilot.connect(data.robot_dir) as pilot:
+    with ur_pilot.connect(config_data.robot_dir) as pilot:
         pilot.register_ee_cam(cam, calib_dir)
 
         with pilot.context.position_control():

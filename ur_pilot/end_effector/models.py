@@ -11,8 +11,7 @@ from ur_pilot.config_mdl import Config
 
 # typing
 from numpy import typing as npt
-from typing import Iterator, Sequence
-
+from typing import Iterator, Sequence, Any
 
 LOGGER = logging.getLogger(__name__)
 
@@ -155,6 +154,28 @@ class PlugModel:
 
     def exit(self) -> None:
         self.type = self.plug_types.NONE
+
+    @contextmanager
+    def context(self, plug_type: str) -> Iterator[None]:
+        name = plug_type.lower()
+        try:
+            if name == 'type2_male':
+                LOGGER.debug(f"Enter workspace context using plug type: Type 2 male")
+                yield
+                LOGGER.debug(f"Exit workspace context using plug type: Type 2 male")
+            elif name == 'type2_female':
+                self.type = self.plug_types.TYPE2_FEMALE
+                LOGGER.debug(f"Enter workspace context using plug type: Type 2 female")
+                yield
+                LOGGER.debug(f"Exit workspace context using plug type: Type 2 female")
+            elif name == 'ccs_female':
+                LOGGER.debug(f"Enter workspace context using plug type: CCS female")
+                yield
+                LOGGER.debug(f"Exit workspace context using plug type: CCS female")
+            else:
+                raise KeyError(f"No context with name '{name}' available")
+        finally:
+            self.exit()
 
     @contextmanager
     def type2_female(self) -> Iterator[None]:

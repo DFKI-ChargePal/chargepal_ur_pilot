@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 if __name__ == '__main__':
     ur_pilot.logger.set_logging_level(logging.INFO)
     # Connect to API
-    with ur_pilot.connect(config_dir=config.data.robot_dir) as pilot:
+    with ur_pilot.connect(config_dir=config.config_data.robot_dir) as pilot:
         # Read joint and pose information
         joint_pos = pilot.robot.joint_pos
         tcp_pose = pilot.robot.tcp_pose

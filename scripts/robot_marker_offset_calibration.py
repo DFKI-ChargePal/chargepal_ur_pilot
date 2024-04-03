@@ -7,7 +7,7 @@ import cvpd as pd
 import camera_kit as ck
 import spatialmath as sm
 from pathlib import Path
-from config import data
+from config import config_data
 
 # typing
 from argparse import Namespace
@@ -23,16 +23,16 @@ def calibration_procedure(opt: Namespace) -> None:
     Args:
         opt: Script arguments
     """
-    LOGGER.info(data)
+    LOGGER.info(config_data)
     # Perception setup
     cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
-    cam.load_coefficients(data.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
+    cam.load_coefficients(config_data.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
     cam.render()
-    dtt = pd.factory.create(data.detector_dir.joinpath(opt.detector_config_file))
+    dtt = pd.factory.create(config_data.detector_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
 
     # Connect to arm
-    with ur_pilot.connect(data.robot_dir) as pilot:
+    with ur_pilot.connect(config_data.robot_dir) as pilot:
         pilot.register_ee_cam(cam)
 
         # Enable free drive mode

@@ -3,7 +3,7 @@ import logging
 import argparse
 import ur_pilot
 import cvpd as pd
-from config import data
+from config import config_data
 import camera_kit as ck
 import spatialmath as sm
 from ur_pilot import FlangeEyeCalibration
@@ -21,17 +21,17 @@ def calibration_procedure(opt: Namespace) -> None:
     Args:
         opt: Script arguments
     """
-    LOGGER.info(data)
+    LOGGER.info(config_data)
     # Perception setup
     cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
-    calib_dir = data.camera_info_dir.joinpath(opt.camera_name, 'calibration')
+    calib_dir = config_data.camera_info_dir.joinpath(opt.camera_name, 'calibration')
     cam.load_coefficients(calib_dir.joinpath('coefficients.toml'))
     cam.render()
-    dtt = pd.factory.create(data.detector_dir.joinpath('charuco_flange_eye_calibration.yaml'))
+    dtt = pd.factory.create(config_data.detector_dir.joinpath('charuco_flange_eye_calibration.yaml'))
     dtt.register_camera(cam)
 
     # Connect to arm
-    with ur_pilot.connect(data.robot_dir) as pilot:
+    with ur_pilot.connect(config_data.robot_dir) as pilot:
 
         with pilot.context.position_control():
             pilot.robot.move_home()
