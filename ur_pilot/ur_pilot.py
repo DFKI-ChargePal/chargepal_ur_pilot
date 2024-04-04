@@ -327,34 +327,23 @@ class Pilot:
         # Create target
         ee_jt_pos = self.robot.joint_pos[-1]
         ee_jt_pos_tgt = ee_jt_pos + ang
-        # Time observation
-        success = False
-        t_start = _t_now()
-        # Controller state
-        prev_error = np.nan
-        i_err = 0.0
-        while True:
+        # Setup controller
+        screw_ctrl = utils.PIDController(kp=1.0, kd=1.0, ki=1.0)
+        # Exit criteria parameter
+        success, t_start = False, _t_now()
+        while not success:
             # Angular error
             ee_jt_pos_now = self.robot.joint_pos[-1]
             ang_error = (ee_jt_pos_tgt - ee_jt_pos_now)
-            p_err = torque * ang_error
-            if prev_error is np.NAN:
-                d_err = 0.0
-            else:
-                d_err = 1.0 * (ang_error - prev_error) / self.robot.dt
-            i_err = i_err + 1.0e-0 * ang_error * self.robot.dt
-            wrench_vec[-1] = np.clip(p_err + d_err + i_err, -torque, torque)
-            prev_error = ang_error
+            wrench_vec[-1] = np.clip(screw_ctrl.update(ang_error, self.robot.dt), -torque, torque)
             # Apply wrench
             self.robot.force_mode(
                 task_frame=task_frame,
                 selection_vector=compliant_axes,
                 wrench=wrench_vec)
-            t_now = _t_now()
             if abs(ang_error) < 5e-3:
                 success = True
-                break
-            if t_now - t_start > time_out:
+            if _t_now() - t_start > time_out:
                 break
         # Stop robot movement.
         self.robot.pause_force_mode()
