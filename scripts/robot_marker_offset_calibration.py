@@ -5,7 +5,6 @@ import argparse
 import ur_pilot
 import cvpd as pd
 import camera_kit as ck
-import spatialmath as sm
 from pathlib import Path
 from config import config_data
 
@@ -13,8 +12,6 @@ from config import config_data
 from argparse import Namespace
 
 LOGGER = logging.getLogger(__name__)
-
-_T_fpi2socket = sm.SE3().Trans([0.0, 0.0, -0.034])
 
 
 def calibration_procedure(opt: Namespace) -> None:
@@ -35,56 +32,55 @@ def calibration_procedure(opt: Namespace) -> None:
     # Connect to arm
     with ur_pilot.connect(config_data.robot_dir) as pilot:
         pilot.register_ee_cam(cam)
+        with pilot.plug_model.context(config_data.robot_plug_type):
+            # Enable free drive mode
+            with pilot.context.teach_in_control():
+                LOGGER.info('Start teach in mode')
+                LOGGER.info("   You can now move the arm to the fully-plugged-in socket pose")
+                LOGGER.info("   Press key 'r' or 'R' to go to the next step")
+                while not ck.user.resume():
+                    cam.render()
+                LOGGER.info('Stop teach in mode\n')
+            # Measure target pose
+            time.sleep(0.5)
+            T_base2socket = pilot.get_pose(ur_pilot.EndEffectorFrames.PLUG_LIP)
+            with pilot.context.teach_in_control():
+                LOGGER.info('Start teach in mode')
+                LOGGER.info("  You can now bring the arm into a pose where the marker can be observed")
+                LOGGER.info("  Press key 'r' or 'R' to go to the next step")
+                while not ck.user.resume():
+                    cam.render()
+                LOGGER.info('Stop teach in mode\n')
+            # Measure observation pose
+            time.sleep(0.5)
+            T_base2flange = pilot.get_pose(ur_pilot.EndEffectorFrames.FLANGE)
+            found, T_cam2marker = dtt.find_pose(render=True)
 
-        # Enable free drive mode
-        with pilot.context.teach_in_control():
-            LOGGER.info('Start teach in mode')
-            LOGGER.info("   You can now move the arm to the fully-plugged-in socket pose")
-            LOGGER.info("   Press key 'r' or 'R' to go to the next step")
-            while not ck.user.resume():
-                cam.render()
-            LOGGER.info('Stop teach in mode\n')
-        # Measure target pose
-        time.sleep(0.5)
-        T_base2fpi = pilot.get_pose('tool_tip')
-        with pilot.context.teach_in_control():
-            LOGGER.info('Start teach in mode')
-            LOGGER.info("  You can now bring the arm into a pose where the marker can be observed")
-            LOGGER.info("  Press key 'r' or 'R' to go to the next step")
-            while not ck.user.resume():
-                cam.render()
-            LOGGER.info('Stop teach in mode\n')
-        # Measure observation pose
-        time.sleep(0.5)
-        T_base2flange = pilot.get_pose('flange')
-        found, T_cam2marker = dtt.find_pose(render=True)
+            if found:
+                LOGGER.info('Found marker')
+                # Get pose from target to marker
+                T_socket2base = T_base2socket.inv()
+                T_flange2cam = pilot.cam_mdl.T_flange2camera
 
-        if found:
-            LOGGER.info('Found marker')
-            # Get pose from target to marker
-            T_base2socket = T_base2fpi * _T_fpi2socket
-            T_socket2base = T_base2socket.inv()
-            T_flange2cam = pilot.cam_mdl.T_flange2camera
+                T_flange2marker = T_flange2cam * T_cam2marker
+                T_base2marker = T_base2flange * T_flange2marker
+                T_socket2marker = T_socket2base * T_base2marker
+                T_marker2socket = T_socket2marker.inv()
 
-            T_flange2marker = T_flange2cam * T_cam2marker
-            T_base2marker = T_base2flange * T_flange2marker
-            T_socket2marker = T_socket2base * T_base2marker
-            T_marker2socket = T_socket2marker.inv()
+                LOGGER.debug(f"Base - Flange:   {ur_pilot.utils.se3_to_str(T_base2flange)}")
+                LOGGER.debug(f"Base - Marker:   {ur_pilot.utils.se3_to_str(T_base2marker)}")
+                LOGGER.debug(f"Base - Socket:   {ur_pilot.utils.se3_to_str(T_base2socket)}")
+                LOGGER.debug(f"Flange - Cam:    {ur_pilot.utils.se3_to_str(T_flange2cam)}")
+                LOGGER.debug(f"Flange - Marker: {ur_pilot.utils.se3_to_str(T_flange2marker)}")
+                LOGGER.debug(f"Socket - Marker: {ur_pilot.utils.se3_to_str(T_socket2marker)}")
+                LOGGER.debug(f"Cam - Marker:    {ur_pilot.utils.se3_to_str(T_cam2marker)}")
 
-            LOGGER.debug(f"Base - Flange:   {ur_pilot.utils.se3_to_str(T_base2flange)}")
-            LOGGER.debug(f"Base - Marker:   {ur_pilot.utils.se3_to_str(T_base2marker)}")
-            LOGGER.debug(f"Base - Socket:   {ur_pilot.utils.se3_to_str(T_base2socket)}")
-            LOGGER.debug(f"Flange - Cam:    {ur_pilot.utils.se3_to_str(T_flange2cam)}")
-            LOGGER.debug(f"Flange - Marker: {ur_pilot.utils.se3_to_str(T_flange2marker)}")
-            LOGGER.debug(f"Socket - Marker: {ur_pilot.utils.se3_to_str(T_socket2marker)}")
-            LOGGER.debug(f"Cam - Marker:    {ur_pilot.utils.se3_to_str(T_cam2marker)}")
+                dtt.adjust_offset(T_marker2socket)
 
-            dtt.adjust_offset(T_marker2socket)
-
-            LOGGER.info(f"  Calculated transformation from marker to socket:")
-            LOGGER.info(f"  {ur_pilot.utils.se3_to_str(T_marker2socket)}\n")
-        else:
-            LOGGER.info(f"Marker not found. Please check configuration and make sure marker is in camera fov")
+                LOGGER.info(f"  Calculated transformation from marker to socket:")
+                LOGGER.info(f"  {ur_pilot.utils.se3_to_str(T_marker2socket)}\n")
+            else:
+                LOGGER.info(f"Marker not found. Please check configuration and make sure marker is in camera fov")
         if cam is not None:
             cam.end()
 
