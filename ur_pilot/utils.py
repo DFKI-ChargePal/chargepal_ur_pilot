@@ -207,6 +207,34 @@ def vec_to_str(vec: Sequence[float] | npt.NDArray[np.float32 | np.float64 | np.f
     return f"[{vec_str}]"
 
 
+def quatAvg(Q: sm.UnitQuaternion) -> sm.UnitQuaternion:
+    """ Averaging Quaternions.
+        Heavily inspired by Dr. Tolga Birdal's work: https://github.com/tolgabirdal/averaging_quaternions
+        Based on Markley, F. Landis, Yang Cheng, John Lucas Crassidis, and Yaakov Oshman.
+        "Averaging quaternions." Journal of Guidance, Control, and Dynamics 30, no. 4 (2007): 1193-1197.
+
+    Args:
+        Q: UnitQuaternion with N Quaternions.
+
+    Returns:
+        The averaged quaternion
+    """
+    # Form the symmetric accumulator matrix
+    A = np.zeros((4, 4))
+    N = len(Q)
+    w = 1/N
+
+    for i in range(N):
+        q = Q[i].vec
+        if q[0] < 0:  # handle the antipodal configuration
+            q = -q
+        A += w * (np.outer(q, q))  # rank 1 update
+    # scale
+    A /= N
+    # Get the eigenvector corresponding to largest eigen value
+    return sm.UnitQuaternion(np.linalg.eigh(A)[1][:, -1])
+
+
 def ramp(start: float, end: float, duration: float) -> list[float]:
     """ Get a list with values from start to end with a step size of one second
 
