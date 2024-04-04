@@ -426,7 +426,7 @@ class Pilot:
         lin_ang_err = utils.lin_rot_error(T_base2plug_est, T_base2plug_meas)
         return success, lin_ang_err
 
-    def try2_decouple_to_plug(self, time_out: float) -> tuple[bool, tuple[float, float]]:
+    def try2_decouple_to_plug(self, time_out: float = 5.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input arguments
         time_out = abs(time_out)

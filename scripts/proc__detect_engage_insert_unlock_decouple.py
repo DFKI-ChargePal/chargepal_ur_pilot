@@ -33,6 +33,7 @@ LOGGER = logging.getLogger(__name__)
 _t_now = perf_counter
 
 # Starting point
+_retreat_j_pos = [3.4035, -1.6286, 2.1541, -0.4767, 1.8076, -1.5921]
 _socket_obs_j_pos = [3.4035, -1.6286, 2.1541, -0.4767, 1.8076, -1.5921]
 _T_marker2obs_close = sm.SE3().Trans([0.022, -0.022, -0.15])
 
@@ -85,6 +86,7 @@ def main(opt: Namespace) -> None:
                     pilot.set_tcp('plug_safety')
                     pilot.move_to_tcp_pose(T_base2socket)
 
+                success_eng, success_in, success_in, success_ul, success_dc = False, False, False, False, False
                 with pilot.context.force_control():
                     success_eng, lin_ang_err = pilot.try2_engage_with_socket(T_base2socket)
                     LOGGER.debug(f"Final error after engaging between plug and socket: "
@@ -93,13 +95,19 @@ def main(opt: Namespace) -> None:
                         success_in, lin_ang_err = pilot.try2_insert_plug(T_base2socket)
                         LOGGER.debug(f"Final error after inserting plug to socket: "
                                      f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
-                        if success_in:
-                            success_ul, lin_ang_err = pilot.try2_unlock_plug(T_base2socket)
-                            LOGGER.debug(f"Final error after unlocking robot from plug: "
-                                         f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                    if success_in:
+                        success_ul, lin_ang_err = pilot.try2_unlock_plug(T_base2socket)
+                        LOGGER.debug(f"Final error after unlocking robot from plug: "
+                                     f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
+                    if success_ul:
+                        success_dc, lin_ang_err = pilot.try2_decouple_to_plug()
+                        LOGGER.debug(f"Final error after decoupling robot from plug: "
+                                     f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
-
+                with pilot.context.position_control():
+                    if success_dc:
+                        pilot.move_to_joint_pos(_retreat_j_pos)
 
 
 if __name__ == '__main__':
