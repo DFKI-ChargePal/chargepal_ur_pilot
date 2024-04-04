@@ -35,8 +35,8 @@ _t_now = perf_counter
 
 # Starting point
 _retreat_j_pos = [3.4035, -1.6286, 2.1541, -0.4767, 1.8076, -1.5921]
-_socket_obs_j_pos = [3.4035, -1.6286, 2.1541, -0.4767, 1.8076, -1.5921]
-_T_marker2obs_close = sm.SE3().Trans([0.022, -0.022, -0.15])
+_socket_obs_j_pos = [3.4518, -2.0271, 2.1351, -0.0672, 1.8260, -1.5651]
+_T_marker2obs_close = sm.SE3().Rt(R=sm.SO3.EulerVec((0.0, 0.15, 0.0)), t=(0.1, -0.025, -0.1))
 
 
 def detect(pilot: Pilot, cam: CameraBase, detector_fp: Path) -> tuple[bool, sm.SE3]:
@@ -84,28 +84,28 @@ def main(opt: Namespace) -> None:
         pilot.register_ee_cam(cam, config_data.camera_dir)
         with pilot.plug_model.context(config_data.robot_plug_type):
             with pilot.context.position_control():
-                # pilot.move_to_joint_pos(_socket_obs_j_pos)
-                pilot.move_to_joint_pos([3.4290, -1.3710, 2.1270, -0.7469, 1.8690, -1.5650])
+                pilot.move_to_joint_pos(_socket_obs_j_pos)
 
-            with pilot.context.force_control():
-                T_base2socket = sm.SE3.Rt(R=sm.SO3.EulerVec((0.005, 1.568, -0.010)), t=(0.5799, 0.3177, 0.2683))
-                success_up, _ = pilot.try2_unlock_plug(T_base2socket)
-                LOGGER.debug(f"Unlocking successfully: {success_up}")
+            # with pilot.context.force_control():
+            #     T_base2socket = sm.SE3.Rt(R=sm.SO3.EulerVec((0.005, 1.568, -0.010)), t=(0.5799, 0.3177, 0.2683))
+            #     success_up, _ = pilot.try2_unlock_plug(T_base2socket)
+            #     LOGGER.debug(f"Unlocking successfully: {success_up}")
 
-                success_dp, lin_ang_err = pilot.try2_decouple_to_plug()
-                LOGGER.debug(f"Decoupling successfully: {success_dp}")
-                LOGGER.debug(f"Final error after decoupling robot from plug: "
-                             f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+            #     success_dp, lin_ang_err = pilot.try2_decouple_to_plug()
+            #     LOGGER.debug(f"Decoupling successfully: {success_dp}")
+            #     LOGGER.debug(f"Final error after decoupling robot from plug: "
+            #                  f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
 
-            # if config_data.detector_two_step_approach:
-            #     found, T_base2marker = detect(pilot, cam, config_data.detector_configs['i'])
-            #     if found:
-            #         with pilot.context.position_control():
-            #             pilot.set_tcp('plug_safety')
-            #             T_base2obs_close = T_base2marker * _T_marker2obs_close
-            #             pilot.move_to_tcp_pose(T_base2obs_close)
-            # found, T_base2socket = detect(pilot, cam, config_data.detector_configs['ii'])
+            if config_data.detector_two_step_approach:
+                for _ in range(2):
+                    found, T_base2marker = detect(pilot, cam, config_data.detector_configs['i'])
+                    if found:
+                        with pilot.context.position_control():
+                            pilot.set_tcp('plug_safety')
+                            T_base2obs_close = T_base2marker * _T_marker2obs_close
+                            pilot.move_to_tcp_pose(T_base2obs_close)
+            found, T_base2socket = detect(pilot, cam, config_data.detector_configs['ii'])
             # if found:
             #     with pilot.context.position_control():
             #         pilot.set_tcp('plug_safety')
@@ -130,9 +130,9 @@ def main(opt: Namespace) -> None:
             #             LOGGER.debug(f"Final error after decoupling robot from plug: "
             #                          f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
-                with pilot.context.position_control():
-                    if success_dp:
-                        pilot.move_to_joint_pos(_retreat_j_pos)
+            # with pilot.context.position_control():
+            #     if success_dp:
+            #         pilot.move_to_joint_pos(_retreat_j_pos)
 
 
 if __name__ == '__main__':
