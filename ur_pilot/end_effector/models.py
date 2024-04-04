@@ -160,6 +160,7 @@ class PlugModel:
         name = plug_type.lower()
         try:
             if name == 'type2_male':
+                self.type = self.plug_types.TYPE2_MALE
                 LOGGER.debug(f"Enter workspace context using plug type: Type 2 male")
                 yield
                 LOGGER.debug(f"Exit workspace context using plug type: Type 2 male")
@@ -169,6 +170,7 @@ class PlugModel:
                 yield
                 LOGGER.debug(f"Exit workspace context using plug type: Type 2 female")
             elif name == 'ccs_female':
+                self.type = self.plug_types.CCS_FEMALE
                 LOGGER.debug(f"Enter workspace context using plug type: CCS female")
                 yield
                 LOGGER.debug(f"Exit workspace context using plug type: CCS female")

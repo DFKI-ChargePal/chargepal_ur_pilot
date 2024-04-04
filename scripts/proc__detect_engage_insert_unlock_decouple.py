@@ -71,42 +71,54 @@ def main(opt: Namespace) -> None:
         pilot.register_ee_cam(cam, config_data.camera_dir)
         with pilot.plug_model.context(config_data.robot_plug_type):
             with pilot.context.position_control():
-                pilot.move_to_joint_pos(_socket_obs_j_pos)
+                # pilot.move_to_joint_pos(_socket_obs_j_pos)
+                pilot.move_to_joint_pos([3.4290, -1.3710, 2.1270, -0.7469, 1.8690, -1.5650])
 
-            if config_data.detector_two_step_approach:
-                found, T_base2marker = detect(pilot, cam, config_data.detector_configs['i'])
-                if found:
-                    with pilot.context.position_control():
-                        pilot.set_tcp('plug_safety')
-                        T_base2obs_close = T_base2marker * _T_marker2obs_close
-                        pilot.move_to_tcp_pose(T_base2obs_close)
-            found, T_base2socket = detect(pilot, cam, config_data.detector_configs['ii'])
-            if found:
+            with pilot.context.force_control():
+                T_base2socket = sm.SE3.Rt(R=sm.SO3.EulerVec((0.005, 1.568, -0.010)), t=(0.5799, 0.3177, 0.2683))
+                success_up, _ = pilot.try2_unlock_plug(T_base2socket)
+                LOGGER.debug(f"Unlocking successfully: {success_up}")
+
+                success_dp, lin_ang_err = pilot.try2_decouple_to_plug()
+                LOGGER.debug(f"Decoupling successfully: {success_dp}")
+                LOGGER.debug(f"Final error after decoupling robot from plug: "
+                             f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+
+
+            # if config_data.detector_two_step_approach:
+            #     found, T_base2marker = detect(pilot, cam, config_data.detector_configs['i'])
+            #     if found:
+            #         with pilot.context.position_control():
+            #             pilot.set_tcp('plug_safety')
+            #             T_base2obs_close = T_base2marker * _T_marker2obs_close
+            #             pilot.move_to_tcp_pose(T_base2obs_close)
+            # found, T_base2socket = detect(pilot, cam, config_data.detector_configs['ii'])
+            # if found:
+            #     with pilot.context.position_control():
+            #         pilot.set_tcp('plug_safety')
+            #         pilot.move_to_tcp_pose(T_base2socket)
+
+            #     success_eng, success_in, success_in, success_ul, success_dc = False, False, False, False, False
+            #     with pilot.context.force_control():
+            #         success_eng, lin_ang_err = pilot.try2_engage_with_socket(T_base2socket)
+            #         LOGGER.debug(f"Final error after engaging between plug and socket: "
+            #                      f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+            #         if success_eng:
+            #             success_in, lin_ang_err = pilot.try2_insert_plug(T_base2socket)
+            #             LOGGER.debug(f"Final error after inserting plug to socket: "
+            #                          f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+            #         if success_in:
+            #             success_ul, lin_ang_err = pilot.try2_unlock_plug(T_base2socket)
+            #             LOGGER.debug(f"Final error after unlocking robot from plug: "
+            #                          f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+
+            #         if success_ul:
+            #             success_dc, lin_ang_err = pilot.try2_decouple_to_plug()
+            #             LOGGER.debug(f"Final error after decoupling robot from plug: "
+            #                          f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+
                 with pilot.context.position_control():
-                    pilot.set_tcp('plug_safety')
-                    pilot.move_to_tcp_pose(T_base2socket)
-
-                success_eng, success_in, success_in, success_ul, success_dc = False, False, False, False, False
-                with pilot.context.force_control():
-                    success_eng, lin_ang_err = pilot.try2_engage_with_socket(T_base2socket)
-                    LOGGER.debug(f"Final error after engaging between plug and socket: "
-                                 f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
-                    if success_eng:
-                        success_in, lin_ang_err = pilot.try2_insert_plug(T_base2socket)
-                        LOGGER.debug(f"Final error after inserting plug to socket: "
-                                     f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
-                    if success_in:
-                        success_ul, lin_ang_err = pilot.try2_unlock_plug(T_base2socket)
-                        LOGGER.debug(f"Final error after unlocking robot from plug: "
-                                     f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
-
-                    if success_ul:
-                        success_dc, lin_ang_err = pilot.try2_decouple_to_plug()
-                        LOGGER.debug(f"Final error after decoupling robot from plug: "
-                                     f"(Linera error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
-
-                with pilot.context.position_control():
-                    if success_dc:
+                    if success_dp:
                         pilot.move_to_joint_pos(_retreat_j_pos)
 
 

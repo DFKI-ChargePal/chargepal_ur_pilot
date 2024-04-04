@@ -20,5 +20,4 @@ if __name__ == '__main__':
         # Print out
         LOGGER.info(f"        Joint positions: {ur_pilot.utils.vec_to_str(joint_pos)}")
         LOGGER.info(f"Transformation Base-TCP: {ur_pilot.utils.se3_to_str(tcp_pose)}")
-
-        print(pilot.get_pose('flange').t, pilot.get_pose('flange').eulervec()) # rpy(unit="deg", order="zyx"))
+        # print(pilot.get_pose('flange').t, pilot.get_pose('flange').eulervec()) # rpy(unit="deg", order="zyx"))

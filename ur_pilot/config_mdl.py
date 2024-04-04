@@ -24,7 +24,7 @@ class CouplingModel(BaseModel):
     """
     mass: float = 0.0
     com: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
-    flange_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
+    link_frame: List[float] = Field(default_factory=lambda: 6 * [0.0])
 
 
 class PlugModel(BaseModel):

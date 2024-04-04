@@ -321,9 +321,9 @@ class Pilot:
         # Limit input
         torque = np.clip(torque, 0.0, 5.0)
         wrench_vec = 6 * [0.0]
-        compliant_axes = [1, 1, 1, 0, 0, 1]
+        compliant_axes = [0, 0, 1, 0, 0, 1]
         # Wrench will be applied with respect to the current TCP pose
-        task_frame = self.get_pose('flange')
+        task_frame = self.get_pose(EndEffectorFrames.FLANGE)
         # Create target
         ee_jt_pos = self.robot.joint_pos[-1]
         ee_jt_pos_tgt = ee_jt_pos + ang
@@ -342,7 +342,7 @@ class Pilot:
                 d_err = 0.0
             else:
                 d_err = 1.0 * (ang_error - prev_error) / self.robot.dt
-            i_err = i_err + 3.5e-5 * ang_error / self.robot.dt
+            i_err = i_err + 1.0e-0 * ang_error * self.robot.dt
             wrench_vec[-1] = np.clip(p_err + d_err + i_err, -torque, torque)
             prev_error = ang_error
             # Apply wrench
@@ -436,7 +436,7 @@ class Pilot:
         # x_ctrl = utils.PDController(kp=100.0, kd=0.99)
         # y_ctrl = utils.PDController(kp=100.0, kd=0.99)
         yaw_ctrl = utils.PDController(kp=10.0, kd=0.99)
-        z_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
+        z_ctrl = utils.PIDController(kp=500.0, kd=0.99, ki=1000.0)
 
         # Get estimation of the safety pose
         T_base2safety_est = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
