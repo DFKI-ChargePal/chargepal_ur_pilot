@@ -14,6 +14,7 @@ import ur_pilot
 import logging
 import argparse
 import cvpd as pd
+import numpy as np
 import camera_kit as ck
 import spatialmath as sm
 from pathlib import Path
@@ -41,11 +42,12 @@ _T_marker2obs_close = sm.SE3().Trans([0.022, -0.022, -0.15])
 def detect(pilot: Pilot, cam: CameraBase, detector_fp: Path) -> tuple[bool, sm.SE3]:
     """ Function to run a new detection. """
     # Perception setup
+    max_meas = 10
+    T_base2target = sm.SE3().Alloc(max_meas)
     dtt = pd.factory.create(detector_fp)
     dtt.register_camera(cam)
-    found, T_base2target = False, sm.SE3()
-    t_start = _t_now()
-    while _t_now() - t_start <= config_data.detector_time_out and not found:
+    t_start, n_meas = _t_now(), 0
+    for i in range(max_meas):
         time.sleep(1/3)
         found, T_cam2target = dtt.find_pose(render=True)
         if found:
@@ -53,8 +55,19 @@ def detect(pilot: Pilot, cam: CameraBase, detector_fp: Path) -> tuple[bool, sm.S
             T_flange2cam = pilot.cam_mdl.T_flange2camera
             T_base2flange = pilot.get_pose('flange')
             # Get searched transformation
-            T_base2target = T_base2flange * T_flange2cam * T_cam2target
-    return found, T_base2target
+            T_base2target[i] = T_base2flange * T_flange2cam * T_cam2target
+            n_meas += 1
+        if _t_now() - t_start > config_data.detector_time_out:
+            break
+    if n_meas == 0:
+        success = False
+        T_base2target_avg = sm.SE3()
+    else:
+        success = True
+        q_avg = ur_pilot.utils.quatAvg(sm.UnitQuaternion(T_base2target[:n_meas]))
+        t_avg = np.mean(T_base2target.t[:n_meas], axis=0)
+        T_base2target_avg = sm.SE3().Rt(R=q_avg.SO3(), t=t_avg)
+    return success, T_base2target_avg
 
 
 def main(opt: Namespace) -> None:
