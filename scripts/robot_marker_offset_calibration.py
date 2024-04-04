@@ -23,10 +23,11 @@ def calibration_procedure(opt: Namespace) -> None:
     Args:
         opt: Script arguments
     """
+    ur_pilot.base_logger.set_logging_level(opt.logging_level)
     LOGGER.info(config_data)
     # Perception setup
-    cam = ck.camera_factory.create(opt.camera_name, opt.logging_level)
-    cam.load_coefficients(config_data.camera_info_dir.joinpath(opt.camera_name, 'calibration/coefficients.toml'))
+    cam = ck.camera_factory.create(config_data.camera_name, opt.logging_level)
+    cam.load_coefficients(config_data.camera_cc)
     cam.render()
     dtt = pd.factory.create(config_data.detector_dir.joinpath(opt.detector_config_file))
     dtt.register_camera(cam)
@@ -93,7 +94,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=des)
     parser.add_argument('detector_config_file', type=str, 
                         help='Description and configuration of the used marker as .yaml file')
-    parser.add_argument('--camera_name', type=str, default='realsense_tcp_cam', help='Camera name')
     parser.add_argument('--debug', action='store_true', help='Option to set global logger level')
     # Parse input arguments
     args = parser.parse_args()

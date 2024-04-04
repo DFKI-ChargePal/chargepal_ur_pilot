@@ -2,6 +2,7 @@
 import logging
 import ur_pilot
 import camera_kit as ck
+from config import config_data
 
 
 LOGGER = logging.getLogger(__name__)
@@ -11,7 +12,7 @@ def free_drive() -> None:
     # Use camera for user interaction
     cam = ck.camera_factory.create("realsense_tcp_cam")
     # Connect to API
-    with ur_pilot.connect() as pilot:
+    with ur_pilot.connect(config_data.robot_dir) as pilot:
         # Start free drive mode
         LOGGER.info("Hit key 'S' to print out the current state")
         with pilot.context.teach_in_control():
