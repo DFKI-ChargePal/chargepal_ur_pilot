@@ -85,7 +85,7 @@ def main(opt: Namespace) -> None:
 
 
             if config_data.detector_two_step_approach:
-                for _ in range(2):
+                for _ in range(6):
                     found, T_base2marker = detect(pilot, cam, config_data.detector_configs['i'])
                     if found:
                         with pilot.context.position_control():
