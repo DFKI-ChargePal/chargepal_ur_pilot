@@ -400,7 +400,7 @@ class Pilot:
         self.robot.pause_force_mode()
         return success
 
-    def try2_couple_to_plug(self, T_base2socket: sm.SE3, time_out: float = 6.0) -> tuple[bool, tuple[float, float]]:
+    def try2_couple_to_plug(self, T_base2socket: sm.SE3, time_out: float = 10.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         time_out = abs(time_out)
@@ -413,8 +413,11 @@ class Pilot:
         yaw_ctrl = utils.PDController(kp=10.0, kd=0.99)
 
         # Get estimation of the plug pose
-        T_socket2plug = self.plug_model.T_mounting2lip.inv()
-        T_base2plug_est = T_base2socket * T_socket2plug
+        T_socket2mounting = self.plug_model.T_mounting2lip.inv()
+        T_mounting2plug = self.coupling_model.T_mounting2locked
+        T_base2plug_est = T_base2socket * T_socket2mounting * T_mounting2plug
+        # T_socket2plug = self.plug_model.T_mounting2lip.inv()
+        # T_base2plug_est = T_base2socket * T_socket2plug
 
         # Wrench will be applied with respect to the current TCP pose
         task_frame = T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
@@ -442,11 +445,11 @@ class Pilot:
             t_now = _t_now()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
-                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.001)
+                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.002)
                         and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.015)):
                     # Check whether couple depth is reached
                     d_err = p_meas2est[2]
-                    if abs(d_err) <= 0.002:
+                    if abs(d_err) <= 0.003:
                         success = True
                     else:
                         success = False
@@ -643,7 +646,7 @@ class Pilot:
         t_now = t_start = _t_now()
         while t_now - t_start <= time_out:
             # Update controller
-            wrench_vec[2] = np.clip(depth_ctrl.update(p_meas2est[2], self.robot.dt), -125, 125)
+            wrench_vec[2] = np.clip(depth_ctrl.update(p_meas2est[2], self.robot.dt) - 50.0, -125.0, 0.0)
             self.robot.force_mode(task_frame=task_frame, selection_vector=selection_vec, wrench=wrench_vec)
             # Update error
             T_base2safety_meas = self.get_pose(EndEffectorFrames.PLUG_SAFETY)

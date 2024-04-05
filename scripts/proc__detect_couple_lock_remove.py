@@ -58,30 +58,33 @@ def main(opt: Namespace) -> None:
                                                           render=True)
             if found:
                 with pilot.context.position_control():
-                    pilot.set_tcp(ur_pilot.EndEffectorFrames.PLUG_SAFETY)
-                    pilot.move_to_tcp_pose(T_base2socket)
+                    pilot.set_tcp(ur_pilot.EndEffectorFrames.COUPLING_SAFETY)
+                    T_socket2mounting = pilot.plug_model.T_mounting2lip.inv()
+                    T_mounting2plug = pilot.coupling_model.T_mounting2locked
+                    T_base2plug = T_base2socket * T_socket2mounting * T_mounting2plug
+                    pilot.move_to_tcp_pose(T_base2plug)
 
-            sus_cp, sus_lp, sus_rp = False, False, False
-            with pilot.context.force_control():
-                sus_cp, lin_ang_err = pilot.try2_couple_to_plug(T_base2socket)
-                LOGGER.info(f"Coupling robot and plug successfully: {sus_cp}")
-                LOGGER.debug(f"Final error after coupling robot and plug: "
-                             f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                sus_cp, sus_lp, sus_rp = False, False, False
+                with pilot.context.force_control():
+                    sus_cp, lin_ang_err = pilot.try2_couple_to_plug(T_base2socket)
+                    LOGGER.info(f"Coupling robot and plug successfully: {sus_cp}")
+                    LOGGER.debug(f"Final error after coupling robot and plug: "
+                                f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
-                if sus_cp:
-                    sus_lp, lin_ang_err = pilot.try2_lock_plug(T_base2socket)
-                    LOGGER.info(f"Lock robot with plug successfully: {sus_lp}")
-                    LOGGER.debug(f"Final error after locking robot with plug: "
-                                 f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                    if sus_cp:
+                        sus_lp, lin_ang_err = pilot.try2_lock_plug(T_base2socket)
+                        LOGGER.info(f"Lock robot with plug successfully: {sus_lp}")
+                        LOGGER.debug(f"Final error after locking robot with plug: "
+                                    f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
-                if sus_lp:
-                    sus_rp, lin_ang_err = pilot.try2_remove_plug()
-                    LOGGER.info(f"Remove plug from socket successfully: {sus_lp}")
-                    LOGGER.debug(f"Final error after removing plug from socket: "
-                                 f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                    if sus_lp:
+                        sus_rp, lin_ang_err = pilot.try2_remove_plug()
+                        LOGGER.info(f"Remove plug from socket successfully: {sus_lp}")
+                        LOGGER.debug(f"Final error after removing plug from socket: "
+                                    f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
         with pilot.context.position_control():
-            if sus_lp:
+            if sus_rp:
                 pilot.move_to_joint_pos(_retreat_j_pos)
 
 

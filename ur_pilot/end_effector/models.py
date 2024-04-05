@@ -37,7 +37,7 @@ class TwistCouplingModel(ToolModel):
         super().__init__(mass, com, gravity)
         l_frame = np.reshape(link_frame, 6)
         self.T_mounting2locked = sm.SE3.Rt(R=sm.SO3.EulerVec(l_frame[3:6]), t=l_frame[0:3])
-        T_locked2unlocked = sm.SE3.EulerVec((0.0, 0.0, -np.pi/2))
+        T_locked2unlocked = sm.SE3.EulerVec((0.0, 0.0, np.pi/2))
         self.T_mounting2unlocked = self.T_mounting2locked * T_locked2unlocked
         s_margin = np.reshape(safety_margin, 6)
         T_unlocked2safety = sm.SE3.Rt(R=sm.SO3.EulerVec(s_margin[3:6]), t=s_margin[0:3])
