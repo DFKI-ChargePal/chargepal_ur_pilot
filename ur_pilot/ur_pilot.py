@@ -334,7 +334,7 @@ class Pilot:
         while not success:
             # Angular error
             ee_jt_pos_now = self.robot.joint_pos[-1]
-            ang_error = (ee_jt_pos_tgt - ee_jt_pos_now)
+            ang_error = float(ee_jt_pos_tgt - ee_jt_pos_now)
             wrench_vec[-1] = np.clip(screw_ctrl.update(ang_error, self.robot.dt), -torque, torque)
             # Apply wrench
             self.robot.force_mode(
