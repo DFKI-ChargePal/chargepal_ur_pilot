@@ -130,9 +130,9 @@ def main(opt: Namespace) -> None:
                         LOGGER.debug(f"Final error after decoupling robot from plug: "
                                      f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
-            # with pilot.context.position_control():
-            #     if success_dp:
-            #         pilot.move_to_joint_pos(_retreat_j_pos)
+            with pilot.context.position_control():
+                if success_dp:
+                    pilot.move_to_joint_pos(_retreat_j_pos)
 
 
 if __name__ == '__main__':
