@@ -346,6 +346,7 @@ class Pilot:
             if _t_now() - t_start > time_out:
                 break
         # Stop robot movement.
+        self.relax(0.5)
         self.robot.pause_force_mode()
         return success
 
@@ -369,7 +370,7 @@ class Pilot:
         task_frame = T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
         T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
         p_meas2est_ref = p_meas2est = T_meas2est.t
-        yaw_meas2est_ref = yaw_meas2est = float(sm.UnitQuaternion(T_meas2est.R).rpy(order='zyx')[-1])
+        yaw_meas2est_ref = yaw_meas2est = float(sm.UnitQuaternion(sm.SO3(T_meas2est.R).norm()).rpy(order='zyx')[-1])
         success = False
         t_ref = t_now = t_start = _t_now()
         while t_now - t_start <= time_out:
@@ -387,7 +388,7 @@ class Pilot:
             T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
             T_meas2est = T_base2plug_meas.inv() * T_base2plug_est
             p_meas2est = T_meas2est.t
-            yaw_meas2est = float(sm.UnitQuaternion(T_meas2est.R).rpy(order='zyx')[-1])
+            yaw_meas2est = float(sm.UnitQuaternion(sm.SO3(T_meas2est.R).norm()).rpy(order='zyx')[-1])
             t_now = _t_now()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
@@ -432,7 +433,7 @@ class Pilot:
         # Get control input difference
         T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
         p_meas2est = T_meas2est.t
-        yaw_meas2est = float(sm.UnitQuaternion(T_meas2est.R).rpy(order='zyx')[-1])
+        yaw_meas2est = float(sm.UnitQuaternion(sm.SO3(T_meas2est.R).norm()).rpy(order='zyx')[-1])
         success = False
         t_now = t_start = _t_now()
         while t_now - t_start <= time_out:
@@ -447,7 +448,7 @@ class Pilot:
             # Update error
             T_base2safety_meas = self.get_pose(EndEffectorFrames.COUPLING_SAFETY)
             T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
-            yaw_meas2est = float(sm.UnitQuaternion(T_meas2est.R).rpy(order='zyx')[-1])
+            yaw_meas2est = float(sm.UnitQuaternion(sm.SO3(T_meas2est.R).norm()).rpy(order='zyx')[-1])
             p_meas2est = T_meas2est.t
             if abs(p_meas2est[2]) <= 0.003:  # Only check for depth value of the coupling
                 success = True
@@ -500,7 +501,7 @@ class Pilot:
         task_frame = T_base2tip_meas = self.get_pose(EndEffectorFrames.PLUG_TIP)
         T_tip2engaged = T_base2tip_meas.inv() * T_base2engaged_est
         xyz_tip2engaged = T_tip2engaged.t
-        yaw_tip2engaged = float(sm.UnitQuaternion(T_tip2engaged.R).rpy(order='zyx')[-1])
+        yaw_tip2engaged = float(sm.UnitQuaternion(sm.SO3(T_tip2engaged.R).norm()).rpy(order='zyx')[-1])
         success = False
         t_ref = t_now = t_start = _t_now()
         while t_now - t_start <= time_out:
@@ -518,7 +519,7 @@ class Pilot:
             T_base2tip_meas = self.get_pose(EndEffectorFrames.PLUG_TIP)
             T_tip2engaged = T_base2tip_meas.inv() * T_base2engaged_est
             xyz_tip2engaged = T_tip2engaged.t
-            yaw_tip2engaged = float(sm.UnitQuaternion(T_tip2engaged.R).rpy(order='zyx')[-1])
+            yaw_tip2engaged = float(sm.UnitQuaternion(sm.SO3(T_tip2engaged.R).norm()).rpy(order='zyx')[-1])
             t_now = _t_now()
             # Check if alignment error is not getting to large
             xy_error = utils.lin_error(T_base2engaged_est, T_base2tip_meas, axes='xy')
