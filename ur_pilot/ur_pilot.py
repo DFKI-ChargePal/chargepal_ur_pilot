@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-# global
+# libs
 import math
 import time
+import cvpd as pd
 import numpy as np
 from pathlib import Path
 import spatialmath as sm
 from strenum import StrEnum
-
 from time import perf_counter
 from contextlib import contextmanager
 
-# local
+import ur_pilot.utils
 from ur_pilot import utils
 from ur_pilot import config
 from ur_pilot.ur_robot import URRobot
@@ -154,6 +154,56 @@ class Pilot:
             self.cam.load_coefficients()
         T_flange2cam = FlangeEyeCalibration.load_transformation(self.cam, tf_dir)
         self.cam_mdl.T_flange2camera = sm.SE3.CopyFrom(T_flange2cam)
+
+    def find_target_pose(self,
+                         detector_fp: str | Path,
+                         max_samples: int = 10,
+                         time_out: float = 4.0,
+                         render: bool = False) -> tuple[bool, sm.SE3]:
+        """ Helper method to find pose of a target object. Object described by a detector configuration
+
+        Args:
+            detector_fp: File path to the detector configuration
+            max_samples: Maximum number of samples used to average target pose measurement
+            time_out:    Max time for detection
+            render:      Flag to show detection results on screen
+
+        Returns:
+            (valid result flag | Averaged pose estimation w.r.t robot base)
+        """
+        search_rate = 0.5 * time_out/max_samples
+        n_max, t_max = int(abs(max_samples)), abs(time_out)
+        T_base2target_meas: sm.SE3 | None = None
+        detector = pd.factory.create(Path(detector_fp))
+        if self.cam is None:
+            raise RuntimeError(f"No registered camera. Detection cannot be executed without it.")
+        detector.register_camera(self.cam)
+        t_start = _t_now()
+        for _ in range(n_max):
+            time.sleep(search_rate)
+            found, T_cam2target = detector.find_pose(render=render)
+            if found:
+                # Get transformation matrices
+                T_flange2cam = self.cam_mdl.T_flange2camera
+                T_base2flange = self.get_pose(EndEffectorFrames.FLANGE)
+                # Get searched transformation
+                if T_base2target_meas is None:
+                    T_base2target_meas = T_base2flange * T_flange2cam * T_cam2target
+                else:
+                    T_base2target_meas.append(T_base2flange * T_flange2cam * T_cam2target)
+            # Check for time boundary
+            if _t_now() - t_start > t_max:
+                break
+        if T_base2target_meas is None:
+            valid_result, T_base2target = False, sm.SE3()
+        elif len(T_base2target_meas) == 1:
+            valid_result, T_base2target = True, T_base2target_meas
+        else:
+            q_avg = ur_pilot.utils.quatAvg(sm.UnitQuaternion(T_base2target_meas))
+            t_avg = np.mean(T_base2target_meas.t, axis=0)
+            T_base2target = sm.SE3().Rt(R=q_avg.SO3(), t=t_avg)
+            valid_result = True
+        return valid_result, T_base2target
 
     @contextmanager
     def open_plug_connection(self) -> Iterator[None]:
@@ -350,7 +400,7 @@ class Pilot:
         self.robot.pause_force_mode()
         return success
 
-    def try2_couple_to_plug(self, T_base2socket: sm.SE3, time_out: float) -> tuple[bool, tuple[float, float]]:
+    def try2_couple_to_plug(self, T_base2socket: sm.SE3, time_out: float = 6.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         time_out = abs(time_out)

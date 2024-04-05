@@ -1,10 +1,9 @@
-""" Script for testing the complete 'plug-in process'.
+""" Script for testing the complete 'unplugging process'.
     This means:
         1) Detecting the socket
-        2) Engaging plug and socket
-        3) Insert plug to socket
-        4) Unlock robot-plug closure
-        5) Decouple robot from plug
+        2) Couple robot with plug
+        3) Lock robot-plug closure
+        4) Remove plug from socket
 """
 from __future__ import annotations
 
@@ -20,9 +19,7 @@ from config import config_data
 # typing
 from argparse import Namespace
 
-
 LOGGER = logging.getLogger(__name__)
-
 
 # Reference positions
 _retreat_j_pos = [3.4035, -1.6286, 2.1541, -0.4767, 1.8076, -1.5921]
@@ -53,7 +50,7 @@ def main(opt: Namespace) -> None:
                                                                   render=True)
                     if found:
                         with pilot.context.position_control():
-                            pilot.set_tcp('plug_safety')
+                            pilot.set_tcp(ur_pilot.EndEffectorFrames.PLUG_SAFETY)
                             T_base2obs_close = T_base2marker * _T_marker2obs_close
                             pilot.move_to_tcp_pose(T_base2obs_close)
             found, T_base2socket = pilot.find_target_pose(config_data.detector_configs['ii'],
@@ -61,35 +58,31 @@ def main(opt: Namespace) -> None:
                                                           render=True)
             if found:
                 with pilot.context.position_control():
-                    pilot.set_tcp('plug_safety')
+                    pilot.set_tcp(ur_pilot.EndEffectorFrames.PLUG_SAFETY)
                     pilot.move_to_tcp_pose(T_base2socket)
-  
-                success_ep, success_ip, success_up, success_dp = False, False, False, False
-                with pilot.context.force_control():
-                    success_ep, lin_ang_err = pilot.try2_engage_with_socket(T_base2socket)
-                    LOGGER.info(f"Engaging plug to socket successfully: {success_ep}")
-                    LOGGER.debug(f"Final error after engaging between plug and socket: "
+
+            sus_cp, sus_lp, sus_rp = False, False, False
+            with pilot.context.force_control():
+                sus_cp, lin_ang_err = pilot.try2_couple_to_plug(T_base2socket)
+                LOGGER.info(f"Coupling robot and plug successfully: {sus_cp}")
+                LOGGER.debug(f"Final error after coupling robot and plug: "
+                             f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+
+                if sus_cp:
+                    sus_lp, lin_ang_err = pilot.try2_lock_plug(T_base2socket)
+                    LOGGER.info(f"Lock robot with plug successfully: {sus_lp}")
+                    LOGGER.debug(f"Final error after locking robot with plug: "
                                  f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
-                    if success_ep:
-                        success_ip, lin_ang_err = pilot.try2_insert_plug(T_base2socket)
-                        LOGGER.info(f"Inserting plug to socket successfully: {success_ip}")
-                        LOGGER.debug(f"Final error after inserting plug to socket: "
-                                     f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
-                    if success_ip:
-                        success_up, lin_ang_err = pilot.try2_unlock_plug(T_base2socket)
-                        LOGGER.info(f"Unlock robot from plug successfully: {success_up}")
-                        LOGGER.debug(f"Final error after unlocking robot from plug: "
-                                     f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
-                    if success_up:
-                        success_dp, lin_ang_err = pilot.try2_decouple_to_plug()
-                        LOGGER.info(f"Decoupling from plug successfully: {success_dp}")
-                        LOGGER.debug(f"Final error after decoupling robot from plug: "
-                                     f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                if sus_lp:
+                    sus_rp, lin_ang_err = pilot.try2_remove_plug()
+                    LOGGER.info(f"Remove plug from socket successfully: {sus_lp}")
+                    LOGGER.debug(f"Final error after removing plug from socket: "
+                                 f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
-            with pilot.context.position_control():
-                if success_dp:
-                    pilot.move_to_joint_pos(_retreat_j_pos)
+        with pilot.context.position_control():
+            if sus_lp:
+                pilot.move_to_joint_pos(_retreat_j_pos)
 
 
 if __name__ == '__main__':
