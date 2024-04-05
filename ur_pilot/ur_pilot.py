@@ -409,7 +409,7 @@ class Pilot:
         selection_vec = [1, 1, 1, 0, 0, 1]
         x_ctrl = utils.PDController(kp=100.0, kd=0.99)
         y_ctrl = utils.PDController(kp=100.0, kd=0.99)
-        z_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
+        z_ctrl = utils.PIDController(kp=500.0, kd=0.99, ki=1000.0)
         yaw_ctrl = utils.PDController(kp=10.0, kd=0.99)
 
         # Get estimation of the plug pose
@@ -631,7 +631,7 @@ class Pilot:
         # Setup controller
         wrench_vec = 6 * [0.0]
         selection_vec = [0, 0, 1, 0, 0, 0]
-        depth_ctrl = utils.PIDController(kp=10.0, kd=0.99, ki=3.5e-5)
+        depth_ctrl = utils.PIDController(kp=500.0, kd=0.99, ki=1000.0)
         # Get estimation of the safety pose
         T_base2safety_est = self.get_pose(EndEffectorFrames.PLUG_LIP)
         # Get current plug-in pose
