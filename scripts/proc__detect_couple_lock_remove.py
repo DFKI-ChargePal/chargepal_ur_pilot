@@ -58,11 +58,7 @@ def main(opt: Namespace) -> None:
                                                           render=True)
             if found:
                 with pilot.context.position_control():
-                    pilot.set_tcp(ur_pilot.EndEffectorFrames.COUPLING_SAFETY)
-                    T_socket2mounting = pilot.plug_model.T_mounting2lip.inv()
-                    T_mounting2plug = pilot.coupling_model.T_mounting2locked
-                    T_base2plug = T_base2socket * T_socket2mounting * T_mounting2plug
-                    pilot.move_to_tcp_pose(T_base2plug)
+                    pilot.try2_approach_to_plug(T_base2socket)
 
                 sus_cp, sus_lp, sus_rp = False, False, False
                 with pilot.context.force_control():

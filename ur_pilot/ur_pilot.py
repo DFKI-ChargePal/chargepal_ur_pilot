@@ -400,6 +400,20 @@ class Pilot:
         self.robot.pause_force_mode()
         return success
 
+    def try2_approach_to_plug(self, T_base2socket: sm.SE3) -> tuple[bool, tuple[float, float]]:
+        self.context.check_mode(expected=self.context.mode_types.POSITION)
+        # Set TCP offset
+        self.set_tcp(EndEffectorFrames.COUPLING_SAFETY)
+        # Get estimation of the plug pose
+        T_socket2mounting = self.plug_model.T_mounting2lip.inv()
+        T_mounting2plug = self.coupling_model.T_mounting2locked
+        T_base2plug = T_base2socket * T_socket2mounting * T_mounting2plug
+        success, _ = self.move_to_tcp_pose(T_base2plug)
+        # Evaluate spatial error
+        T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_SAFETY)
+        lin_ang_err = utils.lin_rot_error(T_base2plug, T_base2plug_meas)
+        return success, lin_ang_err
+
     def try2_couple_to_plug(self, T_base2socket: sm.SE3, time_out: float = 10.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
