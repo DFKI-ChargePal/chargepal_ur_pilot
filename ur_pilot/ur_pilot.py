@@ -414,6 +414,16 @@ class Pilot:
         lin_ang_err = utils.lin_rot_error(T_base2plug, T_base2plug_meas)
         return success, lin_ang_err
 
+    def try2_approach_to_socket(self, T_base2socket: sm.SE3) -> tuple[bool, tuple[float, float]]:
+        self.context.check_mode(expected=self.context.mode_types.POSITION)
+        # Set TCP offset
+        self.set_tcp(EndEffectorFrames.PLUG_SAFETY)
+        success, _ = self.move_to_tcp_pose(T_base2socket)
+        # Evaluate spatial error
+        T_base2socket_meas = self.get_pose(EndEffectorFrames.PLUG_SAFETY)
+        lin_ang_err = utils.lin_rot_error(T_base2socket, T_base2socket_meas)
+        return success, lin_ang_err
+
     def try2_couple_to_plug(self, T_base2socket: sm.SE3, time_out: float = 10.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input

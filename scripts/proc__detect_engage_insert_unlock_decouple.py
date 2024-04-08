@@ -61,8 +61,7 @@ def main(opt: Namespace) -> None:
                                                           render=True)
             if found:
                 with pilot.context.position_control():
-                    pilot.set_tcp('plug_safety')
-                    pilot.move_to_tcp_pose(T_base2socket)
+                    pilot.try2_approach_to_socket(T_base2socket)
   
                 success_ep, success_ip, success_up, success_dp = False, False, False, False
                 with pilot.context.force_control():

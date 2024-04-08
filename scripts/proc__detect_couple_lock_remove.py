@@ -65,7 +65,7 @@ def main(opt: Namespace) -> None:
                     sus_cp, lin_ang_err = pilot.try2_couple_to_plug(T_base2socket)
                     LOGGER.info(f"Coupling robot and plug successfully: {sus_cp}")
                     LOGGER.debug(f"Final error after coupling robot and plug: "
-                                f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                                 f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
                     if sus_cp:
                         sus_lp, lin_ang_err = pilot.try2_lock_plug(T_base2socket)
