@@ -592,7 +592,7 @@ class Pilot:
     def try2_insert_plug(self, T_base2socket: sm.SE3, time_out: float = 10.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Inputs
-        f_start, f_end = 50.0, 100.0
+        f_start, f_end = 85.0, 125.0
         wrench_vec = 6 * [0.0]
         selection_vec = [1, 1, 1, 0, 0, 1]
         T_base2socket_est = T_base2socket
@@ -619,7 +619,7 @@ class Pilot:
                 break
             z_error = utils.lin_error(T_base2socket_est, T_base2socket_meas, 'z')
             insertion_progress = utils.lin_error(T_base2socket_meas_ref, T_base2socket_meas, 'z')
-            if insertion_progress < 0.0025 and z_error < 0.01:
+            if insertion_progress < 0.0025 and z_error < 0.005:
                 success = True
                 break
         # Evaluate spatial error
