@@ -58,18 +58,14 @@ def main(opt: Namespace) -> None:
                                                           render=True)
             if found:
                 with pilot.context.position_control():
-                    pilot.set_tcp(ur_pilot.EndEffectorFrames.COUPLING_SAFETY)
-                    T_socket2mounting = pilot.plug_model.T_mounting2lip.inv()
-                    T_mounting2plug = pilot.coupling_model.T_mounting2locked
-                    T_base2plug = T_base2socket * T_socket2mounting * T_mounting2plug
-                    pilot.move_to_tcp_pose(T_base2plug)
+                    pilot.try2_approach_to_plug(T_base2socket)
 
                 sus_cp, sus_lp, sus_rp = False, False, False
                 with pilot.context.force_control():
                     sus_cp, lin_ang_err = pilot.try2_couple_to_plug(T_base2socket)
                     LOGGER.info(f"Coupling robot and plug successfully: {sus_cp}")
                     LOGGER.debug(f"Final error after coupling robot and plug: "
-                                f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                                 f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
                     if sus_cp:
                         sus_lp, lin_ang_err = pilot.try2_lock_plug(T_base2socket)
