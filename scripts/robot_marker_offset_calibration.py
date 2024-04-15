@@ -40,7 +40,7 @@ def calibration_procedure(opt: Namespace) -> None:
 
     # Connect to arm
     with ur_pilot.connect(config_data.robot_dir) as pilot:
-        pilot.register_ee_cam(cam)
+        pilot.register_ee_cam(cam, config_data.camera_dir)
         with pilot.plug_model.context(config_data.robot_plug_type):
             # Enable free drive mode
             with pilot.context.teach_in_control():
