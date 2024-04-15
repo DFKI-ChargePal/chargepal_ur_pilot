@@ -473,7 +473,7 @@ class Pilot:
                         and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.015)):
                     # Check whether couple depth is reached
                     d_err = p_meas2est[2]
-                    if abs(d_err) <= 0.003:
+                    if abs(d_err) <= 0.005:
                         success = True
                     else:
                         success = False
