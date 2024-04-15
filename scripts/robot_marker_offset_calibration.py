@@ -1,17 +1,26 @@
+from __future__ import annotations
+
 # libs
 import time
 import logging
 import argparse
 import ur_pilot
 import cvpd as pd
+import numpy as np
 import camera_kit as ck
+import spatialmath as sm
 from pathlib import Path
+from time import perf_counter
 from config import config_data
 
 # typing
 from argparse import Namespace
 
 LOGGER = logging.getLogger(__name__)
+
+_t_now = perf_counter
+_time_out = 10.0
+_max_samples = 20
 
 
 def calibration_procedure(opt: Namespace) -> None:
@@ -52,28 +61,46 @@ def calibration_procedure(opt: Namespace) -> None:
                     cam.render()
                 LOGGER.info('Stop teach in mode\n')
             # Measure observation pose
-            time.sleep(0.5)
-            T_base2flange = pilot.get_pose(ur_pilot.EndEffectorFrames.FLANGE)
-            found, T_cam2marker = dtt.find_pose(render=True)
+            search_rate = 0.5 * _time_out / _max_samples
+            n_max, t_max = int(abs(_max_samples)), abs(_time_out)
+            T_base2target_meas: sm.SE3 | None = None
+            t_start = _t_now()
+            for _ in range(n_max):
+                time.sleep(search_rate)
+                found, T_cam2target = dtt.find_pose(render=True)
+                if found:
+                    # Get transformation matrices
+                    T_flange2cam = pilot.cam_mdl.T_flange2camera
+                    T_base2marker_ = pilot.get_pose(ur_pilot.EndEffectorFrames.FLANGE)
+                    # Get searched transformation
+                    if T_base2target_meas is None:
+                        T_base2target_meas = T_base2marker_ * T_flange2cam * T_cam2target
+                    else:
+                        T_base2target_meas.append(T_base2marker_ * T_flange2cam * T_cam2target)
+                # Check for time boundary
+                if _t_now() - t_start > t_max:
+                    break
+            if T_base2target_meas is None:
+                valid_result, T_base2marker = False, sm.SE3()
+            elif len(T_base2target_meas) == 1:
+                valid_result, T_base2marker = True, T_base2target_meas
+            else:
+                q_avg = ur_pilot.utils.quatAvg(sm.UnitQuaternion(T_base2target_meas))
+                t_avg = np.mean(T_base2target_meas.t, axis=0)
+                T_base2marker = sm.SE3().Rt(R=q_avg.SO3(), t=t_avg)
+                valid_result = True
 
-            if found:
+            if valid_result:
                 LOGGER.info('Found marker')
                 # Get pose from target to marker
                 T_socket2base = T_base2socket.inv()
-                T_flange2cam = pilot.cam_mdl.T_flange2camera
-
-                T_flange2marker = T_flange2cam * T_cam2marker
-                T_base2marker = T_base2flange * T_flange2marker
                 T_socket2marker = T_socket2base * T_base2marker
                 T_marker2socket = T_socket2marker.inv()
 
-                LOGGER.debug(f"Base - Flange:   {ur_pilot.utils.se3_to_str(T_base2flange)}")
+                LOGGER.debug(f"Base - Flange:   {ur_pilot.utils.se3_to_str(T_base2marker)}")
                 LOGGER.debug(f"Base - Marker:   {ur_pilot.utils.se3_to_str(T_base2marker)}")
                 LOGGER.debug(f"Base - Socket:   {ur_pilot.utils.se3_to_str(T_base2socket)}")
-                LOGGER.debug(f"Flange - Cam:    {ur_pilot.utils.se3_to_str(T_flange2cam)}")
-                LOGGER.debug(f"Flange - Marker: {ur_pilot.utils.se3_to_str(T_flange2marker)}")
                 LOGGER.debug(f"Socket - Marker: {ur_pilot.utils.se3_to_str(T_socket2marker)}")
-                LOGGER.debug(f"Cam - Marker:    {ur_pilot.utils.se3_to_str(T_cam2marker)}")
 
                 dtt.adjust_offset(T_marker2socket)
 
