@@ -561,7 +561,7 @@ class Pilot:
         lin_ang_err = utils.lin_rot_error(T_base2plug_est, T_base2plug_meas)
         return success, lin_ang_err
 
-    def try2_engage_with_socket(self, T_base2socket: sm.SE3, time_out: float = 6.0) -> tuple[bool, tuple[float, float]]:
+    def try2_engage_with_socket(self, T_base2socket: sm.SE3, time_out: float = 10.0) -> tuple[bool, tuple[float, float]]:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         time_out = abs(time_out)
@@ -570,7 +570,7 @@ class Pilot:
         selection_vec = [1, 1, 1, 0, 0, 1]
         x_ctrl = utils.PDController(kp=100.0, kd=0.99)
         y_ctrl = utils.PDController(kp=100.0, kd=0.99)
-        z_ctrl = utils.PIDController(kp=500.0, kd=0.99, ki=1000.0)
+        z_ctrl = utils.PIDController(kp=750.0, kd=0.99, ki=1000.0)
         yaw_ctrl = utils.PDController(kp=10.0, kd=0.99)
         # Get estimation of the engaged socket pose
         T_base2engaged_est = T_base2socket * sm.SE3.Tz(0.015)
@@ -605,7 +605,7 @@ class Pilot:
                 break
             # Check on whether the engaging error is small enough
             z_error = utils.lin_error(T_base2engaged_est, T_base2tip_meas, axes='z')
-            if z_error < 2.5e-3:
+            if z_error < 5e-3:
                 success = True
                 break
         # Evaluate spatial error
