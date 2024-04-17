@@ -327,7 +327,7 @@ class Pilot:
         fin = False
         # Move to requested TCP pose
         if self.context.mode == self.context.mode_types.POSITION:
-            self.robot.movel(target)
+            self.robot.movel(target, vel=0.5, acc=0.2)
             fin = True
         elif self.context.mode == self.context.mode_types.MOTION:
             t_start = _t_now()
