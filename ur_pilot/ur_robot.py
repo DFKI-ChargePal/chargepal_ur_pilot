@@ -50,6 +50,11 @@ class URRobot(RealURRobot):
             raise RuntimeError(
                 "Motion PD controller is not initialized. Please run URPilot.set_up_motion_mode(...) first")
 
+    @property
+    def is_in_running_mode(self) -> bool:
+        retval: bool = self.rtde_receiver.getRobotMode() == 7
+        return retval
+
     def set_up_motion_mode(self,
                            error_scale: float | None = None,
                            force_limit: float | None = None,
