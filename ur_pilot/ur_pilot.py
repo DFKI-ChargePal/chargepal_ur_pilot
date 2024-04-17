@@ -121,6 +121,11 @@ class Pilot:
     def rot_world2arm(self) -> sm.SO3:
         return self.R_WORLD2BASE_
 
+    @property
+    def is_in_running_mode(self) -> bool:
+        retval: bool = self.robot.rtde_receiver.getRobotMode() == 7
+        return retval
+
     def average_ft_measurement(self, num_meas: int = 100) -> npt.NDArray[np.float_]:
         """ Method to get an average force torque measurement over num_meas samples.
 
