@@ -22,7 +22,7 @@ from ur_pilot.end_effector.flange_eye_calibration import FlangeEyeCalibration
 from ur_pilot.end_effector.models import CameraModel, PlugModel, TwistCouplingModel, BotaSensONEModel
 
 # typing
-from numpy import typing as npt
+from numpy import sign, typing as npt
 from camera_kit import CameraBase
 from typing import Iterator, Sequence
 
@@ -371,7 +371,7 @@ class Pilot:
         # Limit input
         torque = np.clip(torque, 0.0, 5.0)
         wrench_vec = 6 * [0.0]
-        compliant_axes = [0, 0, 1, 0, 0, 1]
+        compliant_axes = [0, 0, 0, 0, 0, 1]
         # Wrench will be applied with respect to the current TCP pose
         task_frame = self.get_pose(EndEffectorFrames.FLANGE)
         # Create target
@@ -431,10 +431,10 @@ class Pilot:
         # Setup controller
         wrench_vec = 6 * [0.0]
         selection_vec = [1, 1, 1, 0, 0, 1]
-        x_ctrl = utils.PDController(kp=100.0, kd=0.99)
-        y_ctrl = utils.PDController(kp=100.0, kd=0.99)
-        z_ctrl = utils.PIDController(kp=500.0, kd=0.99, ki=1000.0)
-        yaw_ctrl = utils.PDController(kp=10.0, kd=0.99)
+        x_ctrl = utils.PDController(kp=50.0, kd=0.99)
+        y_ctrl = utils.PDController(kp=50.0, kd=0.99)
+        z_ctrl = utils.PIDController(kp=750.0, kd=0.99, ki=5000.0)
+        yaw_ctrl = utils.PDController(kp=5.0, kd=0.99)
 
         # Get estimation of the plug pose
         T_socket2mounting = self.plug_model.T_mounting2lip.inv()
@@ -456,6 +456,7 @@ class Pilot:
             wrench_vec[1] = np.clip(y_ctrl.update(p_meas2est[1], self.robot.dt), -50.0, 50.0)
             wrench_vec[2] = np.clip(z_ctrl.update(p_meas2est[2], self.robot.dt), -50.0, 50.0)
             wrench_vec[-1] = np.clip(yaw_ctrl.update(yaw_meas2est, self.robot.dt), -4.0, 4.0)
+            print(wrench_vec)
             self.robot.force_mode(
                 task_frame=task_frame,
                 selection_vector=selection_vec,
@@ -469,11 +470,10 @@ class Pilot:
             t_now = _t_now()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
-                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.002)
-                        and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.015)):
+                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.002) and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.015)):
                     # Check whether couple depth is reached
                     d_err = p_meas2est[2]
-                    if abs(d_err) <= 0.005:
+                    if abs(d_err) <= 0.004:
                         success = True
                     else:
                         success = False
@@ -586,7 +586,7 @@ class Pilot:
             wrench_vec[0] = np.clip(x_ctrl.update(xyz_tip2engaged[0], self.robot.dt), -50.0, 50.0)
             wrench_vec[1] = np.clip(y_ctrl.update(xyz_tip2engaged[1], self.robot.dt), -50.0, 50.0)
             wrench_vec[2] = np.clip(z_ctrl.update(xyz_tip2engaged[2], self.robot.dt), -50.0, 50.0)
-            wrench_vec[-1] = np.clip(yaw_ctrl.update(yaw_tip2engaged, self.robot.dt), -4.0, 4.0)
+            # wrench_vec[-1] = np.clip(yaw_ctrl.update(yaw_tip2engaged, self.robot.dt), -4.0, 4.0)
             self.robot.force_mode(
                 task_frame=task_frame,
                 selection_vector=selection_vec,
@@ -625,6 +625,7 @@ class Pilot:
         success = False
         for f in force_ramp:
             wrench_vec[2] = f
+            print(wrench_vec)
             task_frame = T_base2socket_meas_ref = self.get_pose(EndEffectorFrames.PLUG_LIP)
             # lin_ang_err_ref = utils.lin_rot_error(T_base2socket_est, T_base2socket_meas_ref)
             _t_start = _t_now()
@@ -639,7 +640,10 @@ class Pilot:
             T_base2socket_meas = self.get_pose(EndEffectorFrames.PLUG_LIP)
             xy_error = utils.lin_error(T_base2socket_est, T_base2socket_meas, 'xy')
             screw_error = utils.rot_error_single_axis(T_base2socket_est, T_base2socket_meas, 'yaw')
-            if xy_error > 0.025 or screw_error > 0.1:
+            # Update error
+            T_lip2socket = T_base2socket_meas.inv() * T_base2socket_est
+            sign_z_lip2socket = T_lip2socket.z
+            if xy_error > 0.025 or sign_z_lip2socket < - 0.02 or screw_error > 0.1:
                 break
             z_error = utils.lin_error(T_base2socket_est, T_base2socket_meas, 'z')
             insertion_progress = utils.lin_error(T_base2socket_meas_ref, T_base2socket_meas, 'z')
