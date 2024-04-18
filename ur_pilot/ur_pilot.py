@@ -433,7 +433,7 @@ class Pilot:
         selection_vec = [1, 1, 1, 0, 0, 1]
         x_ctrl = utils.PDController(kp=50.0, kd=0.99)
         y_ctrl = utils.PDController(kp=50.0, kd=0.99)
-        z_ctrl = utils.PIDController(kp=750.0, kd=0.99, ki=5000.0)
+        z_ctrl = utils.PIDController(kp=500.0, kd=0.99, ki=5000.0)
         yaw_ctrl = utils.PDController(kp=5.0, kd=0.99)
 
         # Get estimation of the plug pose
@@ -456,7 +456,6 @@ class Pilot:
             wrench_vec[1] = np.clip(y_ctrl.update(p_meas2est[1], self.robot.dt), -50.0, 50.0)
             wrench_vec[2] = np.clip(z_ctrl.update(p_meas2est[2], self.robot.dt), -50.0, 50.0)
             wrench_vec[-1] = np.clip(yaw_ctrl.update(yaw_meas2est, self.robot.dt), -4.0, 4.0)
-            print(wrench_vec)
             self.robot.force_mode(
                 task_frame=task_frame,
                 selection_vector=selection_vec,
@@ -470,10 +469,10 @@ class Pilot:
             t_now = _t_now()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
-                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.002) and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.015)):
+                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.003) and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.03)):
                     # Check whether couple depth is reached
                     d_err = p_meas2est[2]
-                    if abs(d_err) <= 0.004:
+                    if d_err <= 0.005:
                         success = True
                     else:
                         success = False
@@ -543,7 +542,7 @@ class Pilot:
         T_socket2plug = self.plug_model.T_mounting2lip.inv()
         T_base2plug_est = T_base2socket * T_socket2plug
         # Turn end effector by 90 degrees counter-clockwise
-        success = self.screw_ee_force_mode(torque=4.0, ang=-np.pi/2, time_out=time_out)
+        success = self.screw_ee_force_mode(torque=4.0, ang=0.975 * -np.pi/2, time_out=time_out)
         # Evaluate spatial error
         T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_UNLOCKED)
         lin_ang_err = utils.lin_rot_error(T_base2plug_est, T_base2plug_meas)
@@ -555,7 +554,7 @@ class Pilot:
         T_socket2plug = self.plug_model.T_mounting2lip.inv()
         T_base2plug_est = T_base2socket * T_socket2plug
         # Turn end effector by 90 degrees clockwise
-        success = self.screw_ee_force_mode(torque=4.0, ang=np.pi/2, time_out=time_out)
+        success = self.screw_ee_force_mode(torque=4.0, ang=0.975 * np.pi/2, time_out=time_out)
         # Evaluate spatial error
         T_base2plug_meas = self.get_pose(EndEffectorFrames.COUPLING_LOCKED)
         lin_ang_err = utils.lin_rot_error(T_base2plug_est, T_base2plug_meas)
@@ -570,7 +569,7 @@ class Pilot:
         selection_vec = [1, 1, 1, 0, 0, 1]
         x_ctrl = utils.PDController(kp=100.0, kd=0.99)
         y_ctrl = utils.PDController(kp=100.0, kd=0.99)
-        z_ctrl = utils.PIDController(kp=750.0, kd=0.99, ki=1000.0)
+        z_ctrl = utils.PIDController(kp=750.0, kd=0.99, ki=5000.0)
         yaw_ctrl = utils.PDController(kp=10.0, kd=0.99)
         # Get estimation of the engaged socket pose
         T_base2engaged_est = T_base2socket * sm.SE3.Tz(0.015)
