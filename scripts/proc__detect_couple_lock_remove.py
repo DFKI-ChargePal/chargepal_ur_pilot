@@ -71,13 +71,13 @@ def main(opt: Namespace) -> None:
                         sus_lp, lin_ang_err = pilot.try2_lock_plug(T_base2socket)
                         LOGGER.info(f"Lock robot with plug successfully: {sus_lp}")
                         LOGGER.debug(f"Final error after locking robot with plug: "
-                                    f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                                     f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
                     if sus_lp:
                         sus_rp, lin_ang_err = pilot.try2_remove_plug()
-                        LOGGER.info(f"Remove plug from socket successfully: {sus_lp}")
+                        LOGGER.info(f"Remove plug from socket successfully: {sus_rp}")
                         LOGGER.debug(f"Final error after removing plug from socket: "
-                                    f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
+                                     f"(Linear error={lin_ang_err[0]}[m] | Angular error={lin_ang_err[1]}[rad])")
 
         with pilot.context.position_control():
             if sus_rp:
