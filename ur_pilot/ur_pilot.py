@@ -504,15 +504,15 @@ class Pilot:
                               time_out: float = 6.0,
                               max_force: float = 50.0,
                               max_torque: float = 4.0,
-                              decoupling_tolerance: float = 3e-3
+                              decouple_tolerance: float = 3e-3
                               ) -> tuple[bool, tuple[float, float]]:
         """ Method to decouple robot end-effector and plug using a force-controlled approach
 
         Args:
-            time_out:             Time period before stopping the decouple process with false
-            max_force:            Maximum applied force of the robot end-effector
-            max_torque:           Maximum applied torque of the robot end-effector
-            decoupling_tolerance: Allowed depth tolerance for the finale position
+            time_out:           Time period before stopping the decouple process with false
+            max_force:          Maximum applied force of the robot end-effector
+            max_torque:         Maximum applied torque of the robot end-effector
+            decouple_tolerance: Allowed depth tolerance for the finale position
 
         Returns:
             Success notification and remaining spatial error
@@ -551,7 +551,7 @@ class Pilot:
             T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
             yaw_meas2est = float(sm.UnitQuaternion(sm.SO3(T_meas2est.R).norm()).rpy(order='zyx')[-1])
             p_meas2est = T_meas2est.t
-            if abs(p_meas2est[2]) <= abs(decoupling_tolerance):  # Only check for depth value of the movement
+            if abs(p_meas2est[2]) <= abs(decouple_tolerance):  # Only check for depth value of the movement
                 success = True
                 break
             t_now = _t_now()
@@ -614,7 +614,7 @@ class Pilot:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         max_t = np.abs(max_torque)
-        lock_ang = 0.975 * np.clip(abs(lock_angle), 0.0, np.pi / 2)
+        lock_ang = np.clip(abs(lock_angle), 0.0, np.pi / 2)
         # Get estimation of the plug pose
         T_socket2plug = self.plug_model.T_mounting2lip.inv()
         T_base2plug_est = T_base2socket * T_socket2plug
