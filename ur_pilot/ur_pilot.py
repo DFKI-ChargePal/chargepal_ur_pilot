@@ -446,7 +446,7 @@ class Pilot:
             t_now = _t_now()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
-                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.003) and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.03)):
+                if np.allclose(p_meas2est_ref, p_meas2est, atol=0.003) and np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.03):
                     # Check whether couple depth is reached
                     d_err = p_meas2est[2]
                     if d_err <= 0.005:
@@ -503,7 +503,7 @@ class Pilot:
             T_meas2est = T_base2safety_meas.inv() * T_base2safety_est
             yaw_meas2est = float(sm.UnitQuaternion(sm.SO3(T_meas2est.R).norm()).rpy(order='zyx')[-1])
             p_meas2est = T_meas2est.t
-            if abs(p_meas2est[2]) <= 0.003:  # Only check for depth value of the coupling
+            if abs(p_meas2est[2]) <= 0.003:  # Only check for depth value of the movement
                 success = True
                 break
             t_now = _t_now()
@@ -580,6 +580,7 @@ class Pilot:
             if xy_error > 0.025 or screw_error > 0.1:
                 break
             # Check on whether the engaging error is small enough
+            # TODO: Use depth value instead of absolute error
             z_error = utils.lin_error(T_base2engaged_est, T_base2tip_meas, axes='z')
             if z_error < 5e-3:
                 success = True
