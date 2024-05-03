@@ -390,7 +390,7 @@ class Pilot:
         self.set_tcp(EndEffectorFrames.CAMERA)
         # Get estimation of the plug pose with some observation distance
         T_socket2mounting = self.plug_model.T_mounting2lip.inv()
-        T_mounting2observation = sm.SE3.Trans(0.0, 0.0, 0.5)
+        T_mounting2observation = sm.SE3.Trans(0.0, 0.0, -0.05)
         T_base2obs = T_base2socket * T_socket2mounting * T_mounting2observation
         success, _ = self.move_to_tcp_pose(T_base2obs)
         # Evaluate spatial error
