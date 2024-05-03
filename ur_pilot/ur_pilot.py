@@ -376,6 +376,28 @@ class Pilot:
         self.robot.pause_force_mode()
         return success
 
+    def try2_move_to_plug_id_observation(self, T_base2socket: sm.SE3) -> tuple[bool, tuple[float, float]]:
+        """ Method to bring the camera close to the plug to observe the plug id.
+
+        Args:
+            T_base2socket: Socket pose with respect to the robot base
+
+        Returns:
+            Success notification and remaining spatial error
+        """
+        self.context.check_mode(expected=self.context.mode_types.POSITION)
+        # Set TCP offset
+        self.set_tcp(EndEffectorFrames.CAMERA)
+        # Get estimation of the plug pose with some observation distance
+        T_socket2mounting = self.plug_model.T_mounting2lip.inv()
+        T_mounting2observation = sm.SE3.Trans(0.0, 0.0, 0.5)
+        T_base2obs = T_base2socket * T_socket2mounting * T_mounting2observation
+        success, _ = self.move_to_tcp_pose(T_base2obs)
+        # Evaluate spatial error
+        T_base2obs_meas = self.get_pose(EndEffectorFrames.CAMERA)
+        lin_ang_err = utils.lin_rot_error(T_base2obs, T_base2obs_meas)
+        return success, lin_ang_err
+
     def try2_approach_to_plug(self, T_base2socket: sm.SE3) -> tuple[bool, tuple[float, float]]:
         """ Method to bring the robot end-effector in an aligned pose w.r.t the plug.
             The robot will keep a safety distance to the plug to avoid collision
