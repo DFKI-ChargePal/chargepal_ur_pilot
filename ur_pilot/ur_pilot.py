@@ -604,7 +604,7 @@ class Pilot:
         self.context.check_mode(expected=self.context.mode_types.FORCE)
         # Limit input
         max_t = np.abs(max_torque)
-        unlock_ang = 0.975 * np.clip(abs(unlock_angle), 0.0, np.pi/2)
+        unlock_ang = np.clip(abs(unlock_angle), 0.0, np.pi/2)
         # Get estimation of the plug pose
         T_socket2plug = self.plug_model.T_mounting2lip.inv()
         T_base2plug_est = T_base2socket * T_socket2plug
