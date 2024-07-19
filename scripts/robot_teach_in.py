@@ -25,7 +25,7 @@ def teach_in_joint_sequence(opt: Namespace) -> None:
     # Use a display for user interaction
     display = ck.Display('Monitor')
     if not opt.no_camera:
-        cam = ck.camera_factory.create("realsense_tcp_cam")
+        cam = ck.camera_factory.create(opt.camera_name)
         cam.load_coefficients()
     else:
         cam = None
@@ -91,6 +91,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Record a sequence of robot states")
     parser.add_argument('file_name', type=str, help='.json file name')
     parser.add_argument('--data_dir', type=str, default='data/teach_in')
+    parser.add_argument('--camera_name', type=str, default='realsense_tcp_cam', help='Camera name')
     parser.add_argument('--no_camera', action='store_true', help='Do not use end-effector camera')
     parser.add_argument('--debug', action='store_true', help='Debug flag')
     # Parse input arguments

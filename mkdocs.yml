@@ -1,0 +1,29 @@
+site_name: UR-Pilot Docs
+
+theme:
+  name: "readthedocs"
+  highlightjs: true
+  include_homepage_in_sidebar: false
+  navigation_depth: 3
+  collapse_navigation: true
+  titles_only: false
+  sticky_navigation: true
+
+plugins:
+  - mkdocstrings
+
+nav:
+  - UR-Pilot Docs: index.md
+  - Tutorials: tutorials.md
+  - How-To-Guides: how-to-guides.md
+  - References: reference.md
+  - Explanations: explanation.md
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

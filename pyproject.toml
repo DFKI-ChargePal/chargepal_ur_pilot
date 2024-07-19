@@ -31,6 +31,15 @@ mypy = "^1.0.0"
 types-pyyaml = "^6.0.12.12"
 pandas-stubs = "1.5.3.230321"
 
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "*"
+mkdocs-material = "*"
+mkdocstrings = "*"
+mkdocstrings-python = "*"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

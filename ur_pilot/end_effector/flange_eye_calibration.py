@@ -196,7 +196,7 @@ class FlangeEyeCalibration:
         # Check if file exist
         if not file_path.exists():
             raise FileNotFoundError(f"File with path '{file_path}' not found!")
-            # Read matrix
+        # Read matrix
         with file_path.open(mode='rb') as f:
             toml_reading = tomli.load(f)
             T_flange2cam = np.asarray(toml_reading["T_flange2cam"])
