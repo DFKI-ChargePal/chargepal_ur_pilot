@@ -41,7 +41,7 @@ def calibration_procedure(opt: Namespace) -> None:
     # Connect to arm
     with ur_pilot.connect(config_data.robot_dir) as pilot:
         pilot.register_ee_cam(cam, config_data.camera_dir)
-        with pilot.plug_model.context(config_data.robot_plug_type):
+        with pilot.plug_model.context(opt.plug_type):
             # Enable free drive mode
             with pilot.context.teach_in_control():
                 LOGGER.info('Start teach in mode')
@@ -117,6 +117,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=des)
     parser.add_argument('detector_config_file', type=str, 
                         help='Description and configuration of the used marker as .yaml file')
+    parser.add_argument('plug_type', type=str, choices=['type2_male', 'type2_female', 'ccs_female'],
+                        help='Plug type used for calibration')
     parser.add_argument('--debug', action='store_true', help='Option to set global logger level')
     # Parse input arguments
     args = parser.parse_args()
