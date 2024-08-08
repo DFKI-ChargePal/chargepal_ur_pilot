@@ -497,9 +497,10 @@ class Pilot:
             yaw_meas2est = float(sm.UnitQuaternion(sm.SO3(T_meas2est.R).norm()).rpy(order='zyx')[-1])
             t_now = _t_now()
             # Check every second if robot is still moving
-            if t_now - t_ref > 1.0:
-                if (np.allclose(p_meas2est_ref, p_meas2est, atol=abs(couple_tolerance)) and
-                        np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.03)):
+            if t_now - t_ref > 0.67:
+                if np.sum(np.abs(self.robot.tcp_lin_vel)) < 0.01 and np.sum(np.abs(self.robot.tcp_ang_vel)) < 0.01:
+                # if (np.allclose(p_meas2est_ref, p_meas2est, atol=abs(couple_tolerance)) and
+                #         np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.03)):
                     # Check whether couple depth is reached
                     d_err = p_meas2est[2]
                     if d_err <= abs(couple_tolerance):
