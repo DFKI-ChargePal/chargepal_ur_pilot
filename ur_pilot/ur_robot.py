@@ -160,7 +160,7 @@ class URRobot(RealURRobot):
         self._motion_pd = SpatialPDController(Kp_6=m_Kp, Kd_6=m_Kd)
         self.set_up_force_mode(gain=ft_gain, damping=ft_damping)
 
-    def hybrid_mode(self, target: sm.SE3, wrench: npt.ArrayLike) -> None:
+    def hybrid_mode(self, target: sm.SE3, wrench: npt.NDArray[np.float32]) -> None:
         """ Update hybrid mode control error
 
         Args:
@@ -207,7 +207,7 @@ class URRobot(RealURRobot):
         self.stop_force_mode()
 
     def move_path_j(self,
-                    wps: Sequence[npt.ArrayLike],
+                    wps: Sequence[npt.NDArray[np.float32]],
                     vel: float | None = None,
                     acc: float | None = None,
                     bf: float | None = None) -> bool:

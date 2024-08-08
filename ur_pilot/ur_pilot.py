@@ -296,7 +296,7 @@ class Pilot:
         f_tool_wrt_world = self.coupling_model.f_inertia
         f_tool_wrt_ft: npt.NDArray[np.float_] = self.rot_world2arm * f_tool_wrt_world
 
-        def cross(a: npt.ArrayLike, b: npt.ArrayLike) -> npt.NDArray[np.float32]:
+        def cross(a: npt.NDArray[np.float32], b: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
             # Overwrite numpy cross function to avoid errors by IDE
             a_ = np.array(a, dtype=np.float32)
             b_ = np.array(b, dtype=np.float32)
@@ -312,7 +312,7 @@ class Pilot:
         offset = self.__frame_to_offset(frame=frame)
         self.robot.set_tcp(offset)
 
-    def move_to_joint_pos(self, q: npt.ArrayLike) -> npt.NDArray[np.float_]:
+    def move_to_joint_pos(self, q: npt.NDArray[np.float32]) -> npt.NDArray[np.float_]:
         self.context.check_mode(expected=self.context.mode_types.POSITION)
         # Move to requested joint position
         self.robot.movej(q)
