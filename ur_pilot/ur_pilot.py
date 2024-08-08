@@ -498,7 +498,7 @@ class Pilot:
             t_now = _t_now()
             # Check every second if robot is still moving
             if t_now - t_ref > 1.0:
-                if (np.allclose(p_meas2est_ref, p_meas2est, atol=0.003) and
+                if (np.allclose(p_meas2est_ref, p_meas2est, atol=abs(couple_tolerance)) and
                         np.isclose(yaw_meas2est_ref, yaw_meas2est, atol=0.03)):
                     # Check whether couple depth is reached
                     d_err = p_meas2est[2]
