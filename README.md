@@ -21,7 +21,7 @@ pip install -e .
 git clone https://github.com/DFKI-ChargePal/chargepal_configuration.git config
 # Check out a proper configuration branch
 cd config
-git switch -b xxx/xxx
+git switch ur_pilot/xxx/xxx
 ```
 
 ## Getting started
