@@ -13,17 +13,21 @@ pysoem = "^1.0.8 <1.1.7"
 pydantic = "^1.10.9"
 pandas = "^2.0.3"
 pyyaml = "^6.0.1"
+ur-rtde = "1.5.9"
 testresources = "^2.0.1"
 pyrealsense2 = "^2.54.2.5684"
 spatialmath-python = "^1.1.9"
 # Internal dependencies
-chargepal_cvpd = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_cvpd.git", branch="main"}
-chargepal_camera_kit = {git="git@git.ni.dfki.de:chargepal/manipulation/chargepal_camera_kit.git", branch="main"}
+chargepal_cvpd = {git="https://github.com/DFKI-ChargePal/chargepal_cvpd.git", branch="main"}
 
 ur_control = [
     {markers = "platform_machine == 'x86_64'", git="git@git.ni.dfki.de:chargepal/ur_control.git", branch="integration/ur_pilot_py3_8"},
     {markers = "platform_machine == 'aarch64'", git="git@git.ni.dfki.de:chargepal/ur_control.git", branch="develop/orin"},
 ]
+#ur_control = [
+#    {markers = "platform_machine == 'x86_64'", git="https://github.com/DFKI-ChargePal/ur_control.git", branch="integration/ur_pilot_py3_8"},
+#    {markers = "platform_machine == 'aarch64'", git="https://github.com/DFKI-ChargePal/ur_control.git", branch="develop/orin"},
+#]
 strenum = "^0.4.15"
 
 [tool.poetry.group.dev.dependencies]
