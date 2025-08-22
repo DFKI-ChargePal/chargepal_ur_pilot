@@ -58,7 +58,7 @@ link_frame = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [m]
 
 ### Camera Info
 In the folder `camera_info/` you can add the camera calibration coefficients created by the calibration process of the 
-camera module. More details can be found in the Camera Kit module description [add_link](https://google.com). In addition,
+camera module. More details can be found in the [Camera Kit module description](https://github.com/DFKI-ChargePal/chargepal_camera_kit). In addition,
 the folder is a good place to add the matrix values for the transformation between the camera frame and the robot flange frame.
 How to create them can be found in the section [How to Perform Flange-Eye-Calibration](#how-to-perform-flange-eye-calibration)
 
