@@ -73,7 +73,7 @@ How to create them can be found in the section [How to Perform Flange-Eye-Calibr
 
 In the folder 'detector/' you can add description files to use the Computer Vision Pattern Detector (CVPD) package. Note that 
 the name of the configuration files determines the type of the detector instances that will be created. More details can
-be found in the CVPD package documentation [add_link](https://google.com). A minimal example could be:
+be found in the [CVPD package documentation](https://github.com/DFKI-ChargePal/chargepal_cvpd). A minimal example could be:
 
     detector/
     ├─— aruco_marker_71.yaml
@@ -97,7 +97,6 @@ marker_type: 'DICT_4X4_100'
 checker_size: 25
 checker_grid_size: [10, 7]
 ```
-
 
 ## How to work with the UR-Pilot
 
@@ -139,7 +138,6 @@ with ur_pilot.connect(config_dir=Path("./config/robot_arm")) as pilot:
 
 ```
 
-
 ## How to Perform Flange-Eye-Calibration
 
 Before the detector can output the results in the correct coordinate frame, the pose between camera frame and robot 
@@ -173,7 +171,4 @@ calculation. The resulting transformation matrix is then stored in the camera ca
 python scripts/robot_flange_eye_calibration.py calibration_positions.json --data_dir ./data/teach_in --camera_name camera_name
 ```
 
-
-
-
-Information about the Hand-Eye calibration can be found at OpenCV [Hand-Eye calibration](https://docs.opencv.org/4.10.0/d9/d0c/group__calib3d.html#gaebfc1c9f7434196a374c382abf43439b)
+Information about the Hand-Eye calibration can be found at OpenCV [Hand-Eye calibration](https://docs.opencv.org/4.10.0/d9/d0c/group__calib3d.html#gaebfc1c9f7434196a374c382abf43439b).
